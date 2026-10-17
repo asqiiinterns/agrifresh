@@ -15,8 +15,10 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
 3. Dans le SQL Editor Supabase, exécute `supabase/schema.sql` une seule fois si le schéma n'est pas déjà installé. Vérifie les politiques RLS avant d'utiliser des données réelles.
 4. Exécute ensuite `supabase/migrations/20261017_customer_features.sql` une seule fois dans le SQL Editor. Cette migration ajoute les favoris et la fonction RPC transactionnelle de commande.
 5. Exécute ensuite `supabase/migrations/20261017_invoice_realtime.sql` une seule fois. Elle crée les reçus de commande et active la publication des changements de statut.
-6. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
-7. Redémarre Expo après une modification de `.env.local`.
+6. Exécute ensuite `supabase/migrations/20261017_staff_orders.sql`. Elle ajoute l'espace personnel : lecture de toutes les commandes et validation des statuts par les comptes `staff`/`admin`, et empêche un client de modifier son propre rôle.
+7. Pour créer un compte personnel : inscris-le normalement dans l'appli, puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');`. Après reconnexion, l'onglet **Gestion** apparaît.
+8. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
+9. Redémarre Expo après une modification de `.env.local`.
 
 L'application accède à la base via l'API Supabase et les règles RLS; elle n'ouvre jamais de connexion PostgreSQL directe. Seule une clé Publishable/anon peut être intégrée au client. **N'utilise jamais une clé `secret` ou `service_role` dans l'application.** Les sessions Auth sont conservées sur l'appareil avec AsyncStorage.
 
@@ -46,6 +48,7 @@ La version web partage les composants React Native via React Native Web. Les URL
 - Favoris et historique des commandes associés au compte client
 - Commande enregistrée de façon transactionnelle via RPC, avec contrôle serveur des prix et stocks
 - Reçu PDF partageable et statut de commande actualisé en temps réel lorsque la page Commandes est ouverte
+- Espace personnel (onglet **Gestion**) : commandes en temps réel, validation, préparation, livraison et annulation avec remise en stock
 - Paiement à la livraison; aucun prestataire de paiement par carte n'est encore intégré
 
-Le reçu généré est un document récapitulatif informatif, pas une facture fiscale. Les taux de taxe et règles de facturation légale doivent être validés avant une exploitation commerciale. Le suivi en temps réel reçoit les changements effectués côté base; un écran d'administration pour les modifier reste à développer. Ne réexécute pas les scripts SQL sur une base déjà initialisée sans examiner leurs effets.
+Le reçu généré est un document récapitulatif informatif, pas une facture fiscale. Les taux de taxe et règles de facturation légale doivent être validés avant une exploitation commerciale. Le suivi en temps réel reçoit les changements effectués côté base; l'onglet Gestion des comptes personnel permet de les faire avancer. Ne réexécute pas les scripts SQL sur une base déjà initialisée sans examiner leurs effets.

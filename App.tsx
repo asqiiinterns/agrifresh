@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,9 +26,10 @@ import { fetchCatalog } from "./src/data/catalog";
 import { fetchFavoriteIds, setFavorite } from "./src/data/favorites";
 import { fetchCustomerOrders, placeCustomerOrder, shareOrderInvoice, type CustomerOrder, type DeliveryAddress } from "./src/data/orders";
 import type { CartLine } from "./src/types/order";
+import { fetchAllOrders, fetchIsStaff, isOpenStatus, nextStatus, updateOrderStatus, type OrderStatus } from "./src/data/staff";
 
 const categories: Category[] = ["Tous", "Jus frais", "Fruits", "Légumes", "Épicerie"];
-type Tab = "Découvrir" | "Commandes" | "Favoris" | "Compte";
+type Tab = "Découvrir" | "Commandes" | "Favoris" | "Compte" | "Gestion";
 const CART_STORAGE_KEY = "agrifresh-cart-v1";
 const authRedirectUrl = () => Platform.OS === "web" && typeof window !== "undefined"
   ? window.location.origin
@@ -36,6 +37,25 @@ const authRedirectUrl = () => Platform.OS === "web" && typeof window !== "undefi
 
 const formatPrice = (amount: number) =>
   `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(amount)} TND`;
+
+type NotifyButton = { text: string; style?: "cancel" | "default" | "destructive"; onPress?: () => void };
+
+// React Native Web's Alert is a no-op, so fall back to the browser dialogs.
+function notify(title: string, message = "", buttons?: NotifyButton[]) {
+  if (Platform.OS !== "web") {
+    Alert.alert(title, message, buttons);
+    return;
+  }
+  if (typeof window === "undefined") return;
+  const text = message ? `${title}\n\n${message}` : title;
+  const action = buttons?.find((button) => button.style !== "cancel");
+  if (buttons && buttons.length > 1) {
+    if (window.confirm(text)) action?.onPress?.();
+  } else {
+    window.alert(text);
+    action?.onPress?.();
+  }
+}
 
 function NativeApp() {
   const [catalog, setCatalog] = useState<Product[]>(demoProducts);
@@ -54,6 +74,8 @@ function NativeApp() {
   const [liveCatalog, setLiveCatalog] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
+  const [staffVisible, setStaffVisible] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -75,13 +97,20 @@ function NativeApp() {
 
     async function handleAuthCallback(url: string | null) {
       if (!url) return;
+      let parsedUrl: URL;
       try {
-        const parsedUrl = new URL(url);
-        const query = parsedUrl.searchParams;
-        const fragment = new URLSearchParams(parsedUrl.hash.replace(/^#/, ""));
+        parsedUrl = new URL(url);
+      } catch {
+        return;
+      }
+      const query = parsedUrl.searchParams;
+      const fragment = new URLSearchParams(parsedUrl.hash.replace(/^#/, ""));
+      const isAuthCallback = ["code", "access_token", "error_description"].some((key) => query.has(key) || fragment.has(key));
+      if (!isAuthCallback) return;
+      try {
         const errorDescription = query.get("error_description") ?? fragment.get("error_description");
         if (errorDescription) {
-          Alert.alert("Confirmation e-mail", decodeURIComponent(errorDescription.replace(/\+/g, " ")));
+          notify("Confirmation e-mail", decodeURIComponent(errorDescription.replace(/\+/g, " ")));
           return;
         }
 
@@ -97,9 +126,14 @@ function NativeApp() {
           if (error) throw error;
         }
         setAuthVisible(true);
-        Alert.alert("E-mail confirmé", "Votre compte est maintenant connecté.");
+        notify("E-mail confirmé", "Votre compte est maintenant connecté.");
       } catch (error) {
-        Alert.alert("Confirmation e-mail", error instanceof Error ? error.message : "Le lien de confirmation est invalide ou expiré.");
+        notify("Confirmation e-mail", error instanceof Error ? error.message : "Le lien de confirmation est invalide ou expiré.");
+      } finally {
+        // Drop one-time tokens from the address bar so a reload does not replay them.
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       }
     }
 
@@ -161,8 +195,27 @@ function NativeApp() {
     void fetchFavoriteIds()
       .then((ids) => { if (active) setFavoriteIds(ids); })
       .catch((error: unknown) => {
-        if (active) Alert.alert("Favoris", error instanceof Error ? error.message : "Impossible de charger les favoris.");
+        if (active) notify("Favoris", error instanceof Error ? error.message : "Impossible de charger les favoris.");
       });
+    return () => { active = false; };
+  }, [session?.user.id]);
+
+  // A persisted cart may hold demo items or stale prices; align it with the live catalogue.
+  useEffect(() => {
+    if (!liveCatalog || !cartHydrated) return;
+    setCart((current) => current.flatMap((line) => {
+      const fresh = catalog.find((product) => product.id === line.product.id);
+      return fresh ? [{ ...line, product: fresh }] : [];
+    }));
+  }, [liveCatalog, cartHydrated, catalog]);
+
+  useEffect(() => {
+    let active = true;
+    if (!session) {
+      setIsStaff(false);
+      return () => { active = false; };
+    }
+    void fetchIsStaff().then((staff) => { if (active) setIsStaff(staff); });
     return () => { active = false; };
   }, [session?.user.id]);
 
@@ -199,7 +252,7 @@ function NativeApp() {
 
   async function toggleFavorite(product: Product) {
     if (!session) {
-      Alert.alert("Connexion requise", "Connectez-vous pour enregistrer vos favoris.", [
+      notify("Connexion requise", "Connectez-vous pour enregistrer vos favoris.", [
         { text: "Annuler", style: "cancel" },
         { text: "Se connecter", onPress: () => setAuthVisible(true) },
       ]);
@@ -211,21 +264,21 @@ function NativeApp() {
       await setFavorite(session.user.id, product.id, !wasFavorite);
     } catch (error) {
       setFavoriteIds((current) => wasFavorite ? [...current, product.id] : current.filter((id) => id !== product.id));
-      Alert.alert("Favoris", error instanceof Error ? error.message : "Impossible de mettre à jour ce favori.");
+      notify("Favoris", error instanceof Error ? error.message : "Impossible de mettre à jour ce favori.");
     }
   }
 
   function startCheckout() {
     if (!session) {
       setCartVisible(false);
-      Alert.alert("Connexion requise", "Connectez-vous avant de valider votre commande.", [
+      notify("Connexion requise", "Connectez-vous avant de valider votre commande.", [
         { text: "Annuler", style: "cancel" },
         { text: "Se connecter", onPress: () => setAuthVisible(true) },
       ]);
       return;
     }
     if (!liveCatalog) {
-      Alert.alert("Catalogue indisponible", "La commande en ligne est désactivée tant que le catalogue Supabase n’est pas chargé.");
+      notify("Catalogue indisponible", "La commande en ligne est désactivée tant que le catalogue Supabase n’est pas chargé.");
       return;
     }
     setCartVisible(false);
@@ -236,7 +289,7 @@ function NativeApp() {
     const order = await placeCustomerOrder(cart, address, note);
     setCart([]);
     setCheckoutVisible(false);
-    Alert.alert("Commande confirmée", `Commande #${order.order_number} enregistrée. Paiement à la livraison : ${formatPrice(order.total)}.`);
+    notify("Commande confirmée", `Commande #${order.order_number} enregistrée. Paiement à la livraison : ${formatPrice(order.total)}.`);
     setTab("Commandes");
     setOrdersVisible(true);
   }
@@ -244,9 +297,10 @@ function NativeApp() {
   function selectTab(next: Tab) {
     setTab(next);
     if (next === "Compte") setAuthVisible(true);
+    else if (next === "Gestion") setStaffVisible(true);
     else if (next === "Commandes" || next === "Favoris") {
       if (!session) {
-        Alert.alert("Connexion requise", `Connectez-vous pour consulter ${next.toLocaleLowerCase("fr")}.`, [
+        notify("Connexion requise", `Connectez-vous pour consulter ${next.toLocaleLowerCase("fr")}.`, [
           { text: "Annuler", style: "cancel" },
           { text: "Se connecter", onPress: () => setAuthVisible(true) },
         ]);
@@ -314,6 +368,7 @@ function NativeApp() {
           <NavButton label="Découvrir" icon="⌂" selected={tab === "Découvrir"} onPress={() => selectTab("Découvrir")} />
           <NavButton label="Commandes" icon="▤" selected={tab === "Commandes"} onPress={() => selectTab("Commandes")} />
           <NavButton label="Favoris" icon="♡" selected={tab === "Favoris"} onPress={() => selectTab("Favoris")} />
+          {isStaff ? <NavButton label="Gestion" icon="☷" selected={tab === "Gestion"} onPress={() => selectTab("Gestion")} /> : null}
           <NavButton label="Compte" icon="◉" selected={tab === "Compte"} onPress={() => selectTab("Compte")} />
         </View>
 
@@ -321,6 +376,7 @@ function NativeApp() {
         <CheckoutModal visible={checkoutVisible} cart={cart} total={total} session={session} onClose={() => setCheckoutVisible(false)} onSubmit={submitOrder} />
         <OrdersModal visible={ordersVisible} session={session} onClose={() => setOrdersVisible(false)} />
         <FavoritesModal visible={favoritesVisible} products={catalog.filter((product) => favoriteIds.includes(product.id))} onClose={() => setFavoritesVisible(false)} onAdd={addToCart} onRemove={(product) => toggleFavorite(product)} />
+        {isStaff ? <StaffOrdersModal visible={staffVisible} onClose={() => setStaffVisible(false)} /> : null}
         <AuthModal visible={authVisible} session={session} onClose={() => setAuthVisible(false)} />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -334,7 +390,7 @@ function TrustPoint({ title, icon }: { title: string; icon: string }) {
 function ProductCard({ product, isFavorite, onFavorite, onAdd }: { product: Product; isFavorite: boolean; onFavorite: () => void; onAdd: () => void }) {
   return <View style={styles.productCard}>
     <View style={styles.productImageWrap}>
-      <Image source={{ uri: product.image }} style={styles.productImage} />
+      <ProductImage uri={product.image} style={styles.productImage} />
       {product.badge ? <View style={styles.productBadge}><Text style={styles.productBadgeText}>{product.badge}</Text></View> : null}
       <Pressable style={styles.favoriteButton} onPress={onFavorite} accessibilityLabel={`${isFavorite ? "Retirer" : "Ajouter"} ${product.name} ${isFavorite ? "des" : "aux"} favoris`}><Text style={[styles.favoriteIcon, isFavorite && styles.favoriteIconSelected]}>{isFavorite ? "♥" : "♡"}</Text></Pressable>
     </View>
@@ -345,6 +401,13 @@ function ProductCard({ product, isFavorite, onFavorite, onAdd }: { product: Prod
       <View style={styles.productBottom}><View style={styles.priceBlock}><Text style={styles.productPrice}>{formatPrice(product.price)}</Text><Text style={styles.productUnit}>{product.unit}</Text></View><Pressable style={styles.addButton} onPress={onAdd} accessibilityLabel={`Ajouter ${product.name} au panier`}><Text style={styles.addButtonText}>＋</Text></Pressable></View>
     </View>
   </View>;
+}
+
+function ProductImage({ uri, style }: { uri: string; style: ComponentProps<typeof Image>["style"] }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [uri]);
+  if (failed || !uri) return <View style={[style, styles.imageFallback]}><Text style={styles.imageFallbackIcon}>✿</Text></View>;
+  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
 }
 
 function NavButton({ label, icon, selected, onPress }: { label: Tab; icon: string; selected: boolean; onPress: () => void }) {
@@ -359,7 +422,7 @@ function CartModal({ visible, cart, total, count, onClose, onQuantity, onClear, 
     <SafeAreaView style={styles.modalSafe}>
       <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>VOTRE SÉLECTION</Text><Text style={styles.modalTitle}>Mon panier ({count})</Text></View><Pressable onPress={onClose} style={styles.closeButton}><Text style={styles.closeText}>×</Text></Pressable></View>
       {cart.length === 0 ? <View style={styles.cartEmpty}><Text style={styles.cartEmptyIcon}>♧</Text><Text style={styles.cartEmptyTitle}>Votre panier est encore vide</Text><Text style={styles.cartEmptyBody}>Les bonnes choses commencent par une première sélection.</Text><Pressable style={styles.heroButton} onPress={onClose}><Text style={styles.heroButtonText}>DÉCOUVRIR LES PRODUITS</Text></Pressable></View> : <>
-        <FlatList data={cart} keyExtractor={(item) => item.product.id} contentContainerStyle={styles.cartList} renderItem={({ item }) => <View style={styles.cartLine}><Image source={{ uri: item.product.image }} style={styles.cartImage} /><View style={styles.cartDetails}><Text style={styles.cartProductName}>{item.product.name}</Text><Text style={styles.productUnit}>{item.product.unit}</Text><Text style={styles.cartPrice}>{formatPrice(item.product.price * item.quantity)}</Text><View style={styles.quantityControl}><Pressable onPress={() => onQuantity(item.product.id, -1)}><Text style={styles.quantityButton}>−</Text></Pressable><Text style={styles.quantityValue}>{item.quantity}</Text><Pressable onPress={() => onQuantity(item.product.id, 1)}><Text style={styles.quantityButton}>＋</Text></Pressable></View></View></View>} />
+        <FlatList data={cart} keyExtractor={(item) => item.product.id} contentContainerStyle={styles.cartList} renderItem={({ item }) => <View style={styles.cartLine}><ProductImage uri={item.product.image} style={styles.cartImage} /><View style={styles.cartDetails}><Text style={styles.cartProductName}>{item.product.name}</Text><Text style={styles.productUnit}>{item.product.unit}</Text><Text style={styles.cartPrice}>{formatPrice(item.product.price * item.quantity)}</Text><View style={styles.quantityControl}><Pressable onPress={() => onQuantity(item.product.id, -1)}><Text style={styles.quantityButton}>−</Text></Pressable><Text style={styles.quantityValue}>{item.quantity}</Text><Pressable onPress={() => onQuantity(item.product.id, 1)}><Text style={styles.quantityButton}>＋</Text></Pressable></View></View></View>} />
         <View style={styles.cartSummary}><View style={styles.summaryRow}><Text style={styles.summaryLabel}>Sous-total</Text><Text style={styles.summaryValue}>{formatPrice(total)}</Text></View><Text style={styles.cartHint}>Paiement à la livraison · Frais de livraison : 0 TND pour le moment.</Text><Pressable style={styles.heroButton} onPress={onCheckout}><Text style={styles.heroButtonText}>CONTINUER LA COMMANDE</Text></Pressable><Pressable onPress={onClear} style={styles.clearCart}><Text style={styles.clearCartText}>Vider le panier</Text></Pressable></View>
       </>}
     </SafeAreaView>
@@ -405,7 +468,6 @@ function CheckoutModal({ visible, cart, total, session, onClose, onSubmit }: {
         phone: phone.trim(),
         address_line: address.trim(),
         city: city.trim(),
-        notes: note.trim(),
       }, note);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "La commande n’a pas pu être enregistrée.");
@@ -440,12 +502,15 @@ function OrdersModal({ visible, session, onClose }: { visible: boolean; session:
   const [loading, setLoading] = useState(false);
   const [sharingOrderId, setSharingOrderId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const statusesRef = useRef<Record<string, string>>({});
 
   async function reloadOrders(showLoading: boolean) {
     if (showLoading) setLoading(true);
     setError("");
     try {
-      setOrders(await fetchCustomerOrders());
+      const nextOrders = await fetchCustomerOrders();
+      statusesRef.current = Object.fromEntries(nextOrders.map((order) => [order.id, order.status]));
+      setOrders(nextOrders);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossible de charger les commandes.");
     } finally {
@@ -465,11 +530,12 @@ function OrdersModal({ visible, session, onClose }: { visible: boolean; session:
         table: "orders",
         filter: `customer_id=eq.${session.user.id}`,
       }, (payload) => {
-        const previous = payload.old as { status?: string };
-        const updated = payload.new as { status?: string };
+        // With RLS, payload.old only carries the primary key, so compare with the last loaded status.
+        const updated = payload.new as { id?: string; status?: string };
+        const previousStatus = updated.id ? statusesRef.current[updated.id] : undefined;
         void reloadOrders(false);
-        if (previous.status && updated.status && previous.status !== updated.status) {
-          Alert.alert("Mise à jour de commande", `Votre commande est maintenant : ${statusLabel(updated.status)}.`);
+        if (previousStatus && updated.status && previousStatus !== updated.status) {
+          notify("Mise à jour de commande", `Votre commande est maintenant : ${statusLabel(updated.status)}.`);
         }
       })
       .subscribe((status, subscribeError) => {
@@ -486,7 +552,7 @@ function OrdersModal({ visible, session, onClose }: { visible: boolean; session:
     try {
       await shareOrderInvoice(order);
     } catch (cause) {
-      Alert.alert("Reçu PDF", cause instanceof Error ? cause.message : "Impossible de générer le reçu PDF.");
+      notify("Reçu PDF", cause instanceof Error ? cause.message : "Impossible de générer le reçu PDF.");
     } finally {
       setSharingOrderId(null);
     }
@@ -520,6 +586,98 @@ function FavoritesModal({ visible, products, onClose, onAdd, onRemove }: {
       {products.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyTitle}>Aucun favori pour l’instant</Text><Text style={styles.emptyBody}>Touchez le cœur d’un produit pour le retrouver ici.</Text></View> : <ScrollView contentContainerStyle={styles.productGrid}>
         {products.map((product) => <View key={product.id} style={styles.favoriteRow}><ProductCard product={product} isFavorite onFavorite={() => onRemove(product)} onAdd={() => onAdd(product)} /></View>)}
       </ScrollView>}
+    </SafeAreaView>
+  </Modal>;
+}
+
+function StaffOrdersModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"open" | "all">("open");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  async function reloadOrders(showLoading: boolean) {
+    if (showLoading) setLoading(true);
+    setError("");
+    try {
+      setOrders(await fetchAllOrders());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Impossible de charger les commandes.");
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const client = supabase;
+    if (!visible || !client) return;
+    void reloadOrders(true);
+    const channel = client
+      .channel("staff-orders")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        void reloadOrders(false);
+        const created = payload.new as { order_number?: number };
+        notify("Nouvelle commande", `La commande #${created.order_number ?? ""} vient d’arriver.`);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, () => { void reloadOrders(false); })
+      .subscribe((status, subscribeError) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setError(subscribeError?.message ?? "Le suivi en direct est indisponible; réouvrez cette page pour actualiser.");
+        }
+      });
+    return () => { void client.removeChannel(channel); };
+  }, [visible]);
+
+  async function changeStatus(order: CustomerOrder, status: OrderStatus) {
+    setUpdatingId(order.id);
+    try {
+      await updateOrderStatus(order.id, status);
+      setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
+    } catch (cause) {
+      notify("Mise à jour impossible", cause instanceof Error ? cause.message : "Le statut n’a pas pu être modifié.");
+      void reloadOrders(false);
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  function confirmCancel(order: CustomerOrder) {
+    notify("Annuler la commande", `Annuler la commande #${order.order_number} ? Le stock sera restitué.`, [
+      { text: "Retour", style: "cancel" },
+      { text: "Annuler la commande", style: "destructive", onPress: () => { void changeStatus(order, "cancelled"); } },
+    ]);
+  }
+
+  const visibleOrders = filter === "open" ? orders.filter((order) => isOpenStatus(order.status)) : orders;
+  const pendingCount = orders.filter((order) => order.status === "pending").length;
+
+  return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SafeAreaView style={styles.modalSafe}>
+      <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>ESPACE PERSONNEL · {pendingCount} À VALIDER</Text><Text style={styles.modalTitle}>Gestion des commandes</Text></View><Pressable onPress={onClose} style={styles.closeButton}><Text style={styles.closeText}>×</Text></Pressable></View>
+      <View style={styles.staffFilters}>
+        {([["open", "À traiter"], ["all", "Toutes"]] as const).map(([value, label]) => <Pressable key={value} onPress={() => setFilter(value)} style={[styles.categoryChip, filter === value && styles.categoryChipSelected]}><Text style={[styles.categoryText, filter === value && styles.categoryTextSelected]}>{label}</Text></Pressable>)}
+      </View>
+      {loading ? <View style={styles.loading}><ActivityIndicator color={colors.green} /><Text style={styles.loadingText}>Chargement…</Text></View> : error ? <View style={styles.emptyState}><Text style={styles.errorMessage}>{error}</Text><Pressable onPress={() => void reloadOrders(true)}><Text style={styles.resetText}>Réessayer</Text></Pressable></View> : visibleOrders.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyTitle}>Aucune commande</Text><Text style={styles.emptyBody}>{filter === "open" ? "Toutes les commandes sont traitées." : "Aucune commande enregistrée."}</Text></View> : <FlatList data={visibleOrders} keyExtractor={(order) => order.id} contentContainerStyle={styles.orderList} renderItem={({ item }) => {
+        const next = nextStatus[item.status as OrderStatus];
+        const busy = updatingId === item.id;
+        const address = item.address_snapshot ?? {};
+        return <View style={styles.orderCard}>
+          <View style={styles.summaryRow}><Text style={styles.orderNumber}>Commande #{item.order_number}</Text><Text style={[styles.orderStatus, item.status === "cancelled" && styles.orderStatusCancelled]}>{statusLabel(item.status)}</Text></View>
+          <Text style={styles.orderDate}>{new Date(item.created_at).toLocaleString("fr-TN", { dateStyle: "medium", timeStyle: "short" })}</Text>
+          <Text style={styles.staffInfo}>{address.recipient_name} · {address.phone}</Text>
+          <Text style={styles.staffInfo}>{address.address_line}, {address.city}</Text>
+          {item.customer_note ? <Text style={styles.staffNote}>« {item.customer_note} »</Text> : null}
+          <View style={styles.orderTotalRow}>
+            {item.order_items.map((line, index) => <Text key={`${item.id}-${index}`} style={styles.orderLine}>{line.quantity} × {line.product_name_snapshot} ({line.unit_snapshot}) · {formatPrice(Number(line.line_total))}</Text>)}
+          </View>
+          <View style={[styles.summaryRow, styles.orderTotalRow]}><Text style={styles.summaryLabel}>À encaisser</Text><Text style={styles.summaryValue}>{formatPrice(Number(item.total))}</Text></View>
+          {next || isOpenStatus(item.status) ? <View style={styles.staffActions}>
+            {next ? <Pressable style={[styles.heroButton, styles.staffPrimary, busy && styles.buttonBusy]} disabled={busy} onPress={() => void changeStatus(item, next.status)}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.heroButtonText}>{next.label}</Text>}</Pressable> : null}
+            <Pressable style={styles.cancelButton} disabled={busy} onPress={() => confirmCancel(item)}><Text style={styles.cancelButtonText}>ANNULER</Text></Pressable>
+          </View> : null}
+        </View>;
+      }} />}
     </SafeAreaView>
   </Modal>;
 }
@@ -631,6 +789,8 @@ const styles = StyleSheet.create({
   seasonBanner: { marginHorizontal: 18, marginTop: 29, borderRadius: 13, backgroundColor: "#244b36", padding: 23 }, eyebrowLight: { color: "#c3d5b6", fontSize: 9, letterSpacing: 1.8, fontWeight: "800" }, seasonTitle: { color: colors.white, fontSize: 30, lineHeight: 36, fontFamily: "serif", marginTop: 13 }, seasonAccent: { color: "#f6b45d", fontStyle: "italic" }, seasonBody: { color: "#d4dfd3", fontSize: 11, lineHeight: 18, marginTop: 9 }, seasonButton: { alignSelf: "flex-start", marginTop: 16, backgroundColor: "#f5b45f", paddingHorizontal: 14, paddingVertical: 12, borderRadius: 6 }, seasonButtonText: { color: "#273d2e", fontSize: 9, fontWeight: "800", letterSpacing: 0.6 }, footerNote: { textAlign: "center", paddingVertical: 22, color: colors.muted, fontSize: 10 },
   bottomNav: { minHeight: 61, paddingBottom: 4, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper, flexDirection: "row", justifyContent: "space-around", alignItems: "center" }, navItem: { minWidth: 65, alignItems: "center", gap: 3 }, navIcon: { color: "#92998f", fontSize: 21, lineHeight: 23 }, navIconActive: { color: colors.green }, navLabel: { color: "#92998f", fontSize: 8, fontWeight: "600" }, navLabelActive: { color: colors.green, fontWeight: "800" },
   modalSafe: { flex: 1, backgroundColor: colors.paper, paddingHorizontal: 20 }, modalHeader: { minHeight: 75, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, modalTitle: { fontFamily: "serif", color: colors.text, fontSize: 27, marginTop: 4 }, closeButton: { width: 37, height: 37, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }, closeText: { color: colors.text, fontSize: 27, lineHeight: 30 }, cartEmpty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 22 }, cartEmptyIcon: { color: colors.green, backgroundColor: "#e9efe3", fontSize: 29, overflow: "hidden", borderRadius: 40, padding: 17 }, cartEmptyTitle: { color: colors.text, fontFamily: "serif", fontSize: 23, textAlign: "center", marginTop: 17 }, cartEmptyBody: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 8, marginBottom: 20 }, cartList: { paddingTop: 8, paddingBottom: 15 }, cartLine: { flexDirection: "row", gap: 13, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.line }, cartImage: { width: 82, height: 88, borderRadius: 8 }, cartDetails: { flex: 1, position: "relative", justifyContent: "center" }, cartProductName: { color: colors.text, fontSize: 13, fontWeight: "700" }, cartPrice: { color: colors.green, fontSize: 12, fontWeight: "800", marginTop: 8 }, quantityControl: { position: "absolute", right: 0, bottom: 0, flexDirection: "row", gap: 15, alignItems: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }, quantityButton: { color: colors.green, fontSize: 16, fontWeight: "700" }, quantityValue: { fontSize: 11, color: colors.text }, cartSummary: { borderTopWidth: 1, borderTopColor: colors.line, paddingVertical: 16 }, summaryRow: { flexDirection: "row", justifyContent: "space-between" }, summaryLabel: { color: colors.text, fontSize: 13 }, summaryValue: { color: colors.green, fontSize: 16, fontWeight: "800" }, cartHint: { color: colors.muted, fontSize: 10, marginTop: 7, marginBottom: 13 }, disabledButton: { opacity: 0.75 }, clearCart: { alignSelf: "center", padding: 10 }, clearCartText: { color: colors.muted, textDecorationLine: "underline", fontSize: 11 },
+  imageFallback: { backgroundColor: colors.cream, alignItems: "center", justifyContent: "center" }, imageFallbackIcon: { color: colors.green, fontSize: 30, opacity: 0.6 },
+  staffFilters: { flexDirection: "row", gap: 7, paddingTop: 12 }, staffInfo: { color: colors.text, fontSize: 11, lineHeight: 17 }, staffNote: { color: colors.orange, fontSize: 11, lineHeight: 17, marginTop: 4, fontStyle: "italic" }, staffActions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 12 }, staffPrimary: { flexGrow: 1, minHeight: 40, paddingVertical: 10 }, cancelButton: { borderWidth: 1, borderColor: "#a63d2f", borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10 }, cancelButtonText: { color: "#a63d2f", fontSize: 10, fontWeight: "800" }, orderStatusCancelled: { color: "#a63d2f" },
   realtimeHint: { color: colors.muted, fontSize: 10, paddingTop: 10, lineHeight: 15 }, orderList: { paddingVertical: 14, gap: 12 }, orderCard: { padding: 15, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 }, orderNumber: { color: colors.text, fontSize: 13, fontWeight: "800" }, orderStatus: { color: colors.green, fontSize: 11, fontWeight: "800" }, orderDate: { color: colors.muted, fontSize: 10, marginTop: 5, marginBottom: 10 }, orderLine: { color: colors.text, fontSize: 11, lineHeight: 18 }, orderTotalRow: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 10, paddingTop: 10 }, invoiceButton: { alignSelf: "flex-start", marginTop: 11, borderWidth: 1, borderColor: colors.green, borderRadius: 6, paddingHorizontal: 11, paddingVertical: 8 }, invoiceButtonText: { color: colors.green, fontSize: 10, fontWeight: "800" }, favoriteRow: { width: "100%", marginBottom: 12 },
   authContainer: { flex: 1 }, authForm: { paddingTop: 17, paddingBottom: 30, gap: 14 }, authHelp: { color: colors.muted, fontSize: 12, lineHeight: 19 }, authTabs: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.line }, authTab: { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" }, authTabActive: { borderBottomColor: colors.orange }, authTabText: { color: colors.muted, fontSize: 12 }, authTabTextActive: { color: colors.green, fontWeight: "800" }, field: { gap: 6 }, fieldLabel: { color: "#405447", fontSize: 11, fontWeight: "700" }, fieldInput: { height: 45, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 6, backgroundColor: colors.white, color: colors.text, fontSize: 13 }, successMessage: { color: colors.green, fontSize: 12, lineHeight: 18 }, errorMessage: { color: "#a63d2f", fontSize: 12, lineHeight: 18 }, privacyText: { color: "#92978f", textAlign: "center", fontSize: 10, lineHeight: 16 }, buttonBusy: { opacity: 0.75 },
 });
