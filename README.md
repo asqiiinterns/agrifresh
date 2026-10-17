@@ -13,7 +13,9 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
 1. Crée `.env.local` à la racine depuis `.env.example`.
 2. Renseigne `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` avec les valeurs de **Connect** dans le tableau de bord Supabase.
 3. Dans le SQL Editor Supabase, exécute `supabase/schema.sql` une seule fois si le schéma n'est pas déjà installé. Vérifie les politiques RLS avant d'utiliser des données réelles.
-4. Redémarre Expo après une modification de `.env.local`.
+4. Exécute ensuite `supabase/migrations/20261017_customer_features.sql` une seule fois dans le SQL Editor. Cette migration ajoute les favoris et la fonction RPC transactionnelle de commande.
+5. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
+6. Redémarre Expo après une modification de `.env.local`.
 
 L'application accède à la base via l'API Supabase et les règles RLS; elle n'ouvre jamais de connexion PostgreSQL directe. Seule une clé Publishable/anon peut être intégrée au client. **N'utilise jamais une clé `secret` ou `service_role` dans l'application.** Les sessions Auth sont conservées sur l'appareil avec AsyncStorage.
 
@@ -31,6 +33,9 @@ Le profil `preview` dans `eas.json` produit un `.apk` distribuable directement p
 - Affichage du catalogue de démonstration si le backend n'est pas configuré ou joignable
 - Création de compte, connexion et déconnexion Supabase Auth
 - Session conservée entre les ouvertures de l'application
-- Panier natif temporaire (non enregistré en base à ce stade)
+- Panier conservé localement sur l'appareil
+- Favoris et historique des commandes associés au compte client
+- Commande enregistrée de façon transactionnelle via RPC, avec contrôle serveur des prix et stocks
+- Paiement à la livraison; aucun prestataire de paiement par carte n'est encore intégré
 
-La création réelle des commandes, les favoris persistants, l'historique et les factures restent à développer. Ne réexécute pas le schéma SQL sur une base déjà initialisée sans examiner ses effets.
+Le suivi live des changements de statut, les factures PDF et le paiement par carte restent à développer. Ne réexécute pas les scripts SQL sur une base déjà initialisée sans examiner leurs effets.
