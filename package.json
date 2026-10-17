@@ -6,15 +6,22 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "android:sync": "npm run build && cap sync android",
+    "preandroid:apk": "node scripts/check-mobile-env.mjs",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:open": "cap open android",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@supabase/supabase-js": "^2.57.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

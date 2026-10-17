@@ -37,6 +37,23 @@ Les clés publiques Supabase peuvent être utilisées côté client uniquement a
 - Dans Supabase Auth, ajoute le domaine Vercel déployé aux URL de site et de redirection autorisées.
 - Exécute `supabase/schema.sql` sur le projet Supabase utilisé par le déploiement.
 
+## Générer l'application Android (APK)
+1. Installe Android Studio, puis ajoute Android SDK Platform 36 via SDK Manager. Android Gradle Plugin 8.13 nécessite Java 17 ou plus récent; le JDK fourni avec Android Studio peut être utilisé.
+2. Crée `.env.local` à la racine à partir de `.env.example` et renseigne l'URL Supabase et la clé publique anon/publishable. Ces variables sont intégrées à l'application lors du build; les variables Vercel ne sont pas automatiquement réutilisées.
+3. Vérifie que `supabase/schema.sql` a été exécuté sur le projet Supabase visé et que RLS est activé. Le client Android utilise l'API Supabase avec la clé publique et les politiques RLS — jamais une connexion SQL directe ni la clé `service_role`.
+4. Lance `npm run android:apk`. L'APK de débogage est généré dans `android/app/build/outputs/apk/debug/app-debug.apk`.
+5. Pour installer sur un téléphone Android connecté avec le débogage USB activé, ouvre le projet avec `npm run android:open` dans Android Studio ou utilise `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`.
+
+Chaque changement du frontend ou des variables Supabase nécessite une nouvelle génération et distribution de l'APK. Pour publier sur Google Play, crée ensuite une version signée (AAB recommandé) depuis Android Studio; ne partage pas une clé de signature.
+
+### Génération cloud de l'APK avec GitHub Actions
+1. Dans GitHub, ouvre **Settings → Secrets and variables → Actions**, puis ajoute les secrets de dépôt `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`. Utilise l'URL du projet et sa clé publique publishable/anon; ne crée jamais un secret `service_role` dans le workflow.
+2. Pousse le workflow `.github/workflows/android-apk.yml` sur GitHub.
+3. Ouvre **Actions → Build Android APK → Run workflow** et lance le workflow sur `main`.
+4. Quand le workflow réussit, ouvre son exécution et télécharge l'artefact `agrifresh-debug-apk`.
+
+Le workflow configure Node, Java et le SDK Android sur un runner GitHub, puis construit l'APK. L'artefact est un APK debug à tester/distribuer manuellement, pas une version signée pour Google Play.
+
 ## État actuel
 - Écran d'accueil et catalogue responsive
 - Recherche et filtres de catégories
