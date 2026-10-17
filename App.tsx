@@ -24,13 +24,15 @@ import type { Category, Product } from "./src/types/product";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchCatalog } from "./src/data/catalog";
 import { fetchFavoriteIds, setFavorite } from "./src/data/favorites";
-import { fetchCustomerOrders, placeCustomerOrder, type CustomerOrder, type DeliveryAddress } from "./src/data/orders";
+import { fetchCustomerOrders, placeCustomerOrder, shareOrderInvoice, type CustomerOrder, type DeliveryAddress } from "./src/data/orders";
 import type { CartLine } from "./src/types/order";
 
 const categories: Category[] = ["Tous", "Jus frais", "Fruits", "Légumes", "Épicerie"];
 type Tab = "Découvrir" | "Commandes" | "Favoris" | "Compte";
 const CART_STORAGE_KEY = "agrifresh-cart-v1";
-const AUTH_CALLBACK_URL = "agrifresh://auth/callback";
+const authRedirectUrl = () => Platform.OS === "web" && typeof window !== "undefined"
+  ? window.location.origin
+  : "agrifresh://auth/callback";
 
 const formatPrice = (amount: number) =>
   `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(amount)} TND`;
@@ -235,6 +237,8 @@ function NativeApp() {
     setCart([]);
     setCheckoutVisible(false);
     Alert.alert("Commande confirmée", `Commande #${order.order_number} enregistrée. Paiement à la livraison : ${formatPrice(order.total)}.`);
+    setTab("Commandes");
+    setOrdersVisible(true);
   }
 
   function selectTab(next: Tab) {
@@ -315,7 +319,7 @@ function NativeApp() {
 
         <CartModal visible={cartVisible} cart={cart} total={total} count={cartCount} onClose={() => setCartVisible(false)} onQuantity={updateQuantity} onClear={() => setCart([])} onCheckout={startCheckout} />
         <CheckoutModal visible={checkoutVisible} cart={cart} total={total} session={session} onClose={() => setCheckoutVisible(false)} onSubmit={submitOrder} />
-        <OrdersModal visible={ordersVisible} onClose={() => setOrdersVisible(false)} />
+        <OrdersModal visible={ordersVisible} session={session} onClose={() => setOrdersVisible(false)} />
         <FavoritesModal visible={favoritesVisible} products={catalog.filter((product) => favoriteIds.includes(product.id))} onClose={() => setFavoritesVisible(false)} onAdd={addToCart} onRemove={(product) => toggleFavorite(product)} />
         <AuthModal visible={authVisible} session={session} onClose={() => setAuthVisible(false)} />
       </SafeAreaView>
@@ -431,31 +435,73 @@ function CheckoutModal({ visible, cart, total, session, onClose, onSubmit }: {
   </Modal>;
 }
 
-function OrdersModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function OrdersModal({ visible, session, onClose }: { visible: boolean; session: Session | null; onClose: () => void }) {
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sharingOrderId, setSharingOrderId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!visible) return;
-    let active = true;
-    setLoading(true);
+  async function reloadOrders(showLoading: boolean) {
+    if (showLoading) setLoading(true);
     setError("");
-    void fetchCustomerOrders()
-      .then((rows) => { if (active) setOrders(rows); })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "Impossible de charger les commandes."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [visible]);
+    try {
+      setOrders(await fetchCustomerOrders());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Impossible de charger les commandes.");
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const client = supabase;
+    if (!visible || !session || !client) return;
+    void reloadOrders(true);
+    const channel = client
+      .channel(`customer-orders-${session.user.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "orders",
+        filter: `customer_id=eq.${session.user.id}`,
+      }, (payload) => {
+        const previous = payload.old as { status?: string };
+        const updated = payload.new as { status?: string };
+        void reloadOrders(false);
+        if (previous.status && updated.status && previous.status !== updated.status) {
+          Alert.alert("Mise à jour de commande", `Votre commande est maintenant : ${statusLabel(updated.status)}.`);
+        }
+      })
+      .subscribe((status, subscribeError) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setError(subscribeError?.message ?? "Le suivi en direct est indisponible; réouvrez cette page pour actualiser.");
+        }
+      });
+
+    return () => { void client.removeChannel(channel); };
+  }, [visible, session?.user.id]);
+
+  async function downloadReceipt(order: CustomerOrder) {
+    setSharingOrderId(order.id);
+    try {
+      await shareOrderInvoice(order);
+    } catch (cause) {
+      Alert.alert("Reçu PDF", cause instanceof Error ? cause.message : "Impossible de générer le reçu PDF.");
+    } finally {
+      setSharingOrderId(null);
+    }
+  }
 
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={styles.modalSafe}>
       <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>VOTRE ESPACE CLIENT</Text><Text style={styles.modalTitle}>Mes commandes</Text></View><Pressable onPress={onClose} style={styles.closeButton}><Text style={styles.closeText}>×</Text></Pressable></View>
+      <Text style={styles.realtimeHint}>Les changements de statut apparaissent en direct lorsque la connexion est active.</Text>
       {loading ? <View style={styles.loading}><ActivityIndicator color={colors.green} /><Text style={styles.loadingText}>Chargement…</Text></View> : error ? <View style={styles.emptyState}><Text style={styles.errorMessage}>{error}</Text></View> : orders.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyTitle}>Pas encore de commande</Text><Text style={styles.emptyBody}>Vos commandes confirmées apparaîtront ici.</Text></View> : <FlatList data={orders} keyExtractor={(order) => order.id} contentContainerStyle={styles.orderList} renderItem={({ item }) => <View style={styles.orderCard}>
         <View style={styles.summaryRow}><Text style={styles.orderNumber}>Commande #{item.order_number}</Text><Text style={styles.orderStatus}>{statusLabel(item.status)}</Text></View>
         <Text style={styles.orderDate}>{new Date(item.created_at).toLocaleDateString("fr-TN", { dateStyle: "medium" })} · Paiement à la livraison</Text>
         {item.order_items.map((line, index) => <Text key={`${item.id}-${index}`} style={styles.orderLine}>{line.quantity} × {line.product_name_snapshot} · {formatPrice(Number(line.line_total))}</Text>)}
         <View style={[styles.summaryRow, styles.orderTotalRow]}><Text style={styles.summaryLabel}>Total</Text><Text style={styles.summaryValue}>{formatPrice(Number(item.total))}</Text></View>
+        <Pressable style={styles.invoiceButton} onPress={() => void downloadReceipt(item)} disabled={sharingOrderId === item.id}><Text style={styles.invoiceButtonText}>{sharingOrderId === item.id ? "Préparation du PDF…" : `Partager le reçu ${item.invoices ? "PDF" : "PDF informatif"}`}</Text></Pressable>
       </View>} />}
     </SafeAreaView>
   </Modal>;
@@ -506,7 +552,7 @@ function AuthModal({ visible, session, onClose }: { visible: boolean; session: S
     setBusy(true); setMessage(""); setError("");
     try {
       if (mode === "signup") {
-        const { data, error: authError } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: AUTH_CALLBACK_URL, data: { full_name: name.trim(), phone: phone.trim() } } });
+        const { data, error: authError } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: authRedirectUrl(), data: { full_name: name.trim(), phone: phone.trim() } } });
         if (authError) throw authError;
         setMessage(data.session ? "Compte créé, vous êtes connecté·e." : "Compte créé. Consultez votre e-mail pour confirmer votre adresse.");
       } else {
@@ -585,7 +631,7 @@ const styles = StyleSheet.create({
   seasonBanner: { marginHorizontal: 18, marginTop: 29, borderRadius: 13, backgroundColor: "#244b36", padding: 23 }, eyebrowLight: { color: "#c3d5b6", fontSize: 9, letterSpacing: 1.8, fontWeight: "800" }, seasonTitle: { color: colors.white, fontSize: 30, lineHeight: 36, fontFamily: "serif", marginTop: 13 }, seasonAccent: { color: "#f6b45d", fontStyle: "italic" }, seasonBody: { color: "#d4dfd3", fontSize: 11, lineHeight: 18, marginTop: 9 }, seasonButton: { alignSelf: "flex-start", marginTop: 16, backgroundColor: "#f5b45f", paddingHorizontal: 14, paddingVertical: 12, borderRadius: 6 }, seasonButtonText: { color: "#273d2e", fontSize: 9, fontWeight: "800", letterSpacing: 0.6 }, footerNote: { textAlign: "center", paddingVertical: 22, color: colors.muted, fontSize: 10 },
   bottomNav: { minHeight: 61, paddingBottom: 4, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper, flexDirection: "row", justifyContent: "space-around", alignItems: "center" }, navItem: { minWidth: 65, alignItems: "center", gap: 3 }, navIcon: { color: "#92998f", fontSize: 21, lineHeight: 23 }, navIconActive: { color: colors.green }, navLabel: { color: "#92998f", fontSize: 8, fontWeight: "600" }, navLabelActive: { color: colors.green, fontWeight: "800" },
   modalSafe: { flex: 1, backgroundColor: colors.paper, paddingHorizontal: 20 }, modalHeader: { minHeight: 75, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, modalTitle: { fontFamily: "serif", color: colors.text, fontSize: 27, marginTop: 4 }, closeButton: { width: 37, height: 37, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }, closeText: { color: colors.text, fontSize: 27, lineHeight: 30 }, cartEmpty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 22 }, cartEmptyIcon: { color: colors.green, backgroundColor: "#e9efe3", fontSize: 29, overflow: "hidden", borderRadius: 40, padding: 17 }, cartEmptyTitle: { color: colors.text, fontFamily: "serif", fontSize: 23, textAlign: "center", marginTop: 17 }, cartEmptyBody: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 8, marginBottom: 20 }, cartList: { paddingTop: 8, paddingBottom: 15 }, cartLine: { flexDirection: "row", gap: 13, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.line }, cartImage: { width: 82, height: 88, borderRadius: 8 }, cartDetails: { flex: 1, position: "relative", justifyContent: "center" }, cartProductName: { color: colors.text, fontSize: 13, fontWeight: "700" }, cartPrice: { color: colors.green, fontSize: 12, fontWeight: "800", marginTop: 8 }, quantityControl: { position: "absolute", right: 0, bottom: 0, flexDirection: "row", gap: 15, alignItems: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }, quantityButton: { color: colors.green, fontSize: 16, fontWeight: "700" }, quantityValue: { fontSize: 11, color: colors.text }, cartSummary: { borderTopWidth: 1, borderTopColor: colors.line, paddingVertical: 16 }, summaryRow: { flexDirection: "row", justifyContent: "space-between" }, summaryLabel: { color: colors.text, fontSize: 13 }, summaryValue: { color: colors.green, fontSize: 16, fontWeight: "800" }, cartHint: { color: colors.muted, fontSize: 10, marginTop: 7, marginBottom: 13 }, disabledButton: { opacity: 0.75 }, clearCart: { alignSelf: "center", padding: 10 }, clearCartText: { color: colors.muted, textDecorationLine: "underline", fontSize: 11 },
-  orderList: { paddingVertical: 14, gap: 12 }, orderCard: { padding: 15, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 }, orderNumber: { color: colors.text, fontSize: 13, fontWeight: "800" }, orderStatus: { color: colors.green, fontSize: 11, fontWeight: "800" }, orderDate: { color: colors.muted, fontSize: 10, marginTop: 5, marginBottom: 10 }, orderLine: { color: colors.text, fontSize: 11, lineHeight: 18 }, orderTotalRow: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 10, paddingTop: 10 }, favoriteRow: { width: "100%", marginBottom: 12 },
+  realtimeHint: { color: colors.muted, fontSize: 10, paddingTop: 10, lineHeight: 15 }, orderList: { paddingVertical: 14, gap: 12 }, orderCard: { padding: 15, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 }, orderNumber: { color: colors.text, fontSize: 13, fontWeight: "800" }, orderStatus: { color: colors.green, fontSize: 11, fontWeight: "800" }, orderDate: { color: colors.muted, fontSize: 10, marginTop: 5, marginBottom: 10 }, orderLine: { color: colors.text, fontSize: 11, lineHeight: 18 }, orderTotalRow: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 10, paddingTop: 10 }, invoiceButton: { alignSelf: "flex-start", marginTop: 11, borderWidth: 1, borderColor: colors.green, borderRadius: 6, paddingHorizontal: 11, paddingVertical: 8 }, invoiceButtonText: { color: colors.green, fontSize: 10, fontWeight: "800" }, favoriteRow: { width: "100%", marginBottom: 12 },
   authContainer: { flex: 1 }, authForm: { paddingTop: 17, paddingBottom: 30, gap: 14 }, authHelp: { color: colors.muted, fontSize: 12, lineHeight: 19 }, authTabs: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.line }, authTab: { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" }, authTabActive: { borderBottomColor: colors.orange }, authTabText: { color: colors.muted, fontSize: 12 }, authTabTextActive: { color: colors.green, fontWeight: "800" }, field: { gap: 6 }, fieldLabel: { color: "#405447", fontSize: 11, fontWeight: "700" }, fieldInput: { height: 45, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 6, backgroundColor: colors.white, color: colors.text, fontSize: 13 }, successMessage: { color: colors.green, fontSize: 12, lineHeight: 18 }, errorMessage: { color: "#a63d2f", fontSize: 12, lineHeight: 18 }, privacyText: { color: "#92978f", textAlign: "center", fontSize: 10, lineHeight: 16 }, buttonBusy: { opacity: 0.75 },
 });
 

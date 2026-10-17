@@ -4,6 +4,18 @@
     "strict": true,
     "noEmit": true
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "android", "dist", "src", "vite.config.ts", "capacitor.config.ts", "tsconfig.app.json", "tsconfig.node.json"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "android",
+    "dist",
+    "src",
+    "vite.config.ts",
+    "capacitor.config.ts",
+    "tsconfig.app.json",
+    "tsconfig.node.json"
+  ]
 }

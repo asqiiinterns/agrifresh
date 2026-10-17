@@ -9,19 +9,24 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web",
     "typecheck": "tsc --noEmit",
     "build:apk": "npx eas-cli@latest build --platform android --profile preview"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~57.0.17",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@supabase/supabase-js": "^2.57.0",
     "expo": "~57.0.30",
+    "expo-print": "~57.0.2",
+    "expo-sharing": "~57.0.23",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-url-polyfill": "^3.0.0"
+    "react-native-url-polyfill": "^3.0.0",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.3",
