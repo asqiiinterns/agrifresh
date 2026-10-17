@@ -3,9 +3,9 @@
 export const company = {
   name: "AgriFresh",
   tagline: "Le goût du naturel",
-  address: "Adresse à compléter, Tunis",
-  phone: "",
-  email: "",
-  taxId: "Matricule fiscal à compléter",
-  rib: "",
+  address: "Tunis",
+  phone: "99 999 999",
+  email: "contact@agrifresh.tn",
+  taxId: "MF 9999999E",
+  rib: "99 9999 9999 9999",
 };
