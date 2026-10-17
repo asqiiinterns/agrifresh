@@ -55,7 +55,7 @@ export function StaffClientsScreen() {
         return <Pressable style={[ui.card, !item.active && ui.disabled]} onPress={() => setEditing(item)}>
           <View style={ui.row}>
             <Text style={[ui.strong, { flex: 1 }]}>{item.business_name}</Text>
-            <Text style={[ui.small, { color: item.profiles.length ? colors.green : colors.amber, fontWeight: "800" }]}>{item.profiles.length ? "ACCÈS ACTIVÉ" : "NON ACTIVÉ"}</Text>
+            <Text style={[ui.small, { color: item.has_account ? colors.green : colors.amber, fontWeight: "800" }]}>{item.has_account ? "ACCÈS ACTIVÉ" : "NON ACTIVÉ"}</Text>
           </View>
           <Text style={ui.small}>{formatClientNumber(item.client_number)}{item.contact_name ? ` · ${item.contact_name}` : ""}{item.phone ? ` · ${item.phone}` : ""}</Text>
           <Text style={[ui.small, { marginTop: 4 }]}>{points.length} point{points.length > 1 ? "s" : ""} de livraison{!item.active ? " · fiche désactivée" : ""}</Text>
@@ -190,8 +190,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
               <Text style={ui.body}>Fiche active (peut commander)</Text>
               <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.green, false: colors.line }} />
             </View> : null}
-            {record ? <Text style={[ui.small, { marginTop: 10, color: record.profiles.length ? colors.green : colors.amber }]}>
-              {record.profiles.length ? "Le client a activé son accès." : "Le client n’a pas encore activé son accès avec cet e-mail."}
+            {record ? <Text style={[ui.small, { marginTop: 10, color: record.has_account ? colors.green : colors.amber }]}>
+              {record.has_account ? "Le client a activé son accès." : "Le client n’a pas encore activé son accès avec cet e-mail."}
             </Text> : null}
           </View>
 

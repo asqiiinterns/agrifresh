@@ -26,7 +26,7 @@ export type ClientRecord = {
   notes: string | null;
   active: boolean;
   client_delivery_points: DeliveryPoint[];
-  profiles: { id: string }[];
+  has_account: boolean;
 };
 
 export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes"> & { email: string };
@@ -43,8 +43,14 @@ export async function fetchClients(): Promise<ClientRecord[]> {
     .select("id, client_number, business_name, contact_name, email, phone, notes, active, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
-  return ((data ?? []) as unknown as (ClientRecord & { client_delivery_points: (DeliveryPoint & { created_at: string })[] })[]).map((record) => ({
+  type Row = Omit<ClientRecord, "has_account"> & {
+    client_delivery_points: (DeliveryPoint & { created_at: string })[];
+    // profiles.client_id is unique, so PostgREST embeds a single object (or null), not an array.
+    profiles: { id: string } | { id: string }[] | null;
+  };
+  return ((data ?? []) as unknown as Row[]).map(({ profiles, ...record }) => ({
     ...record,
+    has_account: Array.isArray(profiles) ? profiles.length > 0 : Boolean(profiles),
     client_delivery_points: [...record.client_delivery_points].sort((a, b) => a.created_at.localeCompare(b.created_at)),
   }));
 }
