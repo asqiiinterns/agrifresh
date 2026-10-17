@@ -7,6 +7,14 @@ const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 export const isSupabaseConfigured = Boolean(url && key);
 
+export const supabaseHost = (() => {
+  try {
+    return url ? new URL(url).host : "";
+  } catch {
+    return url ?? "";
+  }
+})();
+
 export const supabase = isSupabaseConfigured
   ? createClient(url!, key!, {
       auth: {
