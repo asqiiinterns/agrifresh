@@ -10,4 +10,5 @@ export type Product = {
   image: string;
   badge?: string;
   available: boolean;
+  isNew?: boolean;
 };

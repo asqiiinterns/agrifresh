@@ -10,8 +10,12 @@ type CatalogRow = {
   unit_label: string | null;
   price: number | string;
   active: boolean;
+  created_at: string;
   categories: { name: string } | { name: string }[] | null;
 };
+
+// Products added recently are highlighted to clients as new arrivals.
+const NEW_PRODUCT_DAYS = 30;
 
 const productCategories: Product["category"][] = ["Jus frais", "Fruits", "Légumes", "Épicerie"];
 
@@ -24,7 +28,7 @@ export async function fetchCatalog(): Promise<Product[]> {
 
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, description, image_url, unit_label, price, active, categories(name)")
+    .select("id, name, description, image_url, unit_label, price, active, created_at, categories(name)")
     .eq("active", true)
     .order("created_at", { ascending: false });
 
@@ -43,6 +47,7 @@ export async function fetchCatalog(): Promise<Product[]> {
       unit: row.unit_label ?? "unité",
       image: row.image_url || demoProducts.find((item) => item.category === category)?.image || demoProducts[0].image,
       available: row.active,
+      isNew: Date.now() - new Date(row.created_at).getTime() < NEW_PRODUCT_DAYS * 86_400_000,
     };
   });
 }

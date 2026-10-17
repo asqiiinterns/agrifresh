@@ -15,10 +15,11 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
 3. Dans le SQL Editor Supabase, exécute `supabase/schema.sql` une seule fois si le schéma n'est pas déjà installé. Vérifie les politiques RLS avant d'utiliser des données réelles.
 4. Exécute ensuite `supabase/migrations/20261017_customer_features.sql` une seule fois dans le SQL Editor. Cette migration ajoute les favoris et la fonction RPC transactionnelle de commande.
 5. Exécute ensuite `supabase/migrations/20261017_invoice_realtime.sql` une seule fois. Elle crée les reçus de commande et active la publication des changements de statut.
-6. Exécute ensuite `supabase/migrations/20261017_staff_orders.sql`. Elle ajoute l'espace personnel : lecture de toutes les commandes et validation des statuts par les comptes `staff`/`admin`, et empêche un client de modifier son propre rôle.
-7. Pour créer un compte personnel : inscris-le normalement dans l'appli, puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');`. Après reconnexion, l'onglet **Gestion** apparaît.
-8. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
-9. Redémarre Expo après une modification de `.env.local`.
+6. Exécute ensuite `supabase/migrations/20261017_staff_orders.sql` (rôle personnel, rôle non modifiable par le client).
+7. Exécute **seul** `supabase/migrations/20261018_b2b_1_enums.sql` (nouveaux statuts et rôle livreur), puis `supabase/migrations/20261018_b2b_2_flow.sql` (fiches clients, points de livraison, QR codes, décisions du personnel, livraison par scan, messagerie). Le second fichier peut être relancé sans risque.
+8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). Garde **Confirm email** activé dans Supabase Auth : c'est ce qui empêche quelqu'un d'activer l'accès d'un client avec son e-mail.
+9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
+10. Redémarre Expo après une modification de `.env.local`.
 
 L'application accède à la base via l'API Supabase et les règles RLS; elle n'ouvre jamais de connexion PostgreSQL directe. Seule une clé Publishable/anon peut être intégrée au client. **N'utilise jamais une clé `secret` ou `service_role` dans l'application.** Les sessions Auth sont conservées sur l'appareil avec AsyncStorage.
 
@@ -34,21 +35,26 @@ Le profil `preview` dans `eas.json` produit un `.apk` distribuable directement p
 ## Déployer la version web Expo sur Vercel
 1. Dans Vercel, importe le dépôt GitHub et choisis la branche `expo-react-native`. Le fichier `vercel.json` configure `npm ci`, `npm run build:web` et le dossier `dist`.
 2. Dans **Project Settings → Environment Variables**, ajoute `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` pour **Production**, **Preview** et **Development** selon les environnements utilisés. Vercel ne lit pas `.env.local` du poste de développement.
-3. Lance un déploiement. Quand il réussit, teste l’URL Vercel sur navigateur et vérifie catalogue, connexion, favoris, commandes et export PDF.
-4. La branche `main` contient toujours l’ancienne version Vite du site pour éviter de la remplacer sans validation. La version Expo se déploie d’abord comme Preview depuis `expo-react-native`; après vérification, définis cette branche comme branche Production dans les paramètres Vercel ou fusionne la branche dans la branche Production utilisée par Vercel.
+3. Lance un déploiement. Quand il réussit, teste l’URL Vercel sur navigateur et vérifie connexion, commande, suivi, messages et export PDF.
+4. La branche `main` est déployée en production ; `expo-react-native` produit des déploiements Preview.
 
 La version web partage les composants React Native via React Native Web. Les URL de confirmation Auth sur le web doivent également être autorisées dans Supabase **Authentication → URL Configuration → Redirect URLs**; l’URL `agrifresh://auth/callback` est destinée à l’application native et non au site web.
 
-## Fonctionnalités mobiles présentes
-- Catalogue Supabase, filtres par catégorie et recherche
-- Affichage du catalogue de démonstration si le backend n'est pas configuré ou joignable
-- Création de compte, connexion et déconnexion Supabase Auth
-- Session conservée entre les ouvertures de l'application
-- Panier conservé localement sur l'appareil
-- Favoris et historique des commandes associés au compte client
-- Commande enregistrée de façon transactionnelle via RPC, avec contrôle serveur des prix et stocks
-- Reçu PDF partageable et statut de commande actualisé en temps réel lorsque la page Commandes est ouverte
-- Espace personnel (onglet **Gestion**) : commandes en temps réel, validation, préparation, livraison et annulation avec remise en stock
-- Paiement à la livraison; aucun prestataire de paiement par carte n'est encore intégré
+## Fonctionnement
+Application de commande professionnelle pour des clients connus et récurrents.
 
-Le reçu généré est un document récapitulatif informatif, pas une facture fiscale. Les taux de taxe et règles de facturation légale doivent être validés avant une exploitation commerciale. Le suivi en temps réel reçoit les changements effectués côté base; l'onglet Gestion des comptes personnel permet de les faire avancer. Ne réexécute pas les scripts SQL sur une base déjà initialisée sans examiner leurs effets.
+**Client** (compte rattaché à une fiche créée par AgriFresh)
+- **Commander** : liste des produits avec saisie directe des quantités, nouveautés mises en avant, reprise de la dernière commande, brouillon conservé sur l'appareil. Aucune information à ressaisir : l'adresse vient de la fiche. Le point de livraison n'est demandé que si la fiche en compte plusieurs. Date de livraison souhaitée facultative.
+- **Commandes** : historique, statut en temps réel, motif en cas d'attente ou de refus, bon de commande PDF.
+- **Messages** : échange direct avec l'équipe AgriFresh.
+
+**Personnel** (`staff` / `admin`)
+- **Commandes** : *À décider* (accepter, mettre en attente, décliner avec motif), *En cours* (préparation → préparée → expédiée), *Quantités à préparer* (totaux par produit), *Historique*.
+- **Clients** : fiches, e-mail de connexion, points de livraison, impression des QR codes, partage de l'invitation.
+- **Messages** : une conversation par client, compteur de non-lus.
+
+**Livreur** (`driver`) : liste des commandes expédiées et scan du QR code collé au point de livraison. Le livreur coche les commandes remises ; elles passent en *Livrée* avec l'heure et le livreur.
+
+Statuts : Nouvelle → Acceptée / En attente / Déclinée → En préparation → Préparée → Expédiée → Livrée (uniquement par scan). Un refus ou une annulation remet le stock.
+
+Les nouveaux produits s'ajoutent dans Supabase (**Table Editor → products**) et sont affichés comme *Nouveau* pendant 30 jours. Le document PDF est un récapitulatif informatif, pas une facture fiscale.

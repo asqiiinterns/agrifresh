@@ -27,7 +27,15 @@
       }
     },
     "plugins": [
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "AgriFresh utilise la caméra pour scanner le QR code du point de livraison.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }

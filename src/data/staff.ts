@@ -1,37 +1,46 @@
 import { supabase } from "../lib/supabase";
-import type { CustomerOrder } from "./orders";
+import { ORDER_FIELDS, type Order } from "./orders";
 
-export type OrderStatus = "pending" | "confirmed" | "preparing" | "ready" | "out_for_delivery" | "delivered" | "cancelled";
+export type OrderStatus = "pending" | "on_hold" | "confirmed" | "declined" | "preparing" | "ready" | "out_for_delivery" | "delivered" | "cancelled";
 
-export const nextStatus: Partial<Record<OrderStatus, { status: OrderStatus; label: string }>> = {
-  pending: { status: "confirmed", label: "VALIDER LA COMMANDE" },
-  confirmed: { status: "preparing", label: "PASSER EN PRÉPARATION" },
-  preparing: { status: "ready", label: "MARQUER PRÊTE" },
-  ready: { status: "out_for_delivery", label: "METTRE EN LIVRAISON" },
-  out_for_delivery: { status: "delivered", label: "MARQUER LIVRÉE" },
+export type StaffAction = { status: OrderStatus; label: string; variant: "primary" | "secondary" | "danger"; askReason?: boolean };
+
+// Mirrors the transitions enforced by staff_update_order_status in the database.
+export const staffActions: Partial<Record<OrderStatus, StaffAction[]>> = {
+  pending: [
+    { status: "confirmed", label: "ACCEPTER", variant: "primary" },
+    { status: "on_hold", label: "METTRE EN ATTENTE", variant: "secondary", askReason: true },
+    { status: "declined", label: "DÉCLINER", variant: "danger", askReason: true },
+  ],
+  on_hold: [
+    { status: "confirmed", label: "ACCEPTER", variant: "primary" },
+    { status: "declined", label: "DÉCLINER", variant: "danger", askReason: true },
+  ],
+  confirmed: [{ status: "preparing", label: "COMMENCER LA PRÉPARATION", variant: "primary" }],
+  preparing: [{ status: "ready", label: "MARQUER PRÉPARÉE", variant: "primary" }],
+  ready: [{ status: "out_for_delivery", label: "EXPÉDIER", variant: "primary" }],
 };
 
-export const isOpenStatus = (status: string) => status !== "delivered" && status !== "cancelled";
+export const statusGroups = {
+  decide: ["pending", "on_hold"],
+  progress: ["confirmed", "preparing", "ready", "out_for_delivery"],
+  done: ["delivered", "declined", "cancelled"],
+} as const;
 
-// Without the staff migration the RPC is missing; treat that as a customer account.
-export async function fetchIsStaff(): Promise<boolean> {
-  if (!supabase) return false;
-  const { data, error } = await supabase.rpc("is_staff");
-  if (error) return false;
-  return data === true;
-}
+export type StaffOrder = Order & {
+  clients: { business_name: string; client_number: number } | null;
+  delivered_by_profile: { full_name: string } | null;
+};
 
-export async function fetchAllOrders(): Promise<CustomerOrder[]> {
+export async function fetchAllOrders(): Promise<StaffOrder[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
-
   const { data, error } = await supabase
     .from("orders")
-    .select("id, order_number, status, total, currency, created_at, customer_note, address_snapshot, order_items(product_name_snapshot, quantity, unit_snapshot, line_total), invoices(invoice_number, issued_at, subtotal, tax_total, delivery_fee, total, currency)")
+    .select(`${ORDER_FIELDS}, clients(business_name, client_number), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
     .order("created_at", { ascending: false })
-    .limit(200);
-
+    .limit(300);
   if (error) throw error;
-  return (data ?? []) as unknown as CustomerOrder[];
+  return (data ?? []) as unknown as StaffOrder[];
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus, note?: string): Promise<void> {
@@ -42,4 +51,21 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, no
     p_note: note?.trim() || null,
   });
   if (error) throw error;
+}
+
+export type PreparationLine = { key: string; name: string; unit: string; quantity: number; orders: number };
+
+// Totals per product across accepted orders, to plan picking and preparation.
+export function preparationTotals(orders: Order[]): PreparationLine[] {
+  const totals = new Map<string, PreparationLine>();
+  for (const order of orders) {
+    for (const line of order.order_items) {
+      const key = line.product_id ?? `${line.product_name_snapshot}|${line.unit_snapshot}`;
+      const current = totals.get(key) ?? { key, name: line.product_name_snapshot, unit: line.unit_snapshot, quantity: 0, orders: 0 };
+      current.quantity += Number(line.quantity);
+      current.orders += 1;
+      totals.set(key, current);
+    }
+  }
+  return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }

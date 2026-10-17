@@ -14,4 +14,4 @@ web-build/
 android/.gradle/
 android/**/build/
 android/local.properties
-android/.idea/
+android/.idea/supabase/.temp/

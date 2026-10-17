@@ -2,48 +2,14 @@ import { supabase } from "../lib/supabase";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
-import type { CartLine } from "../types/order";
 
-export type DeliveryAddress = {
-  recipient_name: string;
-  phone: string;
-  address_line: string;
-  city: string;
-  notes?: string;
-};
-
-export type PlacedOrder = {
-  id: string;
-  order_number: number;
-  subtotal: number;
-  delivery_fee: number;
-  total: number;
-  currency: string;
-  status: string;
-  payment_method: string;
-};
-
-export type CustomerOrder = {
-  id: string;
-  order_number: number;
-  status: string;
-  total: number | string;
-  currency: string;
-  created_at: string;
-  customer_note: string | null;
-  address_snapshot: {
-    recipient_name?: string;
-    phone?: string;
-    address_line?: string;
-    city?: string;
-  };
-  invoices: InvoiceRecord | InvoiceRecord[] | null;
-  order_items: {
-    product_name_snapshot: string;
-    quantity: number | string;
-    unit_snapshot: string;
-    line_total: number | string;
-  }[];
+export type OrderLine = {
+  product_id: string | null;
+  product_name_snapshot: string;
+  quantity: number | string;
+  unit_snapshot: string;
+  unit_price: number | string;
+  line_total: number | string;
 };
 
 export type InvoiceRecord = {
@@ -56,33 +22,63 @@ export type InvoiceRecord = {
   currency: string;
 };
 
-export async function placeCustomerOrder(
-  cart: CartLine[],
-  address: DeliveryAddress,
-  customerNote = ""
-): Promise<PlacedOrder> {
+export type Order = {
+  id: string;
+  order_number: number;
+  status: string;
+  status_note: string | null;
+  total: number | string;
+  currency: string;
+  created_at: string;
+  requested_delivery_date: string | null;
+  delivered_at: string | null;
+  customer_note: string | null;
+  client_id: string | null;
+  delivery_point_id: string | null;
+  address_snapshot: {
+    business_name?: string;
+    recipient_name?: string;
+    phone?: string;
+    point_label?: string;
+    address_line?: string;
+    city?: string;
+    notes?: string | null;
+  };
+  invoices: InvoiceRecord | InvoiceRecord[] | null;
+  order_items: OrderLine[];
+};
+
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, client_id, delivery_point_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total), invoices(invoice_number, issued_at, subtotal, tax_total, delivery_fee, total, currency)";
+
+export type OrderDraftLine = { product_id: string; quantity: number };
+
+export async function placeClientOrder(params: {
+  items: OrderDraftLine[];
+  deliveryPointId: string | null;
+  requestedDate: string | null;
+  note: string;
+}): Promise<{ id: string; order_number: number; total: number }> {
   if (!supabase) throw new Error("La connexion au service de commande n’est pas configurée.");
-
-  const { data, error } = await supabase.rpc("place_customer_order", {
-    p_items: cart.map(({ product, quantity }) => ({ product_id: product.id, quantity })),
-    p_address: address,
-    p_customer_note: customerNote.trim() || null,
+  const { data, error } = await supabase.rpc("place_client_order", {
+    p_items: params.items,
+    p_delivery_point_id: params.deliveryPointId,
+    p_requested_date: params.requestedDate,
+    p_note: params.note.trim() || null,
   });
-
   if (error) throw error;
-  return data as PlacedOrder;
+  return data as { id: string; order_number: number; total: number };
 }
 
-export async function fetchCustomerOrders(): Promise<CustomerOrder[]> {
+// RLS limits customers to their own orders.
+export async function fetchMyOrders(): Promise<Order[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
-
   const { data, error } = await supabase
     .from("orders")
-    .select("id, order_number, status, total, currency, created_at, customer_note, address_snapshot, order_items(product_name_snapshot, quantity, unit_snapshot, line_total), invoices(invoice_number, issued_at, subtotal, tax_total, delivery_fee, total, currency)")
-    .order("created_at", { ascending: false });
-
+    .select(ORDER_FIELDS)
+    .order("created_at", { ascending: false })
+    .limit(100);
   if (error) throw error;
-  return (data ?? []) as unknown as CustomerOrder[];
+  return (data ?? []) as unknown as Order[];
 }
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
@@ -96,7 +92,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => (
 const formatInvoiceAmount = (amount: number | string) =>
   `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(amount))} TND`;
 
-export async function shareOrderInvoice(order: CustomerOrder): Promise<void> {
+export async function shareOrderReceipt(order: Order): Promise<void> {
   const rawInvoice = Array.isArray(order.invoices) ? order.invoices[0] : order.invoices;
   const invoiceNumber = rawInvoice?.invoice_number ?? `AF-${order.order_number}`;
   const invoiceDate = rawInvoice?.issued_at ?? order.created_at;
@@ -104,8 +100,9 @@ export async function shareOrderInvoice(order: CustomerOrder): Promise<void> {
   const lines = order.order_items.map((line) => `
     <tr>
       <td>${escapeHtml(line.product_name_snapshot)}</td>
-      <td class="number">${escapeHtml(String(line.quantity))}</td>
+      <td class="number">${escapeHtml(String(Number(line.quantity)))}</td>
       <td>${escapeHtml(line.unit_snapshot)}</td>
+      <td class="number">${formatInvoiceAmount(line.unit_price)}</td>
       <td class="number">${formatInvoiceAmount(line.line_total)}</td>
     </tr>`).join("");
 
@@ -120,20 +117,24 @@ export async function shareOrderInvoice(order: CustomerOrder): Promise<void> {
       .grand{border-top:2px solid #24543b;color:#24543b;font-weight:bold;font-size:17px;padding-top:12px}
       .note{margin-top:35px;padding:14px;background:#f6f1e7;border-radius:8px;font-size:11px;line-height:1.6}
     </style></head><body>
-      <div class="top"><div><h1>AgriFresh</h1><div class="muted">Le goût du naturel</div></div><div><strong>REÇU DE COMMANDE</strong><br/><span class="muted">${escapeHtml(invoiceNumber)} · ${new Date(invoiceDate).toLocaleDateString("fr-TN")}</span></div></div>
-      <h3>Livraison à</h3><div>${escapeHtml(address.recipient_name ?? "")}</div><div>${escapeHtml(address.address_line ?? "")}, ${escapeHtml(address.city ?? "")}</div><div>${escapeHtml(address.phone ?? "")}</div>
-      <table><thead><tr><th>Produit</th><th class="number">Qté</th><th>Unité</th><th class="number">Montant</th></tr></thead><tbody>${lines}</tbody></table>
+      <div class="top"><div><h1>AgriFresh</h1><div class="muted">Le goût du naturel</div></div><div><strong>BON DE COMMANDE</strong><br/><span class="muted">${escapeHtml(invoiceNumber)} · ${new Date(invoiceDate).toLocaleDateString("fr-TN")}</span></div></div>
+      <h3>Livraison à</h3>
+      <div><strong>${escapeHtml(address.business_name ?? address.recipient_name ?? "")}</strong>${address.point_label ? ` · ${escapeHtml(address.point_label)}` : ""}</div>
+      <div>${escapeHtml(address.address_line ?? "")}, ${escapeHtml(address.city ?? "")}</div>
+      <div>${escapeHtml(address.phone ?? "")}</div>
+      ${order.requested_delivery_date ? `<div class="muted">Livraison souhaitée : ${new Date(`${order.requested_delivery_date}T12:00:00`).toLocaleDateString("fr-TN")}</div>` : ""}
+      <table><thead><tr><th>Produit</th><th class="number">Qté</th><th>Unité</th><th class="number">Prix unitaire</th><th class="number">Montant</th></tr></thead><tbody>${lines}</tbody></table>
       <div class="total"><div class="row"><span>Sous-total</span><span>${formatInvoiceAmount(rawInvoice?.subtotal ?? order.total)}</span></div><div class="row"><span>Livraison</span><span>${formatInvoiceAmount(rawInvoice?.delivery_fee ?? 0)}</span></div><div class="row"><span>Taxes</span><span>${formatInvoiceAmount(rawInvoice?.tax_total ?? 0)}</span></div><div class="row grand"><span>Total</span><span>${formatInvoiceAmount(rawInvoice?.total ?? order.total)}</span></div></div>
-      <div class="note"><strong>Paiement à la livraison</strong><br/>Document récapitulatif de commande. Ce reçu est informatif et ne constitue pas une facture fiscale.</div>
+      <div class="note">Document récapitulatif de commande. Ce document est informatif et ne constitue pas une facture fiscale.</div>
     </body></html>`;
 
   if (Platform.OS === "web") {
-    // Browser print dialog lets the customer save the receipt as a PDF.
+    // Browser print dialog lets the user save the document as a PDF.
     await Print.printAsync({ html });
     return;
   }
 
   const { uri } = await Print.printToFileAsync({ html });
   if (!(await Sharing.isAvailableAsync())) throw new Error("Le partage de fichiers PDF n’est pas disponible sur cet appareil.");
-  await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Reçu ${invoiceNumber}` });
+  await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Commande ${invoiceNumber}` });
 }
