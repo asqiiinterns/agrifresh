@@ -13,21 +13,10 @@ type CatalogRow = {
   categories: { name: string } | { name: string }[] | null;
 };
 
-function categoryFor(name: string | null | undefined): Product["category"] {
-  const normalized = name?.trim().toLocaleLowerCase("fr");
-  const category = ["Jus frais", "Fruits", "Légumes", "Épicerie"].find(
-    (item) => item.toLocaleLowerCase("fr") === normalized
-  );
-  return (category as Product["category"] | undefined) ?? "Épicerie";
-}
+const productCategories: Product["category"][] = ["Jus frais", "Fruits", "Légumes", "Épicerie"];
 
-function categoryName(row: CatalogRow): string | undefined {
-  const category = Array.isArray(row.categories) ? row.categories[0] : row.categories;
-  return category?.name;
-}
-
-function fallbackImage(category: Product["category"]): string {
-  return demoProducts.find((product) => product.category === category)?.image ?? demoProducts[0].image;
+function categoryFor(name: string | undefined): Product["category"] {
+  return productCategories.find((item) => item.toLocaleLowerCase("fr") === name?.trim().toLocaleLowerCase("fr")) ?? "Épicerie";
 }
 
 export async function fetchCatalog(): Promise<Product[]> {
@@ -42,7 +31,8 @@ export async function fetchCatalog(): Promise<Product[]> {
   if (error) throw error;
 
   return ((data ?? []) as unknown as CatalogRow[]).map((row) => {
-    const category = categoryFor(categoryName(row));
+    const relation = Array.isArray(row.categories) ? row.categories[0] : row.categories;
+    const category = categoryFor(relation?.name);
     const price = Number(row.price);
     return {
       id: row.id,
@@ -51,8 +41,8 @@ export async function fetchCatalog(): Promise<Product[]> {
       category,
       price: Number.isFinite(price) ? price : 0,
       unit: row.unit_label ?? "unité",
-      image: row.image_url || fallbackImage(category),
-      available: row.active
+      image: row.image_url || demoProducts.find((item) => item.category === category)?.image || demoProducts[0].image,
+      available: row.active,
     };
   });
 }

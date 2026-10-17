@@ -3,6 +3,14 @@ dist
 .env
 .env.local
 .DS_Store
+.expo/
+web-build/
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
 android/.gradle/
 android/**/build/
 android/local.properties

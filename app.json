@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "AgriFresh",
+    "slug": "agrifresh",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "agrifresh",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.agrifresh.app"
+    },
+    "android": {
+      "package": "com.agrifresh.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6EDDF"
+      }
+    }
+  }
+}
