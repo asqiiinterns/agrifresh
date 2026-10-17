@@ -10,7 +10,12 @@ export type OrderLine = {
   unit_price: number | string;
   line_total: number | string;
   vat_rate: number | string;
+  origin_snapshot: ProductOrigin | null;
 };
+
+export type ProductOrigin = { producer?: string; region?: string; label?: string; note?: string };
+
+export type StatusEvent = { status: string; note: string | null; changed_by: string | null; created_at: string };
 
 export type Order = {
   id: string;
@@ -23,6 +28,7 @@ export type Order = {
   requested_delivery_date: string | null;
   delivered_at: string | null;
   customer_note: string | null;
+  customer_id: string;
   client_id: string | null;
   delivery_point_id: string | null;
   delivery_token: string;
@@ -37,9 +43,10 @@ export type Order = {
     notes?: string | null;
   };
   order_items: OrderLine[];
+  order_status_history: StatusEvent[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, client_id, delivery_point_id, delivery_token, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, client_id, delivery_point_id, delivery_token, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, created_at)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 
@@ -72,15 +79,31 @@ export async function fetchMyOrders(): Promise<Order[]> {
   return (data ?? []) as unknown as Order[];
 }
 
+// Answer to an order reopened by AgriFresh ("awaiting_client").
+export async function respondToOrder(orderId: string, accept: boolean, note?: string): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("client_respond_order", { p_order_id: orderId, p_accept: accept, p_note: note?.trim() || null });
+  if (error) throw error;
+}
+
 export const deliveryNoteNumber = (order: Pick<Order, "order_number">) => `BL-${String(order.order_number).padStart(6, "0")}`;
 
 // Delivery note: one per order. Its QR code is scanned by the driver at hand-over.
-export async function shareDeliveryNote(order: Order, showPrices: boolean): Promise<void> {
+export const formatOrigin = (origin: ProductOrigin | null | undefined) =>
+  origin ? [origin.producer, origin.region].filter(Boolean).join(" · ") : "";
+
+// Status history, oldest first, labelled with who made each change.
+export const timeline = (order: Order) => [...(order.order_status_history ?? [])]
+  .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  .map((event) => ({ ...event, byClient: event.changed_by === order.customer_id }));
+
+export async function shareDeliveryNote(order: Order, options: { showPrices: boolean; showOrigin: boolean }): Promise<void> {
+  const { showPrices, showOrigin } = options;
   const number = deliveryNoteNumber(order);
   const address = order.address_snapshot ?? {};
   const lines = order.order_items.map((line) => `
     <tr>
-      <td>${escapeHtml(line.product_name_snapshot)}</td>
+      <td>${escapeHtml(line.product_name_snapshot)}${showOrigin && line.origin_snapshot ? `<div class="muted">Origine : ${escapeHtml([formatOrigin(line.origin_snapshot), line.origin_snapshot.label].filter(Boolean).join(" — "))}</div>` : ""}</td>
       <td class="number">${pdfQuantity(line.quantity)}</td>
       <td>${escapeHtml(line.unit_snapshot)}</td>
       ${showPrices ? `<td class="number">${pdfAmount(line.unit_price)}</td><td class="number">${pdfAmount(line.line_total)}</td>` : ""}

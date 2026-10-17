@@ -16,6 +16,7 @@ export type ClientSummary = {
   contact_name: string;
   phone: string;
   show_prices: boolean;
+  show_origin: boolean;
   reception_qr: boolean;
   reception_token: string | null;
   delivery_points: DeliveryPointSummary[];

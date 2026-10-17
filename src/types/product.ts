@@ -11,4 +11,5 @@ export type Product = {
   badge?: string;
   available: boolean;
   isNew?: boolean;
+  origin?: { producer?: string; region?: string; label?: string; note?: string } | null;
 };

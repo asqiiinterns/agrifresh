@@ -6,9 +6,9 @@ import { documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity,
 
 export type Invoice = {
   id: string;
-  invoice_number: string;
+  invoice_number: string | null;
   client_id: string;
-  status: "issued" | "paid" | "cancelled";
+  status: "draft" | "issued" | "paid" | "cancelled";
   issued_at: string;
   paid_at: string | null;
   client_snapshot: { business_name: string; contact_name?: string; client_number: number; email?: string | null; phone?: string; tax_id?: string | null; address?: string | null };
@@ -38,23 +38,42 @@ export async function fetchInvoices(): Promise<InvoiceWithOrders[]> {
   return (data ?? []) as unknown as InvoiceWithOrders[];
 }
 
-// Accepted delivery notes of a client that are not on an invoice yet.
-export async function fetchUninvoicedOrders(clientId: string): Promise<Order[]> {
+// Accepted delivery notes of a client that are not on an invoice yet (or already on this draft).
+export async function fetchUninvoicedOrders(clientId: string, draftId?: string): Promise<Order[]> {
   const { data, error } = await client()
     .from("orders")
     .select(ORDER_FIELDS)
     .eq("client_id", clientId)
-    .is("client_invoice_id", null)
+    .or(draftId ? `client_invoice_id.is.null,client_invoice_id.eq.${draftId}` : "client_invoice_id.is.null")
     .in("status", ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"])
     .order("created_at");
   if (error) throw error;
   return (data ?? []) as unknown as Order[];
 }
 
-export async function createInvoice(clientId: string, orderIds: string[]): Promise<{ id: string; invoice_number: string }> {
-  const { data, error } = await client().rpc("staff_create_invoice", { p_client_id: clientId, p_order_ids: orderIds });
+export const invoiceLabel = (invoice: Pick<Invoice, "invoice_number">) => invoice.invoice_number ?? "Brouillon";
+
+// A draft has no number and stays editable and hidden from the client until it is issued.
+export async function createInvoice(clientId: string, orderIds: string[], draft: boolean): Promise<{ id: string; invoice_number: string | null }> {
+  const { data, error } = await client().rpc("staff_create_invoice", { p_client_id: clientId, p_order_ids: orderIds, p_draft: draft });
   if (error) throw error;
-  return data as { id: string; invoice_number: string };
+  return data as { id: string; invoice_number: string | null };
+}
+
+export async function updateInvoiceDraft(invoiceId: string, orderIds: string[]): Promise<void> {
+  const { error } = await client().rpc("staff_update_invoice_draft", { p_invoice_id: invoiceId, p_order_ids: orderIds });
+  if (error) throw error;
+}
+
+export async function issueInvoice(invoiceId: string): Promise<string> {
+  const { data, error } = await client().rpc("staff_issue_invoice", { p_invoice_id: invoiceId });
+  if (error) throw error;
+  return (data as { invoice_number: string }).invoice_number;
+}
+
+export async function deleteInvoiceDraft(invoiceId: string): Promise<void> {
+  const { error } = await client().rpc("staff_delete_invoice_draft", { p_invoice_id: invoiceId });
+  if (error) throw error;
 }
 
 export async function setInvoiceStatus(invoiceId: string, status: Invoice["status"]): Promise<void> {
@@ -97,10 +116,10 @@ export async function shareInvoice(invoice: InvoiceWithOrders): Promise<void> {
     tr.bl td{background:#fbfaf6;color:#24543b;font-size:11px;padding-top:12px}
     .stamp{position:fixed;top:40%;left:18%;font-size:72px;color:rgba(166,61,47,.18);transform:rotate(-24deg);font-weight:bold}
   </style></head><body>
-    ${invoice.status === "cancelled" ? `<div class="stamp">ANNULÉE</div>` : ""}
+    ${invoice.status === "cancelled" ? `<div class="stamp">ANNULÉE</div>` : invoice.status === "draft" ? `<div class="stamp">BROUILLON</div>` : ""}
     <div class="top">
       <div><h1>${escapeHtml(company.name)}</h1><div class="muted">${escapeHtml(company.tagline)}</div></div>
-      <div class="doc"><strong>FACTURE</strong><br/>${escapeHtml(invoice.invoice_number)}<br/><span class="muted">Date : ${pdfDate(invoice.issued_at)}</span>
+      <div class="doc"><strong>${invoice.status === "draft" ? "FACTURE (BROUILLON)" : "FACTURE"}</strong><br/>${escapeHtml(invoiceLabel(invoice))}<br/><span class="muted">Date : ${pdfDate(invoice.issued_at)}</span>
         ${invoice.status === "paid" && invoice.paid_at ? `<br/><span class="muted">Payée le ${pdfDate(invoice.paid_at)}</span>` : ""}</div>
     </div>
     <div class="parties">
@@ -119,5 +138,5 @@ export async function shareInvoice(invoice: InvoiceWithOrders): Promise<void> {
     ${company.rib ? `<div class="note">Règlement par virement : ${escapeHtml(company.rib)}</div>` : ""}
   </body></html>`;
 
-  await outputPdf(html, invoice.invoice_number, `Facture ${invoice.invoice_number}`);
+  await outputPdf(html, invoice.invoice_number ?? `brouillon-${invoice.id.slice(0, 8)}`, `Facture ${invoiceLabel(invoice)}`);
 }

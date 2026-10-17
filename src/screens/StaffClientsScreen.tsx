@@ -83,6 +83,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
   const [active, setActive] = useState(true);
   const [taxId, setTaxId] = useState("");
   const [showPrices, setShowPrices] = useState(true);
+  const [showOrigin, setShowOrigin] = useState(false);
   const [invoiceMode, setInvoiceMode] = useState<"auto" | "manual">("manual");
   const [receptionQr, setReceptionQr] = useState(false);
   const [firstPoint, setFirstPoint] = useState<DeliveryPointInput>(emptyPoint);
@@ -99,6 +100,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     setNotes(record?.notes ?? "");
     setTaxId(record?.tax_id ?? "");
     setShowPrices(record?.show_prices ?? true);
+    setShowOrigin(record?.show_origin ?? false);
     setInvoiceMode(record?.invoice_mode ?? "manual");
     setReceptionQr(record?.reception_qr ?? false);
     setActive(record?.active ?? true);
@@ -129,7 +131,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
       return;
     }
     void run(async () => {
-      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, show_prices: showPrices, invoice_mode: invoiceMode, reception_qr: receptionQr };
+      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, show_prices: showPrices, show_origin: showOrigin, invoice_mode: invoiceMode, reception_qr: receptionQr };
       if (record) await updateClient(record.id, { ...input, active });
       else await createClient(input, firstPoint);
       onSaved();
@@ -202,6 +204,10 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
             <View style={[ui.row, { marginTop: 12 }]}>
               <View style={{ flex: 1 }}><Text style={ui.body}>Afficher les prix au client</Text><Text style={ui.small}>Dans l’application et sur les bons de livraison.</Text></View>
               <Switch value={showPrices} onValueChange={setShowPrices} trackColor={{ true: colors.green, false: colors.line }} />
+            </View>
+            <View style={[ui.row, { marginTop: 12 }]}>
+              <View style={{ flex: 1 }}><Text style={ui.body}>Afficher l’origine des produits</Text><Text style={ui.small}>Producteur, région et label sur le catalogue, les commandes et les bons de livraison.</Text></View>
+              <Switch value={showOrigin} onValueChange={setShowOrigin} trackColor={{ true: colors.green, false: colors.line }} />
             </View>
             <View style={[ui.row, { marginTop: 12 }]}>
               <View style={{ flex: 1 }}><Text style={ui.body}>Réception par QR client</Text><Text style={ui.small}>Le livreur scanne le QR affiché dans l’application du client au lieu du QR collé au point de livraison.</Text></View>

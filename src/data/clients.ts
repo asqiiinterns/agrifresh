@@ -28,13 +28,14 @@ export type ClientRecord = {
   tax_id: string | null;
   active: boolean;
   show_prices: boolean;
+  show_origin: boolean;
   invoice_mode: "auto" | "manual";
   reception_qr: boolean;
   client_delivery_points: DeliveryPoint[];
   has_account: boolean;
 };
 
-export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes" | "show_prices" | "invoice_mode" | "reception_qr"> & { email: string; tax_id: string };
+export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes" | "show_prices" | "show_origin" | "invoice_mode" | "reception_qr"> & { email: string; tax_id: string };
 export type DeliveryPointInput = Pick<DeliveryPoint, "label" | "address_line" | "city" | "phone" | "instructions">;
 
 function client() {
@@ -45,7 +46,7 @@ function client() {
 export async function fetchClients(): Promise<ClientRecord[]> {
   const { data, error } = await client()
     .from("clients")
-    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, invoice_mode, reception_qr, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
+    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, invoice_mode, reception_qr, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
   type Row = Omit<ClientRecord, "has_account"> & {
@@ -68,6 +69,7 @@ const clean = (input: ClientInput) => ({
   notes: input.notes?.trim() || null,
   tax_id: input.tax_id.trim() || null,
   show_prices: input.show_prices,
+  show_origin: input.show_origin,
   invoice_mode: input.invoice_mode,
   reception_qr: input.reception_qr,
 });

@@ -12,6 +12,8 @@ import { ClientOrdersScreen } from "./src/screens/ClientOrdersScreen";
 import { StaffOrdersScreen } from "./src/screens/StaffOrdersScreen";
 import { StaffClientsScreen } from "./src/screens/StaffClientsScreen";
 import { StaffInvoicesScreen } from "./src/screens/StaffInvoicesScreen";
+import { ClientInvoicesScreen } from "./src/screens/ClientInvoicesScreen";
+import { DocumentViewerHost } from "./src/ui/DocumentViewer";
 import { DriverScreen } from "./src/screens/DriverScreen";
 import { ClientMessagesScreen, StaffInboxScreen } from "./src/screens/MessagesScreen";
 import { Button, EmptyState, Loading } from "./src/ui/components";
@@ -25,6 +27,7 @@ const tabsByRole: Record<"client" | "unlinked" | "staff" | "driver", TabDef[]> =
   client: [
     { key: "order", label: "Commander", icon: "＋" },
     { key: "orders", label: "Commandes", icon: "▤" },
+    { key: "invoices", label: "Factures", icon: "€" },
     { key: "messages", label: "Messages", icon: "✉" },
     { key: "account", label: "Compte", icon: "◉" },
   ],
@@ -190,7 +193,7 @@ function Main({ session }: { session: Session }) {
       case "clients":
         return <StaffClientsScreen />;
       case "invoices":
-        return <StaffInvoicesScreen />;
+        return kind === "staff" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
       case "deliveries":
         return <DriverScreen />;
       default:
@@ -234,6 +237,7 @@ export default function App() {
         : !ready ? <Loading />
         : session ? <Main session={session} />
         : <AuthScreen />}
+      <DocumentViewerHost />
     </SafeAreaView>
   </SafeAreaProvider>;
 }

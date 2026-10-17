@@ -25,6 +25,7 @@ const statusStyles: Record<string, { label: string; color: string; background: s
   on_hold: { label: "En attente", color: colors.amber, background: "#fdf3e1" },
   confirmed: { label: "Acceptée", color: colors.green, background: "#e6efe4" },
   declined: { label: "Déclinée", color: colors.danger, background: "#f8e5e1" },
+  awaiting_client: { label: "À reconfirmer", color: "#9a4f0f", background: "#fde7d4" },
   preparing: { label: "En préparation", color: "#2f5d8a", background: "#e3edf7" },
   ready: { label: "Préparée", color: "#2f5d8a", background: "#e3edf7" },
   out_for_delivery: { label: "Expédiée", color: "#5b3f8a", background: "#ece6f6" },

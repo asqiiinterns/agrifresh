@@ -41,17 +41,32 @@ export const sellerBlock = () => `<div class="party"><strong>${escapeHtml(compan
   ${escapeHtml(company.address)}${company.phone ? `<br/>${escapeHtml(company.phone)}` : ""}${company.email ? `<br/>${escapeHtml(company.email)}` : ""}
   <br/>MF : ${escapeHtml(company.taxId)}</div>`;
 
-// Web: browser print dialog (save as PDF). Native: PDF written into the app cache, then shared;
-// expo-print's own file lives outside the folders Sharing may read in Expo Go.
-export async function outputPdf(html: string, fileName: string, dialogTitle: string): Promise<void> {
-  if (Platform.OS === "web") {
+export type PendingDocument = { html: string; fileName: string; title: string };
+
+let documentListener: ((document: PendingDocument | null) => void) | null = null;
+
+export function subscribeToDocuments(listener: (document: PendingDocument | null) => void) {
+  documentListener = listener;
+  return () => { if (documentListener === listener) documentListener = null; };
+}
+
+// Web: the browser print preview (print or save as PDF). Native: the in-app preview
+// (DocumentViewerHost), from which the user prints or shares.
+export async function outputPdf(html: string, fileName: string, title: string): Promise<void> {
+  if (Platform.OS === "web" || !documentListener) {
     await Print.printAsync({ html });
     return;
   }
+  documentListener({ html, fileName, title });
+}
+
+// expo-print's own file lives outside the folders Sharing may read in Expo Go,
+// so the PDF is written into the app cache first.
+export async function sharePdf({ html, fileName, title }: PendingDocument): Promise<void> {
   if (!(await Sharing.isAvailableAsync())) throw new Error("Le partage de fichiers PDF n’est pas disponible sur cet appareil.");
   const { base64 } = await Print.printToFileAsync({ html, base64: true });
   if (!base64) throw new Error("Le PDF n’a pas pu être généré.");
   const file = new File(Paths.cache, `${fileName.replace(/[^\w-]+/g, "-")}.pdf`);
   file.write(base64, { encoding: "base64" });
-  await Sharing.shareAsync(file.uri, { mimeType: "application/pdf", dialogTitle, UTI: "com.adobe.pdf" });
+  await Sharing.shareAsync(file.uri, { mimeType: "application/pdf", dialogTitle: title, UTI: "com.adobe.pdf" });
 }

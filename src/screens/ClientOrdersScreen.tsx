@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Modal, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type { ClientSummary } from "../data/account";
-import { deliveryNoteNumber, fetchMyOrders, shareDeliveryNote, type Order } from "../data/orders";
+import { deliveryNoteNumber, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type Order } from "../data/orders";
+import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
+import { OrderTimeline } from "../ui/OrderTimeline";
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { QR, QrCode } from "../ui/Qr";
@@ -12,6 +14,7 @@ import { colors, ui } from "../ui/theme";
 
 const filters = [
   { key: "all", label: "Toutes", statuses: null },
+  { key: "reconfirm", label: "À reconfirmer", statuses: ["awaiting_client"] },
   { key: "waiting", label: "En attente de réponse", statuses: ["pending", "on_hold"] },
   { key: "accepted", label: "Acceptées / en préparation", statuses: ["confirmed", "preparing", "ready"] },
   { key: "shipped", label: "Expédiées", statuses: ["out_for_delivery"] },
@@ -28,13 +31,37 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const [filter, setFilter] = useState<(typeof filters)[number]["key"]>("all");
   const [receptionVisible, setReceptionVisible] = useState(false);
   const statusesRef = useRef<Record<string, string>>({});
+  const [claims, setClaims] = useState<Claim[]>([]);
+  const [claimOrder, setClaimOrder] = useState<Order | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  async function answer(order: Order, accept: boolean) {
+    setRespondingId(order.id);
+    try {
+      await respondToOrder(order.id, accept);
+      notify(accept ? "Commande reconfirmée" : "Commande refusée", accept ? `La commande #${order.order_number} est acceptée et part en préparation.` : `La commande #${order.order_number} est annulée.`);
+      void reload("silent");
+    } catch (cause) {
+      notify("Commande", errorMessage(cause, "Votre réponse n’a pas pu être enregistrée."));
+    } finally {
+      setRespondingId(null);
+    }
+  }
+
+  function confirmRefusal(order: Order) {
+    notify("Refuser la commande", `Annuler définitivement la commande #${order.order_number} ?`, [
+      { text: "Retour", style: "cancel" },
+      { text: "Refuser", style: "destructive", onPress: () => void answer(order, false) },
+    ]);
+  }
 
   async function reload(mode: "initial" | "refresh" | "silent") {
     if (mode === "initial") setLoading(true);
     if (mode === "refresh") setRefreshing(true);
     setError("");
     try {
-      const next = await fetchMyOrders();
+      const [next, nextClaims] = await Promise.all([fetchMyOrders(), fetchClaims().catch(() => [] as Claim[])]);
+      setClaims(nextClaims);
       statusesRef.current = Object.fromEntries(next.map((order) => [order.id, order.status]));
       setOrders(next);
     } catch (cause) {
@@ -67,7 +94,7 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   async function share(order: Order) {
     setSharingId(order.id);
     try {
-      await shareDeliveryNote(order, client.show_prices);
+      await shareDeliveryNote(order, { showPrices: client.show_prices, showOrigin: client.show_origin });
     } catch (cause) {
       notify("Bon de livraison", errorMessage(cause, "Impossible de générer le PDF."));
     } finally {
@@ -109,10 +136,20 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
         </Text>
         {item.address_snapshot?.point_label ? <Text style={ui.small}>Livraison : {item.address_snapshot.point_label} — {item.address_snapshot.address_line}</Text> : null}
         {item.delivered_at ? <Text style={[ui.small, { color: colors.green }]}>Livrée le {formatDateTime(item.delivered_at)}</Text> : null}
-        {item.status_note && (item.status === "declined" || item.status === "on_hold" || item.status === "cancelled") ? <Text style={[ui.body, { color: colors.amber, marginTop: 6 }]}>Motif : {item.status_note}</Text> : null}
+        {item.status === "awaiting_client" ? <View style={styles.reconfirm}>
+          <Text style={[ui.strong, { color: "#9a4f0f" }]}>AgriFresh vous propose de reconfirmer cette commande</Text>
+          {item.status_note ? <Text style={[ui.body, { marginTop: 4 }]}>{item.status_note}</Text> : null}
+          <View style={[ui.wrapRow, { marginTop: 10 }]}>
+            <Button label="RECONFIRMER" onPress={() => void answer(item, true)} busy={respondingId === item.id} style={{ flexGrow: 1 }} />
+            <Button label="REFUSER" variant="danger" onPress={() => confirmRefusal(item)} disabled={respondingId === item.id} />
+          </View>
+        </View> : item.status_note && (item.status === "declined" || item.status === "on_hold" || item.status === "cancelled") ? <Text style={[ui.body, { color: colors.amber, marginTop: 6 }]}>Motif : {item.status_note}</Text> : null}
         <View style={ui.divider}>
           {item.order_items.map((line, index) => <View key={`${item.id}-${index}`} style={ui.row}>
-            <Text style={[ui.body, { flex: 1 }]}>{formatQuantity(line.quantity)} {line.unit_snapshot} · {line.product_name_snapshot}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={ui.body}>{formatQuantity(line.quantity)} {line.unit_snapshot} · {line.product_name_snapshot}</Text>
+              {client.show_origin && line.origin_snapshot ? <Text style={styles.origin}>Origine : {formatOrigin(line.origin_snapshot)}{line.origin_snapshot.label ? ` · ${line.origin_snapshot.label}` : ""}</Text> : null}
+            </View>
             {client.show_prices ? <Text style={ui.small}>{formatPrice(line.line_total)}</Text> : null}
           </View>)}
         </View>
@@ -120,9 +157,23 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
           <Text style={ui.strong}>Total HT</Text>
           <Text style={ui.amount}>{formatPrice(item.total)}</Text>
         </View> : null}
-        {item.status !== "declined" && item.status !== "cancelled" ? <Button label={sharingId === item.id ? "Préparation du PDF…" : "BON DE LIVRAISON PDF"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} style={{ marginTop: 10, alignSelf: "flex-start" }} /> : null}
+        {claims.filter((claim) => claim.order_id === item.id).map((claim) => <View key={claim.id} style={styles.claim}>
+          <View style={ui.row}>
+            <Text style={[ui.small, { fontWeight: "800", color: colors.text, flex: 1 }]}>Réclamation n° {claim.claim_number} · {claimReasonLabel(claim.reason)}</Text>
+            <View style={[ui.badge, { backgroundColor: claimStatusStyle[claim.status].background }]}><Text style={[ui.badgeText, { color: claimStatusStyle[claim.status].color }]}>{claimStatusStyle[claim.status].label}</Text></View>
+          </View>
+          <Text style={ui.small}>{claim.description}</Text>
+          {claim.staff_response ? <Text style={[ui.body, { marginTop: 4 }]}>Réponse AgriFresh : {claim.staff_response}</Text> : null}
+        </View>)}
+        <OrderTimeline order={item} viewer="client" />
+        {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} />
+          <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} />
+        </View> : null}
       </View>}
     />}
+
+    <ClaimModal order={claimOrder} onClose={() => setClaimOrder(null)} onSent={() => { setClaimOrder(null); void reload("silent"); }} />
 
     <Modal visible={receptionVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setReceptionVisible(false)}>
       <SafeAreaView style={ui.modalSafe}>
@@ -137,7 +188,60 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   </View>;
 }
 
+function ClaimModal({ order, onClose, onSent }: { order: Order | null; onClose: () => void; onSent: () => void }) {
+  const [reason, setReason] = useState<ClaimReason | null>(null);
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!order) return;
+    setReason(null);
+    setDescription("");
+    setError("");
+  }, [order]);
+
+  async function send() {
+    if (!order) return;
+    if (!reason || !description.trim()) {
+      setError("Choisissez un motif et décrivez le problème.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await createClaim(order.id, reason, description);
+      notify("Réclamation envoyée", "AgriFresh vous répondra ici dès son traitement.");
+      onSent();
+    } catch (cause) {
+      setError(errorMessage(cause, "La réclamation n’a pas pu être envoyée."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal visible={order !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SafeAreaView style={ui.modalSafe}>
+      <ScreenHeader eyebrow={order ? `COMMANDE #${order.order_number}` : ""} title="Signaler un problème" right={<CloseButton onPress={onClose} />} />
+      <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+        <Text style={[ui.strong, { marginTop: 14 }]}>Motif</Text>
+        <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          {claimReasons.map((item) => <Chip key={item.key} label={item.label} selected={reason === item.key} onPress={() => setReason(item.key)} />)}
+        </View>
+        <Text style={[ui.strong, { marginTop: 16 }]}>Description</Text>
+        <TextInput value={description} onChangeText={setDescription} placeholder="Produits concernés, quantités, état constaté…" placeholderTextColor={colors.muted} style={[ui.input, { minHeight: 110, textAlignVertical: "top", marginTop: 8 }]} multiline maxLength={2000} />
+        {order ? <Text style={[ui.small, { marginTop: 10 }]}>Produits de la commande : {order.order_items.map((line) => line.product_name_snapshot).join(", ")}</Text> : null}
+        {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
+        <Button label="ENVOYER LA RÉCLAMATION" onPress={() => void send()} busy={busy} style={{ marginTop: 16 }} />
+      </ScrollView>
+    </SafeAreaView>
+  </Modal>;
+}
+
 const styles = StyleSheet.create({
+  reconfirm: { marginTop: 10, padding: 12, borderRadius: 8, backgroundColor: "#fde7d4" },
+  claim: { marginTop: 10, padding: 10, borderRadius: 8, backgroundColor: colors.cream },
+  origin: { color: colors.green, fontSize: 10, marginTop: 1 },
   filters: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
   banner: { marginTop: 12, padding: 12, borderRadius: 8, backgroundColor: "#ece6f6", color: "#5b3f8a" },
 });

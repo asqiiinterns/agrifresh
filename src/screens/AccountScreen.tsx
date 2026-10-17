@@ -6,6 +6,7 @@ import { formatClientNumber, type Account } from "../data/account";
 import { Button, Field, ScreenHeader } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
+import { StaffProductsModal } from "./StaffProductsScreen";
 
 const roleLabels = { customer: "Client", staff: "Personnel", admin: "Administrateur", driver: "Livreur" } as const;
 
@@ -14,6 +15,8 @@ export function AccountScreen({ session, account }: { session: Session; account:
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [productsVisible, setProductsVisible] = useState(false);
+  const isStaff = account?.role === "staff" || account?.role === "admin";
 
   async function changePassword() {
     if (!supabase) return;
@@ -51,6 +54,12 @@ export function AccountScreen({ session, account }: { session: Session; account:
         </View> : null}
       </View>
 
+      {isStaff ? <View style={ui.card}>
+        <Text style={ui.strong}>Catalogue</Text>
+        <Text style={ui.small}>Produits, prix, TVA, stock, nouveautés et origine (producteur, région, label).</Text>
+        <Button label="GÉRER LES PRODUITS" onPress={() => setProductsVisible(true)} style={{ marginTop: 10 }} />
+      </View> : null}
+
       <View style={ui.card}>
         <Text style={ui.strong}>Changer mon mot de passe</Text>
         <Field label="Nouveau mot de passe" value={password} onChangeText={setPassword} secureTextEntry />
@@ -63,5 +72,6 @@ export function AccountScreen({ session, account }: { session: Session; account:
 
       <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 20 }} />
     </ScrollView>
+    {isStaff ? <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} /> : null}
   </View>;
 }

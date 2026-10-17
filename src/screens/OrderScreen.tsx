@@ -5,7 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Category, Product } from "../types/product";
 import type { ClientSummary } from "../data/account";
 import { fetchCatalog } from "../data/catalog";
-import { fetchMyOrders, placeClientOrder } from "../data/orders";
+import { fetchMyOrders, formatOrigin, placeClientOrder, type Order } from "../data/orders";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ProductImage, ScreenHeader, formatDay, formatPrice, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -38,7 +38,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Filter>("Tous");
   const [reviewVisible, setReviewVisible] = useState(false);
-  const [repeating, setRepeating] = useState(false);
+  const [repeatVisible, setRepeatVisible] = useState(false);
 
   async function loadCatalog() {
     setLoading(true);
@@ -99,28 +99,20 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
     setQuantity(productId, nextValue > 0 ? String(nextValue) : "");
   }
 
-  async function repeatLastOrder() {
-    setRepeating(true);
-    try {
-      const [last] = await fetchMyOrders();
-      if (!last) {
-        notify("Aucune commande précédente", "Votre première commande servira de modèle la prochaine fois.");
-        return;
-      }
-      const available = new Set(catalog.map((product) => product.id));
-      const next: Record<string, string> = {};
-      let skipped = 0;
-      for (const line of last.order_items) {
-        if (line.product_id && available.has(line.product_id)) next[line.product_id] = String(Number(line.quantity));
+  // Fills the cart from one or several previous orders (quantities are added up).
+  function fillFromOrders(orders: Order[]) {
+    const available = new Set(catalog.map((product) => product.id));
+    const totals: Record<string, number> = {};
+    let skipped = 0;
+    for (const order of orders) {
+      for (const line of order.order_items) {
+        if (line.product_id && available.has(line.product_id)) totals[line.product_id] = (totals[line.product_id] ?? 0) + Number(line.quantity);
         else skipped += 1;
       }
-      setQuantities(next);
-      if (skipped) notify("Commande reprise", `${skipped} produit(s) de la commande #${last.order_number} ne sont plus disponibles.`);
-    } catch (cause) {
-      notify("Commande précédente", errorMessage(cause, "Impossible de charger votre dernière commande."));
-    } finally {
-      setRepeating(false);
     }
+    setQuantities(Object.fromEntries(Object.entries(totals).map(([id, quantity]) => [id, String(Math.round(quantity * 1000) / 1000)])));
+    setRepeatVisible(false);
+    if (skipped) notify("Panier rempli", `${skipped} ligne(s) ne sont plus disponibles et n’ont pas été reprises.`);
   }
 
   return <View style={ui.screen}>
@@ -131,7 +123,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
     />
     <View style={styles.toolbar}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un produit" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
-      <Button label={repeating ? "…" : "REPRENDRE LA DERNIÈRE"} variant="secondary" onPress={() => void repeatLastOrder()} busy={repeating} disabled={loading} />
+      <Button label="REPRENDRE" variant="secondary" onPress={() => setRepeatVisible(true)} disabled={loading} />
     </View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
       {catalog.some((product) => product.isNew) ? <Chip label="✦ Nouveautés" selected={category === "Nouveautés"} onPress={() => setCategory("Nouveautés")} /> : null}
@@ -153,6 +145,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
             {item.isNew ? <Text style={styles.newBadge}>✦ NOUVEAU</Text> : null}
             <Text style={ui.strong} numberOfLines={2}>{item.name}</Text>
             {item.isNew && item.description ? <Text style={ui.small} numberOfLines={2}>{item.description}</Text> : null}
+            {client.show_origin && item.origin ? <Text style={styles.origin} numberOfLines={2}>Origine : {[formatOrigin(item.origin), item.origin.label].filter(Boolean).join(" · ")}{item.origin.note ? ` — ${item.origin.note}` : ""}</Text> : null}
             <Text style={ui.small}>{client.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
           </View>
           <View style={styles.stepper}>
@@ -189,10 +182,19 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
       total={total}
       onClose={() => setReviewVisible(false)}
       onPlaced={() => {
+        // Clear the saved cart right away: the screen unmounts when switching to the orders tab.
+        void AsyncStorage.removeItem(draftKey(client.id)).catch(() => {});
         setQuantities({});
         setReviewVisible(false);
         onPlaced();
       }}
+    />
+
+    <RepeatModal
+      visible={repeatVisible}
+      showPrices={client.show_prices}
+      onClose={() => setRepeatVisible(false)}
+      onFill={fillFromOrders}
     />
   </View>;
 }
@@ -285,12 +287,62 @@ function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
   </Modal>;
 }
 
+function RepeatModal({ visible, showPrices, onClose, onFill }: { visible: boolean; showPrices: boolean; onClose: () => void; onFill: (orders: Order[]) => void }) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    setError("");
+    void fetchMyOrders()
+      .then((all) => {
+        const recent = all.filter((order) => order.status !== "cancelled").slice(0, 12);
+        setOrders(recent);
+        setSelected(recent[0] ? [recent[0].id] : []);
+      })
+      .catch((cause: unknown) => setError(errorMessage(cause, "Impossible de charger vos commandes.")))
+      .finally(() => setLoading(false));
+  }, [visible]);
+
+  const toggle = (id: string) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+
+  return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SafeAreaView style={ui.modalSafe}>
+      <ScreenHeader eyebrow="REMPLIR LE PANIER" title="Reprendre" subtitle="Cochez une ou plusieurs commandes : leurs quantités sont additionnées." right={<CloseButton onPress={onClose} />} />
+      {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content}>
+        {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
+        {orders.length === 0 && !error ? <EmptyState title="Aucune commande précédente" body="Votre première commande servira de modèle la prochaine fois." /> : null}
+        {orders.map((order) => {
+          const checked = selected.includes(order.id);
+          return <Pressable key={order.id} onPress={() => toggle(order.id)} style={[ui.card, checked && styles.productRowSelected]}>
+            <View style={ui.row}>
+              <View style={[styles.checkbox, checked && styles.checkboxChecked]}>{checked ? <Text style={styles.checkmark}>✓</Text> : null}</View>
+              <Text style={[ui.strong, { flex: 1 }]}>Commande #{order.order_number}</Text>
+              <Text style={ui.small}>{formatDay(order.created_at)}</Text>
+            </View>
+            <Text style={[ui.small, { marginLeft: 34 }]} numberOfLines={2}>{order.order_items.map((line) => `${formatQuantity(line.quantity)} ${line.unit_snapshot} ${line.product_name_snapshot}`).join(" · ")}</Text>
+            {showPrices ? <Text style={[ui.small, { marginLeft: 34 }]}>{formatPrice(order.total)} HT</Text> : null}
+          </Pressable>;
+        })}
+        {orders.length ? <Button label={`REMPLIR LE PANIER (${selected.length})`} onPress={() => onFill(orders.filter((order) => selected.includes(order.id)))} disabled={selected.length === 0} style={{ marginTop: 16 }} /> : null}
+      </ScrollView>}
+    </SafeAreaView>
+  </Modal>;
+}
+
 const styles = StyleSheet.create({
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
+  checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
+  checkmark: { color: colors.white, fontWeight: "800" },
   toolbar: { flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingTop: 12, alignItems: "center" },
   categories: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
   productRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginTop: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   productRowSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
   productImage: { width: 54, height: 54, borderRadius: 8 },
+  origin: { color: colors.green, fontSize: 10, marginTop: 1 },
   newBadge: { color: colors.orange, fontSize: 9, fontWeight: "800", letterSpacing: 0.8, marginBottom: 2 },
   stepper: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.white },
   stepButton: { width: 34, height: 40, alignItems: "center", justifyContent: "center" },
