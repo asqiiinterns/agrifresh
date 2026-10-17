@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { File, Paths } from "expo-file-system";
 import { Platform } from "react-native";
 
 export type OrderLine = {
@@ -134,7 +135,12 @@ export async function shareOrderReceipt(order: Order): Promise<void> {
     return;
   }
 
-  const { uri } = await Print.printToFileAsync({ html });
   if (!(await Sharing.isAvailableAsync())) throw new Error("Le partage de fichiers PDF n’est pas disponible sur cet appareil.");
-  await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Commande ${invoiceNumber}` });
+  // expo-print writes outside the app's readable folders in Expo Go, so Sharing refuses
+  // its file; write the PDF ourselves into the app cache under a readable name instead.
+  const { base64 } = await Print.printToFileAsync({ html, base64: true });
+  if (!base64) throw new Error("Le PDF n’a pas pu être généré.");
+  const file = new File(Paths.cache, `bon-commande-${order.order_number}.pdf`);
+  file.write(base64, { encoding: "base64" });
+  await Sharing.shareAsync(file.uri, { mimeType: "application/pdf", dialogTitle: `Commande ${invoiceNumber}`, UTI: "com.adobe.pdf" });
 }
