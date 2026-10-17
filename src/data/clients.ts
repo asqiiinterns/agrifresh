@@ -1,8 +1,9 @@
 import * as Print from "expo-print";
-import qrcode from "qrcode-generator";
 import { Platform, Share } from "react-native";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "./account";
+import { escapeHtml } from "./pdf";
+import { QR, qrSvg } from "../ui/Qr";
 
 export type DeliveryPoint = {
   id: string;
@@ -24,12 +25,16 @@ export type ClientRecord = {
   email: string | null;
   phone: string;
   notes: string | null;
+  tax_id: string | null;
   active: boolean;
+  show_prices: boolean;
+  invoice_mode: "auto" | "manual";
+  reception_qr: boolean;
   client_delivery_points: DeliveryPoint[];
   has_account: boolean;
 };
 
-export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes"> & { email: string };
+export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes" | "show_prices" | "invoice_mode" | "reception_qr"> & { email: string; tax_id: string };
 export type DeliveryPointInput = Pick<DeliveryPoint, "label" | "address_line" | "city" | "phone" | "instructions">;
 
 function client() {
@@ -40,7 +45,7 @@ function client() {
 export async function fetchClients(): Promise<ClientRecord[]> {
   const { data, error } = await client()
     .from("clients")
-    .select("id, client_number, business_name, contact_name, email, phone, notes, active, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
+    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, invoice_mode, reception_qr, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
   type Row = Omit<ClientRecord, "has_account"> & {
@@ -61,6 +66,10 @@ const clean = (input: ClientInput) => ({
   email: input.email.trim().toLowerCase() || null,
   phone: input.phone.trim(),
   notes: input.notes?.trim() || null,
+  tax_id: input.tax_id.trim() || null,
+  show_prices: input.show_prices,
+  invoice_mode: input.invoice_mode,
+  reception_qr: input.reception_qr,
 });
 
 export async function createClient(input: ClientInput, firstPoint: DeliveryPointInput): Promise<string> {
@@ -95,24 +104,10 @@ export async function setDeliveryPointActive(pointId: string, active: boolean): 
   if (error) throw error;
 }
 
-export const QR_PREFIX = "agrifresh:point:";
-
-export function parseDeliveryQr(data: string): string | null {
-  const match = data.trim().match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-  return match ? match[0].toLowerCase() : null;
-}
-
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[character] ?? character));
-
 // Printable sticker to put on the wall at the delivery point.
 export async function printDeliveryPointQr(record: ClientRecord, points: DeliveryPoint[]): Promise<void> {
   const sheets = points.map((point) => {
-    const qr = qrcode(0, "M");
-    qr.addData(`${QR_PREFIX}${point.qr_token}`);
-    qr.make();
-    const svg = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+    const svg = qrSvg(QR.point(point.qr_token), 8);
     return `<section class="sheet">
       <div class="brand">AgriFresh</div>
       <div class="client">${escapeHtml(record.business_name)}</div>

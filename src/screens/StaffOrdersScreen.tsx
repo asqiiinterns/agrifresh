@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
+import { deliveryNoteNumber, shareDeliveryNote } from "../data/orders";
 import { fetchAllOrders, preparationTotals, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
@@ -23,6 +24,18 @@ export function StaffOrdersScreen() {
   const [view, setView] = useState<View_>("decide");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [printingId, setPrintingId] = useState<string | null>(null);
+
+  async function printDeliveryNote(order: StaffOrder) {
+    setPrintingId(order.id);
+    try {
+      await shareDeliveryNote(order, order.clients?.show_prices ?? true);
+    } catch (cause) {
+      notify("Bon de livraison", errorMessage(cause, "Impossible de générer le PDF."));
+    } finally {
+      setPrintingId(null);
+    }
+  }
 
   async function reload(mode: "initial" | "refresh" | "silent") {
     if (mode === "initial") setLoading(true);
@@ -137,7 +150,7 @@ export function StaffOrdersScreen() {
             <StatusBadge status={item.status} />
           </View>
           <Text style={[ui.small, { marginTop: 4 }]}>
-            {item.clients ? `${formatClientNumber(item.clients.client_number)} · ` : ""}Reçue le {formatDateTime(item.created_at)}
+            {deliveryNoteNumber(item)} · {item.clients ? `${formatClientNumber(item.clients.client_number)} · ` : ""}reçue le {formatDateTime(item.created_at)}
           </Text>
           <Text style={[ui.body, { marginTop: 4, color: item.requested_delivery_date ? colors.green : colors.muted, fontWeight: "700" }]}>
             Livraison souhaitée : {item.requested_delivery_date ? formatDay(item.requested_delivery_date, { weekday: "long", day: "numeric", month: "long" }) : "dès que possible"}
@@ -145,6 +158,7 @@ export function StaffOrdersScreen() {
           <Text style={ui.small}>{address.point_label ? `${address.point_label} — ` : ""}{address.address_line}, {address.city}{address.phone ? ` · ${address.phone}` : ""}</Text>
           {item.customer_note ? <Text style={[ui.body, { color: colors.orange, fontStyle: "italic", marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
           {item.status_note ? <Text style={[ui.small, { color: colors.amber }]}>Motif : {item.status_note}</Text> : null}
+          {item.client_invoices && item.client_invoices.status !== "cancelled" ? <Text style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Facture {item.client_invoices.invoice_number}{item.client_invoices.status === "paid" ? " · payée" : ""}</Text> : null}
           {item.delivered_at ? <Text style={[ui.small, { color: colors.green }]}>Livrée le {formatDateTime(item.delivered_at)}{item.delivered_by_profile?.full_name ? ` par ${item.delivered_by_profile.full_name}` : ""} (scan QR)</Text> : null}
 
           <View style={ui.divider}>
@@ -164,7 +178,8 @@ export function StaffOrdersScreen() {
           /> : null}
           {actions.length ? <View style={styles.actions}>
             {actions.map((action) => <Button key={action.status} label={action.label} variant={action.variant} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(item, action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
-          </View> : item.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 10 }]}>En attente du scan du QR code par le livreur.</Text> : null}
+          </View> : item.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 10 }]}>En attente des scans du livreur (bon de livraison + QR client).</Text> : null}
+          {["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(item.status) ? <Button label={printingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" busy={printingId === item.id} onPress={() => void printDeliveryNote(item)} style={{ marginTop: 10, alignSelf: "flex-start" }} /> : null}
         </View>;
       }}
     />}

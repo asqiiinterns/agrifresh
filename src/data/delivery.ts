@@ -13,15 +13,32 @@ export type Shipment = {
   item_count: number;
 };
 
-export type ScannedPoint = {
-  point: { id: string; label: string; address_line: string; city: string; business_name: string; client_number: number };
-  orders: {
-    id: string;
-    order_number: number;
-    requested_delivery_date: string | null;
-    total: number | string;
-    items: { name: string; quantity: number | string; unit: string }[];
-  }[];
+export type ScannedDeliveryNote = {
+  id: string;
+  order_number: number;
+  delivery_token: string;
+  client_id: string;
+  business_name: string;
+  reception_qr: boolean;
+  point_id: string;
+  point_label: string;
+  address_line: string;
+  city: string;
+  items: { name: string; quantity: number | string; unit: string }[];
+};
+
+export type DeliveredOrder = {
+  id: string;
+  order_number: number;
+  delivered_at: string;
+  client_id: string;
+  business_name: string;
+  point_label: string;
+  address_line: string;
+  city: string;
+  total: number | string;
+  driver_name: string | null;
+  item_count: number;
 };
 
 function client() {
@@ -35,14 +52,25 @@ export async function fetchShipments(): Promise<Shipment[]> {
   return (data ?? []) as Shipment[];
 }
 
-export async function lookupDeliveryPoint(qrToken: string): Promise<ScannedPoint> {
-  const { data, error } = await client().rpc("driver_lookup_point", { p_qr_token: qrToken });
+export async function lookupDeliveryNote(deliveryToken: string): Promise<ScannedDeliveryNote> {
+  const { data, error } = await client().rpc("driver_lookup_delivery", { p_delivery_token: deliveryToken });
   if (error) throw error;
-  return data as ScannedPoint;
+  return data as ScannedDeliveryNote;
 }
 
-export async function confirmDelivery(qrToken: string, orderIds: string[]): Promise<number> {
-  const { data, error } = await client().rpc("driver_confirm_delivery", { p_qr_token: qrToken, p_order_ids: orderIds });
+// Hand-over: the scanned delivery notes plus the client's QR code (wall sticker or reception code).
+export async function confirmHandover(deliveryTokens: string[], clientQr: { kind: "point" | "client"; token: string }): Promise<number> {
+  const { data, error } = await client().rpc("driver_confirm_handover", {
+    p_delivery_tokens: deliveryTokens,
+    p_client_qr_kind: clientQr.kind,
+    p_client_qr_token: clientQr.token,
+  });
   if (error) throw error;
   return Number(data);
+}
+
+export async function fetchDeliveryHistory(since: string): Promise<DeliveredOrder[]> {
+  const { data, error } = await client().rpc("driver_history", { p_since: since });
+  if (error) throw error;
+  return (data ?? []) as DeliveredOrder[];
 }

@@ -17,6 +17,7 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
 5. Exécute ensuite `supabase/migrations/20261017_invoice_realtime.sql` une seule fois. Elle crée les reçus de commande et active la publication des changements de statut.
 6. Exécute ensuite `supabase/migrations/20261017_staff_orders.sql` (rôle personnel, rôle non modifiable par le client).
 7. Exécute **seul** `supabase/migrations/20261018_b2b_1_enums.sql` (nouveaux statuts et rôle livreur), puis `supabase/migrations/20261018_b2b_2_flow.sql` (fiches clients, points de livraison, QR codes, décisions du personnel, livraison par scan, messagerie). Le second fichier peut être relancé sans risque.
+   Puis `supabase/migrations/20261019_invoices_delivery_notes.sql` : TVA par produit, options de fiche (prix affichés, réception par QR client, facturation automatique ou manuelle), factures et livraison en deux scans. Renseigne ensuite le taux de TVA de chaque produit dans **Table Editor → products → vat_rate** (0, 7, 13 ou 19) et les coordonnées légales d'AgriFresh dans `src/config/company.ts`.
 8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). Garde **Confirm email** activé dans Supabase Auth : c'est ce qui empêche quelqu'un d'activer l'accès d'un client avec son e-mail.
 9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
 10. Redémarre Expo après une modification de `.env.local`.
@@ -45,16 +46,21 @@ Application de commande professionnelle pour des clients connus et récurrents.
 
 **Client** (compte rattaché à une fiche créée par AgriFresh)
 - **Commander** : liste des produits avec saisie directe des quantités, nouveautés mises en avant, reprise de la dernière commande, brouillon conservé sur l'appareil. Aucune information à ressaisir : l'adresse vient de la fiche. Le point de livraison n'est demandé que si la fiche en compte plusieurs. Date de livraison souhaitée facultative.
-- **Commandes** : historique, statut en temps réel, motif en cas d'attente ou de refus, bon de commande PDF.
+- **Commandes** : historique filtrable par statut, statut en temps réel, motif en cas d'attente ou de refus, bon de livraison PDF, QR de réception si la fiche l'exige.
 - **Messages** : échange direct avec l'équipe AgriFresh.
 
 **Personnel** (`staff` / `admin`)
 - **Commandes** : *À décider* (accepter, mettre en attente, décliner avec motif), *En cours* (préparation → préparée → expédiée), *Quantités à préparer* (totaux par produit), *Historique*.
-- **Clients** : fiches, e-mail de connexion, points de livraison, impression des QR codes, partage de l'invitation.
+- **Clients** : fiches, e-mail de connexion, matricule fiscal, options (prix affichés, réception par QR client, facturation), points de livraison, impression des QR codes, partage de l'invitation.
+- **Factures** : création à partir des BL non facturés, PDF, suivi payé / à encaisser.
 - **Messages** : une conversation par client, compteur de non-lus.
 
-**Livreur** (`driver`) : liste des commandes expédiées et scan du QR code collé au point de livraison. Le livreur coche les commandes remises ; elles passent en *Livrée* avec l'heure et le livreur.
+**Livreur** (`driver`) : *À livrer* (commandes expédiées) et *Historique* filtrable par client, période et tranche horaire. Remise en deux scans : le QR de chaque bon de livraison, puis le QR du client — celui collé au point de livraison, ou le QR de réception affiché dans l'appli du client si sa fiche l'exige.
 
-Statuts : Nouvelle → Acceptée / En attente / Déclinée → En préparation → Préparée → Expédiée → Livrée (uniquement par scan). Un refus ou une annulation remet le stock.
+**Documents**
+- *Bon de livraison* (BL-000123) : un par commande, avec QR code et zones de signature ; prix masqués si la fiche du client le demande.
+- *Facture* (FA-2026-00001) : regroupe un ou plusieurs BL acceptés d'un client ; TVA par produit (prix HT), timbre fiscal, net à payer TTC. Créée automatiquement à l'acceptation pour les fiches en facturation automatique, sinon par le personnel depuis l'onglet **Factures**. Annuler une facture libère ses BL.
 
-Les nouveaux produits s'ajoutent dans Supabase (**Table Editor → products**) et sont affichés comme *Nouveau* pendant 30 jours. Le document PDF est un récapitulatif informatif, pas une facture fiscale.
+Statuts : Nouvelle → Acceptée / En attente / Déclinée → En préparation → Préparée → Expédiée → Livrée (uniquement par les deux scans). Un refus ou une annulation remet le stock.
+
+Les nouveaux produits s'ajoutent dans Supabase (**Table Editor → products**) et sont affichés comme *Nouveau* pendant 30 jours. Vérifie les mentions légales des factures (coordonnées, matricule fiscal, taux de TVA) avec ton comptable avant de les émettre.

@@ -1,8 +1,6 @@
 import { supabase } from "../lib/supabase";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
-import { File, Paths } from "expo-file-system";
-import { Platform } from "react-native";
+import { QR, qrSvg } from "../ui/Qr";
+import { documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity, sellerBlock } from "./pdf";
 
 export type OrderLine = {
   product_id: string | null;
@@ -11,16 +9,7 @@ export type OrderLine = {
   unit_snapshot: string;
   unit_price: number | string;
   line_total: number | string;
-};
-
-export type InvoiceRecord = {
-  invoice_number: string;
-  issued_at: string;
-  subtotal: number | string;
-  tax_total: number | string;
-  delivery_fee: number | string;
-  total: number | string;
-  currency: string;
+  vat_rate: number | string;
 };
 
 export type Order = {
@@ -36,6 +25,8 @@ export type Order = {
   customer_note: string | null;
   client_id: string | null;
   delivery_point_id: string | null;
+  delivery_token: string;
+  client_invoice_id: string | null;
   address_snapshot: {
     business_name?: string;
     recipient_name?: string;
@@ -45,11 +36,10 @@ export type Order = {
     city?: string;
     notes?: string | null;
   };
-  invoices: InvoiceRecord | InvoiceRecord[] | null;
   order_items: OrderLine[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, client_id, delivery_point_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total), invoices(invoice_number, issued_at, subtotal, tax_total, delivery_fee, total, currency)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, client_id, delivery_point_id, delivery_token, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 
@@ -77,70 +67,44 @@ export async function fetchMyOrders(): Promise<Order[]> {
     .from("orders")
     .select(ORDER_FIELDS)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   if (error) throw error;
   return (data ?? []) as unknown as Order[];
 }
 
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-}[character] ?? character));
+export const deliveryNoteNumber = (order: Pick<Order, "order_number">) => `BL-${String(order.order_number).padStart(6, "0")}`;
 
-const formatInvoiceAmount = (amount: number | string) =>
-  `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(amount))} TND`;
-
-export async function shareOrderReceipt(order: Order): Promise<void> {
-  const rawInvoice = Array.isArray(order.invoices) ? order.invoices[0] : order.invoices;
-  const invoiceNumber = rawInvoice?.invoice_number ?? `AF-${order.order_number}`;
-  const invoiceDate = rawInvoice?.issued_at ?? order.created_at;
+// Delivery note: one per order. Its QR code is scanned by the driver at hand-over.
+export async function shareDeliveryNote(order: Order, showPrices: boolean): Promise<void> {
+  const number = deliveryNoteNumber(order);
   const address = order.address_snapshot ?? {};
   const lines = order.order_items.map((line) => `
     <tr>
       <td>${escapeHtml(line.product_name_snapshot)}</td>
-      <td class="number">${escapeHtml(String(Number(line.quantity)))}</td>
+      <td class="number">${pdfQuantity(line.quantity)}</td>
       <td>${escapeHtml(line.unit_snapshot)}</td>
-      <td class="number">${formatInvoiceAmount(line.unit_price)}</td>
-      <td class="number">${formatInvoiceAmount(line.line_total)}</td>
+      ${showPrices ? `<td class="number">${pdfAmount(line.unit_price)}</td><td class="number">${pdfAmount(line.line_total)}</td>` : ""}
     </tr>`).join("");
 
-  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" />
-    <style>
-      body{font-family:Arial,sans-serif;color:#24372c;padding:32px;max-width:780px;margin:auto}
-      h1{color:#24543b;margin-bottom:4px} .muted{color:#737b71;font-size:12px}
-      .top{display:flex;justify-content:space-between;border-bottom:2px solid #24543b;padding-bottom:18px}
-      table{width:100%;border-collapse:collapse;margin-top:28px} th,td{padding:11px 8px;border-bottom:1px solid #e8e7df;text-align:left;font-size:12px}
-      th{color:#24543b;background:#f6f1e7}.number{text-align:right;white-space:nowrap}
-      .total{margin:24px 0 0 auto;width:260px}.row{display:flex;justify-content:space-between;padding:6px 0}
-      .grand{border-top:2px solid #24543b;color:#24543b;font-weight:bold;font-size:17px;padding-top:12px}
-      .note{margin-top:35px;padding:14px;background:#f6f1e7;border-radius:8px;font-size:11px;line-height:1.6}
-    </style></head><body>
-      <div class="top"><div><h1>AgriFresh</h1><div class="muted">Le goût du naturel</div></div><div><strong>BON DE COMMANDE</strong><br/><span class="muted">${escapeHtml(invoiceNumber)} · ${new Date(invoiceDate).toLocaleDateString("fr-TN")}</span></div></div>
-      <h3>Livraison à</h3>
-      <div><strong>${escapeHtml(address.business_name ?? address.recipient_name ?? "")}</strong>${address.point_label ? ` · ${escapeHtml(address.point_label)}` : ""}</div>
-      <div>${escapeHtml(address.address_line ?? "")}, ${escapeHtml(address.city ?? "")}</div>
-      <div>${escapeHtml(address.phone ?? "")}</div>
-      ${order.requested_delivery_date ? `<div class="muted">Livraison souhaitée : ${new Date(`${order.requested_delivery_date}T12:00:00`).toLocaleDateString("fr-TN")}</div>` : ""}
-      <table><thead><tr><th>Produit</th><th class="number">Qté</th><th>Unité</th><th class="number">Prix unitaire</th><th class="number">Montant</th></tr></thead><tbody>${lines}</tbody></table>
-      <div class="total"><div class="row"><span>Sous-total</span><span>${formatInvoiceAmount(rawInvoice?.subtotal ?? order.total)}</span></div><div class="row"><span>Livraison</span><span>${formatInvoiceAmount(rawInvoice?.delivery_fee ?? 0)}</span></div><div class="row"><span>Taxes</span><span>${formatInvoiceAmount(rawInvoice?.tax_total ?? 0)}</span></div><div class="row grand"><span>Total</span><span>${formatInvoiceAmount(rawInvoice?.total ?? order.total)}</span></div></div>
-      <div class="note">Document récapitulatif de commande. Ce document est informatif et ne constitue pas une facture fiscale.</div>
-    </body></html>`;
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles}</style></head><body>
+    <div class="top">
+      <div><h1>AgriFresh</h1><div class="muted">Le goût du naturel</div></div>
+      <div class="doc"><strong>BON DE LIVRAISON</strong><br/>${number}<br/><span class="muted">Commande #${order.order_number} du ${pdfDate(order.created_at)}</span>
+        ${order.requested_delivery_date ? `<br/><span class="muted">Livraison souhaitée : ${pdfDate(order.requested_delivery_date)}</span>` : ""}</div>
+      <div class="qr">${qrSvg(QR.deliveryNote(order.delivery_token))}</div>
+    </div>
+    <div class="parties">
+      ${sellerBlock()}
+      <div class="party"><strong>${escapeHtml(address.business_name ?? address.recipient_name ?? "")}</strong>${address.point_label ? ` · ${escapeHtml(address.point_label)}` : ""}<br/>
+        ${escapeHtml(address.address_line ?? "")}, ${escapeHtml(address.city ?? "")}${address.phone ? `<br/>${escapeHtml(address.phone)}` : ""}
+        ${address.notes ? `<br/><span class="muted">${escapeHtml(address.notes)}</span>` : ""}</div>
+    </div>
+    <table><thead><tr><th>Produit</th><th class="number">Quantité</th><th>Unité</th>${showPrices ? `<th class="number">Prix unitaire HT</th><th class="number">Total HT</th>` : ""}</tr></thead><tbody>${lines}</tbody></table>
+    ${showPrices ? `<div class="totals"><div class="row grand"><span>Total HT</span><span>${pdfAmount(order.total)} TND</span></div></div>` : ""}
+    ${order.customer_note ? `<div class="note"><strong>Remarque du client :</strong> ${escapeHtml(order.customer_note)}</div>` : ""}
+    <div class="signatures"><div>Livré par</div><div>Reçu par (nom, signature)</div></div>
+    <div class="note">Le livreur scanne le QR code de ce bon puis le QR code du client pour confirmer la livraison. Ce bon n’est pas une facture.</div>
+  </body></html>`;
 
-  if (Platform.OS === "web") {
-    // Browser print dialog lets the user save the document as a PDF.
-    await Print.printAsync({ html });
-    return;
-  }
-
-  if (!(await Sharing.isAvailableAsync())) throw new Error("Le partage de fichiers PDF n’est pas disponible sur cet appareil.");
-  // expo-print writes outside the app's readable folders in Expo Go, so Sharing refuses
-  // its file; write the PDF ourselves into the app cache under a readable name instead.
-  const { base64 } = await Print.printToFileAsync({ html, base64: true });
-  if (!base64) throw new Error("Le PDF n’a pas pu être généré.");
-  const file = new File(Paths.cache, `bon-commande-${order.order_number}.pdf`);
-  file.write(base64, { encoding: "base64" });
-  await Sharing.shareAsync(file.uri, { mimeType: "application/pdf", dialogTitle: `Commande ${invoiceNumber}`, UTI: "com.adobe.pdf" });
+  await outputPdf(html, number, `Bon de livraison ${number}`);
 }

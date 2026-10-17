@@ -153,7 +153,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
             {item.isNew ? <Text style={styles.newBadge}>✦ NOUVEAU</Text> : null}
             <Text style={ui.strong} numberOfLines={2}>{item.name}</Text>
             {item.isNew && item.description ? <Text style={ui.small} numberOfLines={2}>{item.description}</Text> : null}
-            <Text style={ui.small}>{formatPrice(item.price)} / {item.unit}</Text>
+            <Text style={ui.small}>{client.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
           </View>
           <View style={styles.stepper}>
             <Pressable onPress={() => step(item.id, -1)} style={styles.stepButton} accessibilityLabel={`Retirer une unité de ${item.name}`}><Text style={styles.stepText}>−</Text></Pressable>
@@ -176,7 +176,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
     <View style={styles.footer}>
       <View style={{ flex: 1 }}>
         <Text style={ui.small}>{lines.length} produit{lines.length > 1 ? "s" : ""}</Text>
-        <Text style={ui.amount}>{formatPrice(total)}</Text>
+        {client.show_prices ? <Text style={ui.amount}>{formatPrice(total)} HT</Text> : null}
       </View>
       {lines.length ? <Pressable onPress={() => setQuantities({})} style={{ padding: 8 }}><Text style={[ui.small, { textDecorationLine: "underline" }]}>Vider</Text></Pressable> : null}
       <Button label="VÉRIFIER ET ENVOYER" onPress={() => setReviewVisible(true)} disabled={!lines.length} />
@@ -235,7 +235,7 @@ function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
       });
       setNote("");
       setDay(null);
-      notify("Commande envoyée", `Commande #${order.order_number} transmise à AgriFresh (${formatPrice(order.total)}). Vous serez informé de son acceptation.`);
+      notify("Commande envoyée", `Commande #${order.order_number} transmise à AgriFresh${client.show_prices ? ` (${formatPrice(order.total)} HT)` : ""}. Vous serez informé de son acceptation.`);
       onPlaced();
     } catch (cause) {
       setError(errorMessage(cause, "La commande n’a pas pu être envoyée."));
@@ -252,10 +252,10 @@ function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
           <View style={ui.card}>
             {lines.map((line) => <View key={line.product.id} style={[ui.row, { paddingVertical: 5 }]}>
               <Text style={[ui.body, { flex: 1 }]}>{formatQuantity(line.quantity)} {line.product.unit} · {line.product.name}</Text>
-              <Text style={ui.body}>{formatPrice(line.product.price * line.quantity)}</Text>
+              {client.show_prices ? <Text style={ui.body}>{formatPrice(line.product.price * line.quantity)}</Text> : null}
             </View>)}
-            <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Total estimé</Text><Text style={ui.amount}>{formatPrice(total)}</Text></View>
-            <Text style={[ui.small, { marginTop: 6 }]}>Les prix et le stock sont confirmés par AgriFresh à la réception.</Text>
+            {client.show_prices ? <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Total estimé HT</Text><Text style={ui.amount}>{formatPrice(total)}</Text></View> : null}
+            <Text style={[ui.small, { marginTop: 6 }]}>{client.show_prices ? "Les prix et le stock sont confirmés par AgriFresh à la réception." : "Le stock est confirmé par AgriFresh à la réception."}</Text>
           </View>
 
           {points.length > 1 ? <View style={ui.card}>

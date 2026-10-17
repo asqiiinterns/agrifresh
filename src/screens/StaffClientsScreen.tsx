@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshCont
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatClientNumber } from "../data/account";
 import { createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
-import { Button, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
@@ -81,6 +81,10 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [active, setActive] = useState(true);
+  const [taxId, setTaxId] = useState("");
+  const [showPrices, setShowPrices] = useState(true);
+  const [invoiceMode, setInvoiceMode] = useState<"auto" | "manual">("manual");
+  const [receptionQr, setReceptionQr] = useState(false);
   const [firstPoint, setFirstPoint] = useState<DeliveryPointInput>(emptyPoint);
   const [pointForm, setPointForm] = useState<{ id: string | null; values: DeliveryPointInput } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -93,6 +97,10 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     setEmail(record?.email ?? "");
     setPhone(record?.phone ?? "");
     setNotes(record?.notes ?? "");
+    setTaxId(record?.tax_id ?? "");
+    setShowPrices(record?.show_prices ?? true);
+    setInvoiceMode(record?.invoice_mode ?? "manual");
+    setReceptionQr(record?.reception_qr ?? false);
     setActive(record?.active ?? true);
     setFirstPoint(emptyPoint);
     setPointForm(null);
@@ -121,7 +129,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
       return;
     }
     void run(async () => {
-      const input = { business_name: businessName, contact_name: contactName, email, phone, notes };
+      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, show_prices: showPrices, invoice_mode: invoiceMode, reception_qr: receptionQr };
       if (record) await updateClient(record.id, { ...input, active });
       else await createClient(input, firstPoint);
       onSaved();
@@ -185,7 +193,25 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
             <Field label="Contact" value={contactName} onChangeText={setContactName} autoCapitalize="words" />
             <Field label="E-mail de connexion du client" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             <Field label="Téléphone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <Field label="Matricule fiscal (pour les factures)" value={taxId} onChangeText={setTaxId} autoCapitalize="characters" />
             <Field label="Notes internes" value={notes} onChangeText={setNotes} multiline />
+          </View>
+
+          <View style={ui.card}>
+            <Text style={ui.strong}>Options</Text>
+            <View style={[ui.row, { marginTop: 12 }]}>
+              <View style={{ flex: 1 }}><Text style={ui.body}>Afficher les prix au client</Text><Text style={ui.small}>Dans l’application et sur les bons de livraison.</Text></View>
+              <Switch value={showPrices} onValueChange={setShowPrices} trackColor={{ true: colors.green, false: colors.line }} />
+            </View>
+            <View style={[ui.row, { marginTop: 12 }]}>
+              <View style={{ flex: 1 }}><Text style={ui.body}>Réception par QR client</Text><Text style={ui.small}>Le livreur scanne le QR affiché dans l’application du client au lieu du QR collé au point de livraison.</Text></View>
+              <Switch value={receptionQr} onValueChange={setReceptionQr} trackColor={{ true: colors.green, false: colors.line }} />
+            </View>
+            <Text style={[ui.body, { marginTop: 14 }]}>Facturation</Text>
+            <View style={[ui.wrapRow, { marginTop: 6 }]}>
+              <Chip label="Automatique (1 facture par commande acceptée)" selected={invoiceMode === "auto"} onPress={() => setInvoiceMode("auto")} />
+              <Chip label="Manuelle (regroupée par le staff)" selected={invoiceMode === "manual"} onPress={() => setInvoiceMode("manual")} />
+            </View>
             {record ? <View style={[ui.row, { marginTop: 12 }]}>
               <Text style={ui.body}>Fiche active (peut commander)</Text>
               <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.green, false: colors.line }} />

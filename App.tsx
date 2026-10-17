@@ -11,13 +11,14 @@ import { OrderScreen } from "./src/screens/OrderScreen";
 import { ClientOrdersScreen } from "./src/screens/ClientOrdersScreen";
 import { StaffOrdersScreen } from "./src/screens/StaffOrdersScreen";
 import { StaffClientsScreen } from "./src/screens/StaffClientsScreen";
+import { StaffInvoicesScreen } from "./src/screens/StaffInvoicesScreen";
 import { DriverScreen } from "./src/screens/DriverScreen";
 import { ClientMessagesScreen, StaffInboxScreen } from "./src/screens/MessagesScreen";
 import { Button, EmptyState, Loading } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
 
-type TabKey = "order" | "orders" | "messages" | "clients" | "deliveries" | "account";
+type TabKey = "order" | "orders" | "messages" | "clients" | "invoices" | "deliveries" | "account";
 type TabDef = { key: TabKey; label: string; icon: string };
 
 const tabsByRole: Record<"client" | "unlinked" | "staff" | "driver", TabDef[]> = {
@@ -31,6 +32,7 @@ const tabsByRole: Record<"client" | "unlinked" | "staff" | "driver", TabDef[]> =
   staff: [
     { key: "orders", label: "Commandes", icon: "▤" },
     { key: "clients", label: "Clients", icon: "☷" },
+    { key: "invoices", label: "Factures", icon: "€" },
     { key: "messages", label: "Messages", icon: "✉" },
     { key: "account", label: "Compte", icon: "◉" },
   ],
@@ -182,11 +184,13 @@ function Main({ session }: { session: Session }) {
       case "order":
         return account.client ? <OrderScreen client={account.client} onPlaced={() => { setOrdersKey((key) => key + 1); setTab("orders"); }} /> : null;
       case "orders":
-        return kind === "staff" ? <StaffOrdersScreen /> : <ClientOrdersScreen key={ordersKey} session={session} />;
+        return kind === "staff" ? <StaffOrdersScreen /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} /> : null;
       case "messages":
         return kind === "staff" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "clients":
         return <StaffClientsScreen />;
+      case "invoices":
+        return <StaffInvoicesScreen />;
       case "deliveries":
         return <DriverScreen />;
       default:
