@@ -40,7 +40,7 @@ export function AuthScreen() {
       } else if (mode === "activate") {
         const { data, error: authError } = await supabase.auth.signUp({ email: cleanEmail, password, options: { emailRedirectTo: authRedirectUrl() } });
         if (authError) throw authError;
-        setMessage(data.session ? "Accès activé." : "Consultez votre boîte e-mail et touchez le lien de confirmation pour terminer l’activation.");
+        setMessage(data.session ? "Compte créé : il est en attente de validation par AgriFresh." : "Compte créé. Consultez votre boîte e-mail pour confirmer votre adresse, puis attendez la validation d’AgriFresh.");
       } else {
         const { error: authError } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: authRedirectUrl() });
         if (authError) throw authError;
@@ -62,12 +62,12 @@ export function AuthScreen() {
 
       <View style={[ui.wrapRow, { justifyContent: "center" }]}>
         <Chip label="Connexion" selected={mode === "signin"} onPress={() => switchMode("signin")} />
-        <Chip label="Activer mon accès" selected={mode === "activate"} onPress={() => switchMode("activate")} />
+        <Chip label="Créer mon compte" selected={mode === "activate"} onPress={() => switchMode("activate")} />
       </View>
 
       <Text style={[ui.subtitle, { textAlign: "center", marginTop: 16 }]}>
         {mode === "signin" ? "Connectez-vous pour passer et suivre vos commandes."
-          : mode === "activate" ? "Première connexion : utilisez l’adresse e-mail enregistrée par AgriFresh sur votre fiche client et choisissez un mot de passe."
+          : mode === "activate" ? "Utilisez l’adresse e-mail communiquée à AgriFresh. Votre compte sera actif dès qu’AgriFresh l’aura validé."
           : "Recevez un lien de connexion pour choisir un nouveau mot de passe."}
       </Text>
 
@@ -77,7 +77,7 @@ export function AuthScreen() {
       <View style={{ marginTop: 16, gap: 10 }}>
         {message ? <Text style={ui.success}>{message}</Text> : null}
         {error ? <Text style={ui.error}>{error}</Text> : null}
-        <Button label={mode === "signin" ? "SE CONNECTER" : mode === "activate" ? "ACTIVER MON ACCÈS" : "ENVOYER LE LIEN"} onPress={() => void submit()} busy={busy} />
+        <Button label={mode === "signin" ? "SE CONNECTER" : mode === "activate" ? "CRÉER MON COMPTE" : "ENVOYER LE LIEN"} onPress={() => void submit()} busy={busy} />
         {mode === "signin" ? <Button label="Mot de passe oublié ?" variant="secondary" onPress={() => switchMode("reset")} />
           : mode === "reset" ? <Button label="Retour à la connexion" variant="secondary" onPress={() => switchMode("signin")} /> : null}
       </View>

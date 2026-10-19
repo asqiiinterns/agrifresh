@@ -190,9 +190,16 @@ function Main({ session }: { session: Session }) {
       : <Loading label="Chargement de votre espace…" />;
   }
 
-  if (account.disabled) {
+  // Accounts work only once an admin has made them active.
+  const status = account.status ?? (account.disabled ? "suspended" : "active");
+  if (status !== "active") {
+    const message = {
+      pending: { title: "Compte en attente de validation", body: "Votre compte est créé. AgriFresh doit le valider avant que vous puissiez l’utiliser ; touchez « Actualiser » une fois prévenu." },
+      refused: { title: "Demande refusée", body: "AgriFresh n’a pas validé ce compte. Contactez-nous si vous pensez qu’il s’agit d’une erreur." },
+      suspended: { title: "Compte suspendu", body: "Votre accès est suspendu par AgriFresh. Contactez l’administrateur pour le réactiver." },
+    }[status];
     return <View style={{ flex: 1 }}>
-      <EmptyState title="Compte désactivé" body="Votre accès a été désactivé par AgriFresh. Contactez l’administrateur pour le réactiver." />
+      <EmptyState title={message.title} body={message.body} action={<Button label="ACTUALISER" variant="secondary" onPress={() => void loadAccount()} />} />
       <AccountScreen session={session} account={account} />
     </View>;
   }

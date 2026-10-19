@@ -35,12 +35,16 @@ export type ClientSummary = {
   delivery_points: DeliveryPointSummary[];
 };
 
+export type AccountStatus = "pending" | "active" | "refused" | "suspended";
+
 export type Account = {
   role: Role;
   full_name: string;
   // Features enabled for this account (see role_permissions); admins get all of them.
   features: string[];
   disabled?: boolean;
+  // Decided by the admin: a new sign-up stays pending until validated.
+  status?: AccountStatus;
   client: ClientSummary | null;
 };
 

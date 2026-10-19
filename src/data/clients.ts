@@ -138,7 +138,7 @@ export async function printDeliveryPointQr(record: ClientRecord, points: Deliver
 
 export async function shareInvitation(record: ClientRecord): Promise<"shared" | "copied"> {
   const link = Platform.OS === "web" && typeof window !== "undefined" ? `\n${window.location.origin}` : "";
-  const message = `Bonjour ${record.contact_name || record.business_name},\n\nVotre accès AgriFresh est prêt. Ouvrez l’application AgriFresh${link ? ` (${link.trim()})` : ""}, touchez « Activer mon accès » et utilisez l’adresse e-mail ${record.email ?? ""} pour choisir votre mot de passe.\n\nVous pourrez ensuite passer vos commandes directement.\n\nL’équipe AgriFresh`;
+  const message = `Bonjour ${record.contact_name || record.business_name},\n\nVotre accès AgriFresh est prêt. Ouvrez l’application AgriFresh${link ? ` (${link.trim()})` : ""}, touchez « Créer mon compte » et utilisez l’adresse e-mail ${record.email ?? ""} pour choisir votre mot de passe.\n\nDès que nous aurons validé votre compte, vous pourrez passer vos commandes directement.\n\nL’équipe AgriFresh`;
   if (Platform.OS === "web" && typeof navigator !== "undefined" && typeof navigator.share !== "function") {
     await navigator.clipboard.writeText(message);
     return "copied";

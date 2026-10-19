@@ -1,13 +1,12 @@
 import { createIsolatedClient, supabase } from "../lib/supabase";
-import type { Role } from "./account";
+import type { AccountStatus, Role } from "./account";
 
 export type AdminAccount = {
   id: string;
   email: string;
   full_name: string;
   role: Role;
-  confirmed: boolean;
-  disabled: boolean;
+  status: AccountStatus;
   created_at: string;
   last_sign_in_at: string | null;
   client_name: string | null;
@@ -25,13 +24,9 @@ export async function fetchAccounts(): Promise<AdminAccount[]> {
   return (data ?? []) as AdminAccount[];
 }
 
-export async function confirmAccount(userId: string): Promise<void> {
-  const { error } = await client().rpc("admin_confirm_account", { p_user_id: userId });
-  if (error) throw error;
-}
-
-export async function setAccountDisabled(userId: string, disabled: boolean): Promise<void> {
-  const { error } = await client().rpc("admin_set_account_disabled", { p_user_id: userId, p_disabled: disabled });
+// Validate (active), refuse, suspend, or put back on hold (pending).
+export async function setAccountStatus(userId: string, status: AccountStatus): Promise<void> {
+  const { error } = await client().rpc("admin_set_account_status", { p_user_id: userId, p_status: status });
   if (error) throw error;
 }
 
@@ -47,8 +42,8 @@ export function temporaryPassword() {
   return `Agri-${Array.from({ length: 4 }, () => pick(letters)).join("")}${Array.from({ length: 4 }, () => pick(digits)).join("")}`;
 }
 
-// Creates the account with an isolated client (the admin stays signed in), validates it
-// and gives it its role. A client e-mail that matches a client record is linked automatically.
+// Creates the account with an isolated client (the admin stays signed in), makes it active
+// at once and gives it its role. A client e-mail that matches a client record is linked automatically.
 export async function createAccount(input: { email: string; fullName: string; role: Role; password: string }): Promise<void> {
   const isolated = createIsolatedClient();
   if (!isolated) throw new Error("Supabase n’est pas configuré.");
@@ -59,6 +54,6 @@ export async function createAccount(input: { email: string; fullName: string; ro
   if (!data.user || (data.user.identities && data.user.identities.length === 0)) {
     throw new Error("Un compte existe déjà avec cet e-mail : retrouvez-le dans la liste.");
   }
-  await confirmAccount(data.user.id);
+  await setAccountStatus(data.user.id, "active");
   if (input.role !== "customer") await setAccountRole(email, input.role);
 }
