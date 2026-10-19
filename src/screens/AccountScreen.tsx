@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { Text } from "../ui/Text";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber, roleLabels, type Account } from "../data/account";
@@ -8,6 +9,8 @@ import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
 import { useCan } from "../data/permissions";
+import { fontScales, useDisplay } from "../ui/display";
+import { Chip } from "../ui/components";
 
 export function AccountScreen({ session, account }: { session: Session; account: Account | null }) {
   const [password, setPassword] = useState("");
@@ -62,6 +65,8 @@ export function AccountScreen({ session, account }: { session: Session; account:
 
 
 
+      <DisplaySettingsCard showProducts={account?.role === "customer"} />
+
       <View style={ui.card}>
         <Text style={ui.strong}>Changer mon mot de passe</Text>
         <Field label="Nouveau mot de passe" value={password} onChangeText={setPassword} secureTextEntry />
@@ -75,5 +80,30 @@ export function AccountScreen({ session, account }: { session: Session; account:
       <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 20 }} />
     </ScrollView>
     {isStaff ? <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} /> : null}
+  </View>;
+}
+
+// Display preferences for this device: text size and product list layout.
+function DisplaySettingsCard({ showProducts }: { showProducts: boolean }) {
+  const display = useDisplay();
+  return <View style={ui.card}>
+    <Text style={ui.strong}>Affichage</Text>
+    <Text style={ui.small}>Réglages de cet appareil uniquement.</Text>
+    <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Taille du texte</Text>
+    <View style={[ui.wrapRow, { marginTop: 6 }]}>
+      {fontScales.map((option) => <Chip key={option.value} label={option.label} selected={display.fontScale === option.value} onPress={() => display.update({ fontScale: option.value })} />)}
+    </View>
+    <View style={[ui.divider, { marginTop: 10 }]}>
+      <Text style={ui.body}>Aperçu : Commande #128 · 12,5 kg d’oranges</Text>
+      <Text style={ui.small}>Les textes de toute l’application suivent ce réglage.</Text>
+    </View>
+    {showProducts ? <>
+      <Text style={[ui.fieldLabel, { marginTop: 14 }]}>Liste des produits</Text>
+      <View style={[ui.wrapRow, { marginTop: 6 }]}>
+        <Chip label="Avec photos" selected={!display.compactProducts} onPress={() => display.update({ compactProducts: false })} />
+        <Chip label="Compacte (sans photos)" selected={display.compactProducts} onPress={() => display.update({ compactProducts: true })} />
+      </View>
+    </> : null}
+    <Button label="RÉTABLIR L’AFFICHAGE PAR DÉFAUT" variant="secondary" onPress={display.reset} style={{ marginTop: 14 }} />
   </View>;
 }

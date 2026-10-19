@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Category, Product } from "../types/product";
@@ -9,6 +10,7 @@ import { fetchMyOrders, formatOrigin, placeClientOrder, type Order } from "../da
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ProductImage, ScreenHeader, formatDay, formatPrice, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { useDisplay } from "../ui/display";
 
 type Filter = Category | "Nouveautés";
 const categories: Category[] = ["Tous", "Jus frais", "Fruits", "Légumes", "Épicerie"];
@@ -39,6 +41,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
   const [category, setCategory] = useState<Filter>("Tous");
   const [reviewVisible, setReviewVisible] = useState(false);
   const [repeatVisible, setRepeatVisible] = useState(false);
+  const { compactProducts } = useDisplay();
 
   async function loadCatalog() {
     setLoading(true);
@@ -139,8 +142,8 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
       renderItem={({ item }) => {
         const value = quantities[item.id] ?? "";
         const selected = parseQuantity(value) > 0;
-        return <View style={[styles.productRow, selected && styles.productRowSelected]}>
-          <ProductImage uri={item.image} style={styles.productImage} />
+        return <View style={[styles.productRow, compactProducts && styles.productRowCompact, selected && styles.productRowSelected]}>
+          {compactProducts ? null : <ProductImage uri={item.image} style={styles.productImage} />}
           <View style={{ flex: 1 }}>
             {item.isNew ? <Text style={styles.newBadge}>✦ NOUVEAU</Text> : null}
             <Text style={ui.strong} numberOfLines={2}>{item.name}</Text>
@@ -343,6 +346,7 @@ const styles = StyleSheet.create({
   productRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginTop: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   productRowSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
   productImage: { width: 54, height: 54, borderRadius: 8 },
+  productRowCompact: { paddingVertical: 6, marginTop: 4 },
   origin: { color: colors.green, fontSize: 10, marginTop: 1 },
   newBadge: { color: colors.orange, fontSize: 9, fontWeight: "800", letterSpacing: 0.8, marginBottom: 2 },
   stepper: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.white },

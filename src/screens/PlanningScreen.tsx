@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { scheduleOrder, type StaffOrder } from "../data/staff";
 import { CloseButton, EmptyState, ScreenHeader, StatusBadge, formatDay } from "../ui/components";

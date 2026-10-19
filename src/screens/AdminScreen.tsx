@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { roleLabels, type Role } from "../data/account";
 import { createAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, type AdminAccount } from "../data/admin";

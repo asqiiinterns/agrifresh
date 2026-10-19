@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";

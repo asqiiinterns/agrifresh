@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentProps, type ReactElement } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "../ui/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { executionQueue, fetchAllOrders, preparationTotals, updateOrderStatus, type StaffOrder } from "../data/staff";

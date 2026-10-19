@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "./Text";
 import { timeline, type Order } from "../data/orders";
 import { formatDateTime, statusLabel } from "./components";
 import { colors, ui } from "./theme";

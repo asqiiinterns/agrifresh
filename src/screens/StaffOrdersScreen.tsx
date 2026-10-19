@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentProps, type ReactElement } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { claimReasonLabel, claimStatusStyle, fetchClaims, updateClaim, type Claim, type ClaimStatus } from "../data/claims";

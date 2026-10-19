@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
+import { Text } from "./src/ui/Text";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { PermissionsContext } from "./src/data/permissions";
+import { DisplayProvider } from "./src/ui/display";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { countUnread } from "./src/data/messages";
@@ -256,7 +258,7 @@ export default function App() {
   const { session, ready } = useSession();
   useAuthCallback();
 
-  return <SafeAreaProvider>
+  return <DisplayProvider><SafeAreaProvider>
     <SafeAreaView style={ui.screen} edges={["top", "left", "right", "bottom"]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
       {!isSupabaseConfigured
@@ -266,7 +268,7 @@ export default function App() {
         : <AuthScreen />}
       <DocumentViewerHost />
     </SafeAreaView>
-  </SafeAreaProvider>;
+  </SafeAreaProvider></DisplayProvider>;
 }
 
 const styles = StyleSheet.create({

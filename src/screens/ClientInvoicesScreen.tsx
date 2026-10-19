@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "../ui/Text";
 import { fetchInvoices, invoiceLabel, shareInvoice, type InvoiceWithOrders } from "../data/invoices";
 import { deliveryNoteNumber } from "../data/orders";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, formatDay, formatPrice } from "../ui/components";

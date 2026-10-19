@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "./Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Calendar } from "./Calendar";
 import { Button, CloseButton, ScreenHeader } from "./components";

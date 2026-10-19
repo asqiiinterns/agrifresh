@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Switch, Text, View } from "react-native";
+import { Switch, View } from "react-native";
+import { Text } from "../ui/Text";
 import type { Role } from "../data/account";
 import { configurableRoles, featureCatalog, fetchRolePermissions, setRolePermission, type Feature } from "../data/permissions";
 import { Chip, Loading } from "../ui/components";

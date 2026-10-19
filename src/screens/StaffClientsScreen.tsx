@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatClientNumber } from "../data/account";
 import { createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";

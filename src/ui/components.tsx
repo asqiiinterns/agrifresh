@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, View } from "react-native";
+import { Text, TextInput } from "./Text";
 import { colors, ui } from "./theme";
 
 export const formatPrice = (amount: number | string) =>

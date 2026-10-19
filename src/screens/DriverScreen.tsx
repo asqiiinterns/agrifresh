@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { confirmHandover, fetchDeliveryHistory, fetchShipments, lookupDeliveryNote, type DeliveredOrder, type ScannedDeliveryNote, type Shipment } from "../data/delivery";

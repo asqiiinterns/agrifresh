@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { Text } from "../ui/Text";
 import { supabase } from "../lib/supabase";
 import { Button, Chip, Field } from "../ui/components";
 import { errorMessage } from "../ui/notify";

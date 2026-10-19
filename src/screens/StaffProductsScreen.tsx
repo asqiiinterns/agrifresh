@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Switch, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VAT_RATES, fetchAdminProducts, fetchCategories, saveProduct, type AdminProduct, type Category, type ProductInput } from "../data/productAdmin";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ProductImage, ScreenHeader, formatPrice, formatQuantity } from "../ui/components";
