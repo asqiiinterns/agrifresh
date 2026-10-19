@@ -5,10 +5,13 @@ import { formatClientNumber } from "../data/account";
 import { createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
+import { useCan } from "../data/permissions";
 import { colors, ui } from "../ui/theme";
 
-// Only admins create client records (also enforced by the database).
-export function StaffClientsScreen({ canCreate }: { canCreate: boolean }) {
+// Creating and editing client records follow the admin-defined permissions (also enforced by the database).
+export function StaffClientsScreen() {
+  const can = useCan();
+  const canCreate = can("clients.create");
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -76,6 +79,8 @@ export function StaffClientsScreen({ canCreate }: { canCreate: boolean }) {
 const emptyPoint: DeliveryPointInput = { label: "Principal", address_line: "", city: "", phone: "", instructions: "" };
 
 function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRecord | null; visible: boolean; onClose: () => void; onSaved: () => void }) {
+  const can = useCan();
+  const canEdit = record ? can("clients.edit") : can("clients.create");
   const [businessName, setBusinessName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
@@ -245,7 +250,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
             <PointFields values={firstPoint} onChange={setFirstPoint} />
           </View> : null}
 
-          <Button label={record ? "ENREGISTRER LA FICHE" : "CRÉER LE CLIENT"} onPress={saveClient} busy={busy} style={{ marginTop: 14 }} />
+          {canEdit ? <Button label={record ? "ENREGISTRER LA FICHE" : "CRÉER LE CLIENT"} onPress={saveClient} busy={busy} style={{ marginTop: 14 }} /> : <Text style={[ui.small, { marginTop: 14 }]}>Consultation seule : votre profil ne permet pas de modifier les fiches.</Text>}
           {record ? <Button label="PARTAGER L’INVITATION" variant="secondary" onPress={invite} disabled={busy} style={{ marginTop: 10 }} /> : null}
 
           {record ? <View style={ui.card}>
@@ -260,8 +265,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
               {point.instructions ? <Text style={ui.small}>{point.instructions}</Text> : null}
               <View style={[ui.wrapRow, { marginTop: 8 }]}>
                 {point.active ? <Button label="IMPRIMER LE QR" variant="secondary" onPress={() => print([point])} disabled={busy} /> : null}
-                <Button label="MODIFIER" variant="secondary" onPress={() => setPointForm({ id: point.id, values: { label: point.label, address_line: point.address_line, city: point.city, phone: point.phone, instructions: point.instructions ?? "" } })} disabled={busy} />
-                <Button label={point.active ? "DÉSACTIVER" : "RÉACTIVER"} variant={point.active ? "danger" : "secondary"} onPress={() => togglePoint(point)} disabled={busy} />
+                {canEdit ? <Button label="MODIFIER" variant="secondary" onPress={() => setPointForm({ id: point.id, values: { label: point.label, address_line: point.address_line, city: point.city, phone: point.phone, instructions: point.instructions ?? "" } })} disabled={busy} /> : null}
+                {canEdit ? <Button label={point.active ? "DÉSACTIVER" : "RÉACTIVER"} variant={point.active ? "danger" : "secondary"} onPress={() => togglePoint(point)} disabled={busy} /> : null}
               </View>
             </View>)}
 
@@ -272,7 +277,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
                 <Button label="ENREGISTRER LE POINT" onPress={savePoint} busy={busy} />
                 <Button label="ANNULER" variant="secondary" onPress={() => setPointForm(null)} disabled={busy} />
               </View>
-            </View> : <Button label="+ AJOUTER UN POINT DE LIVRAISON" variant="secondary" onPress={() => setPointForm({ id: null, values: { ...emptyPoint, label: "" } })} disabled={busy} style={{ marginTop: 12 }} />}
+            </View> : !canEdit ? null : <Button label="+ AJOUTER UN POINT DE LIVRAISON" variant="secondary" onPress={() => setPointForm({ id: null, values: { ...emptyPoint, label: "" } })} disabled={busy} style={{ marginTop: 12 }} />}
           </View> : null}
         </ScrollView>
       </KeyboardAvoidingView>

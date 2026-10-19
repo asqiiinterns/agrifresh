@@ -2,12 +2,13 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { formatClientNumber, isManager, roleLabels, type Account } from "../data/account";
+import { formatClientNumber, roleLabels, type Account } from "../data/account";
 import { Button, Field, ScreenHeader } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
 import { TeamModal } from "./TeamScreen";
+import { useCan } from "../data/permissions";
 
 export function AccountScreen({ session, account }: { session: Session; account: Account | null }) {
   const [password, setPassword] = useState("");
@@ -15,7 +16,7 @@ export function AccountScreen({ session, account }: { session: Session; account:
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [productsVisible, setProductsVisible] = useState(false);
-  const isStaff = isManager(account?.role);
+  const isStaff = useCan()("products.manage");
   const isAdmin = account?.role === "admin";
   const [teamVisible, setTeamVisible] = useState(false);
 

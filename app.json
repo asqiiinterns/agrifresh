@@ -8,7 +8,10 @@
     "scheme": "agrifresh",
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "AgriFresh",
+      "themeColor": "#24543B"
     },
     "newArchEnabled": true,
     "ios": {
@@ -18,7 +21,8 @@
     "android": {
       "package": "com.agrifresh.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6EDDF"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#24543B"
       }
     },
     "extra": {
@@ -36,6 +40,7 @@
           "recordAudioAndroid": false
         }
       ]
-    ]
+    ],
+    "icon": "./assets/icon.png"
   }
 }

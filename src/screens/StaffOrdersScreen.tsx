@@ -7,6 +7,10 @@ import { deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/ord
 import { executionQueue, fetchAllOrders, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterPanel, type FilterGroup } from "../ui/FilterPanel";
 import { PlanningModal } from "./PlanningModal";
+import { useCan, type Feature } from "../data/permissions";
+
+const actionFeature = (status: OrderStatus): Feature =>
+  status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { OrderTimeline } from "../ui/OrderTimeline";
@@ -49,6 +53,7 @@ export function StaffOrdersScreen() {
   const [day, setDay] = useState<DayFilter>("all");
   const [stage, setStage] = useState<string>("all");
   const [planning, setPlanning] = useState<{ order: StaffOrder; mode: "accept" | "move" } | null>(null);
+  const can = useCan();
 
   async function reload(mode: "initial" | "refresh" | "silent") {
     if (mode === "initial") setLoading(true);
@@ -102,7 +107,7 @@ export function StaffOrdersScreen() {
   const sections: { key: Section; label: string }[] = [
     { key: "decide", label: `À décider (${decide.length})` },
     { key: "queue", label: `En cours (${inProgress.length})` },
-    { key: "claims", label: `Réclamations (${openClaims.length})` },
+    ...(can("claims.manage") ? [{ key: "claims" as const, label: `Réclamations (${openClaims.length})` }] : []),
     { key: "done", label: "Historique" },
   ];
 
@@ -153,7 +158,14 @@ export function StaffOrdersScreen() {
           order={item}
           position={positions.get(item.id)}
           claims={claims.filter((claim) => claim.order_id === item.id)}
-          onPlan={(mode) => setPlanning({ order: item, mode })}
+          onPlan={(mode) => {
+            // Without the planning right, an accepted order simply joins the end of the queue.
+            if (mode === "accept" && !can("orders.plan")) {
+              void updateOrderStatus(item.id, "confirmed").then(() => reload("silent")).catch((cause: unknown) => notify("Mise à jour impossible", errorMessage(cause, "La commande n’a pas pu être acceptée.")));
+              return;
+            }
+            setPlanning({ order: item, mode });
+          }}
           onChanged={() => void reload("silent")}
           onLocalUpdate={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))}
         />}
@@ -178,10 +190,11 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
   onLocalUpdate: (order: StaffOrder) => void;
 }) {
   const [expanded, setExpanded] = useState(order.status === "pending");
+  const can = useCan();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
-  const actions = staffActions[order.status as OrderStatus] ?? [];
+  const actions = (staffActions[order.status as OrderStatus] ?? []).filter((action) => can(actionFeature(action.status)));
   const needsReason = actions.some((action) => action.askReason);
   const address = order.address_snapshot ?? {};
   const clientName = order.clients?.business_name ?? address.business_name ?? address.recipient_name ?? "Client";
@@ -277,7 +290,7 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
 
     <View style={styles.actions}>
       {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
-      {position ? <Button label="DÉPLACER" variant="secondary" onPress={() => onPlan("move")} /> : null}
+      {position && can("orders.plan") ? <Button label="DÉPLACER" variant="secondary" onPress={() => onPlan("move")} /> : null}
       {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => void printDeliveryNote()} /> : null}
     </View>
     {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En attente des scans du livreur (bon de livraison + QR client).</Text> : null}

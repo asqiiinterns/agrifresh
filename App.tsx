@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
-import { fetchMyAccount, isManager, type Account } from "./src/data/account";
+import { fetchMyAccount, type Account } from "./src/data/account";
+import { PermissionsContext } from "./src/data/permissions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { countUnread } from "./src/data/messages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -24,32 +25,34 @@ import { colors, ui } from "./src/ui/theme";
 type TabKey = "order" | "orders" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "account";
 type TabDef = { key: TabKey; label: string; icon: string };
 
-const tabsByRole: Record<"client" | "unlinked" | "staff" | "production" | "driver", TabDef[]> = {
-  client: [
-    { key: "order", label: "Commander", icon: "＋" },
-    { key: "orders", label: "Commandes", icon: "▤" },
-    { key: "invoices", label: "Factures", icon: "€" },
-    { key: "messages", label: "Messages", icon: "✉" },
-    { key: "account", label: "Compte", icon: "◉" },
-  ],
-  unlinked: [{ key: "account", label: "Compte", icon: "◉" }],
-  staff: [
-    { key: "orders", label: "Commandes", icon: "▤" },
-    { key: "production", label: "Production", icon: "⚙" },
-    { key: "clients", label: "Clients", icon: "☷" },
-    { key: "invoices", label: "Factures", icon: "€" },
-    { key: "messages", label: "Messages", icon: "✉" },
-    { key: "account", label: "Compte", icon: "◉" },
-  ],
-  production: [
-    { key: "production", label: "Production", icon: "⚙" },
-    { key: "account", label: "Compte", icon: "◉" },
-  ],
-  driver: [
-    { key: "deliveries", label: "Livraisons", icon: "⇥" },
-    { key: "account", label: "Compte", icon: "◉" },
-  ],
-};
+const TAB = {
+  order: { key: "order", label: "Commander", icon: "＋" },
+  orders: { key: "orders", label: "Commandes", icon: "▤" },
+  production: { key: "production", label: "Production", icon: "⚙" },
+  deliveries: { key: "deliveries", label: "Livraisons", icon: "⇥" },
+  clients: { key: "clients", label: "Clients", icon: "☷" },
+  invoices: { key: "invoices", label: "Factures", icon: "€" },
+  messages: { key: "messages", label: "Messages", icon: "✉" },
+  account: { key: "account", label: "Compte", icon: "◉" },
+} satisfies Record<TabKey, TabDef>;
+
+// Tabs follow the features the admin enabled for the account's role.
+function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
+  const has = (feature: string) => account.features.includes(feature);
+  if (account.role === "customer") {
+    if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
+    return { kind: "client", tabs: [TAB.order, TAB.orders, ...(has("client.invoices") ? [TAB.invoices] : []), ...(has("client.messages") ? [TAB.messages] : []), TAB.account] };
+  }
+  const tabs: TabDef[] = [];
+  if (["orders.decide", "orders.plan", "orders.ship", "claims.manage"].some(has)) tabs.push(TAB.orders);
+  if (has("production.view")) tabs.push(TAB.production);
+  if (has("deliveries")) tabs.push(TAB.deliveries);
+  if (has("clients.view")) tabs.push(TAB.clients);
+  if (has("invoices.manage")) tabs.push(TAB.invoices);
+  if (has("messages.manage")) tabs.push(TAB.messages);
+  tabs.push(TAB.account);
+  return { kind: "team", tabs };
+}
 
 function useSession() {
   const [session, setSession] = useState<Session | null>(null);
@@ -173,14 +176,10 @@ function Main({ session }: { session: Session }) {
     void loadAccount();
   }, [session.user.id, loadAccount]);
 
-  const kind = !account ? null
-    : isManager(account.role) ? "staff"
-    : account.role === "production" ? "production"
-    : account.role === "driver" ? "driver"
-    : account.client ? "client" : "unlinked";
-  const tabs = kind ? tabsByRole[kind] : [];
+  const { kind, tabs } = account ? tabsFor(account) : { kind: null, tabs: [] as TabDef[] };
   const current = tab && tabs.some((item) => item.key === tab) ? tab : tabs[0]?.key;
-  const { unread, refresh: refreshUnread } = useUnreadMessages(kind === "client" || kind === "staff", kind === "staff");
+  const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
+  const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team");
 
   if (!account) {
     return accountError
@@ -194,15 +193,15 @@ function Main({ session }: { session: Session }) {
       case "order":
         return account.client ? <OrderScreen client={account.client} onPlaced={() => { setOrdersKey((key) => key + 1); setTab("orders"); }} /> : null;
       case "orders":
-        return kind === "staff" ? <StaffOrdersScreen /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} /> : null;
+        return kind === "team" ? <StaffOrdersScreen /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} /> : null;
       case "messages":
-        return kind === "staff" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
+        return kind === "team" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "clients":
-        return <StaffClientsScreen canCreate={account.role === "admin"} />;
+        return <StaffClientsScreen />;
       case "production":
         return <ProductionScreen />;
       case "invoices":
-        return kind === "staff" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
+        return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
       case "deliveries":
         return <DriverScreen />;
       default:
@@ -217,7 +216,7 @@ function Main({ session }: { session: Session }) {
     }
   }
 
-  return <>
+  return <PermissionsContext.Provider value={permissions}>
     <View style={{ flex: 1 }}>{renderTab()}</View>
     {tabs.length > 1 ? <View style={styles.tabBar}>
       {tabs.map((item) => {
@@ -231,7 +230,7 @@ function Main({ session }: { session: Session }) {
         </Pressable>;
       })}
     </View> : null}
-  </>;
+  </PermissionsContext.Provider>;
 }
 
 export default function App() {

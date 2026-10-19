@@ -7,6 +7,7 @@ import type { ClientSummary } from "../data/account";
 import { deliveryNoteNumber, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type Order } from "../data/orders";
 import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
 import { OrderTimeline } from "../ui/OrderTimeline";
+import { useCan } from "../data/permissions";
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { QR, QrCode } from "../ui/Qr";
@@ -34,6 +35,7 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const [claims, setClaims] = useState<Claim[]>([]);
   const [claimOrder, setClaimOrder] = useState<Order | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const canClaim = useCan()("client.claims");
 
   async function answer(order: Order, accept: boolean) {
     setRespondingId(order.id);
@@ -168,7 +170,7 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
         <OrderTimeline order={item} viewer="client" />
         {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} />
-          <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} />
+          {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
         </View> : null}
       </View>}
     />}

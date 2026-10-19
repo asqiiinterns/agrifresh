@@ -7,6 +7,7 @@ import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDat
 import { FilterPanel, type FilterGroup } from "../ui/FilterPanel";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { useCan } from "../data/permissions";
 
 type Tab = "totals" | "queue" | "history";
 
@@ -193,6 +194,7 @@ function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshC
 
 function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; refreshControl: ReactElement<ComponentProps<typeof RefreshControl>>; onChanged: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const canUpdate = useCan()("production.update");
 
   async function advance(order: StaffOrder) {
     setBusyId(order.id);
@@ -225,7 +227,7 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
       </View>
       {item.customer_note ? <Text style={[ui.small, { color: colors.orange, marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
       {item.status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.green, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
-        : <Button label={item.status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => void advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
+        : !canUpdate ? null : <Button label={item.status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => void advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
     </View>}
   />;
 }

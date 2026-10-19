@@ -38,6 +38,8 @@ export type ClientSummary = {
 export type Account = {
   role: Role;
   full_name: string;
+  // Features enabled for this account (see role_permissions); admins get all of them.
+  features: string[];
   client: ClientSummary | null;
 };
 

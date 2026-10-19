@@ -6,6 +6,7 @@ import { assignableRoles, fetchTeam, setMemberRole, type TeamMember } from "../d
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { PermissionsPanel } from "./PermissionsPanel";
 
 // Admins give roles to people who already activated an account in the app.
 export function TeamModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -65,6 +66,8 @@ export function TeamModal({ visible, onClose }: { visible: boolean; onClose: () 
           {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
           <Button label="ENREGISTRER" onPress={() => void assign(email, role)} busy={busy} disabled={!email.trim()} style={{ marginTop: 12 }} />
         </View>
+
+        <PermissionsPanel />
 
         <Text style={[ui.strong, { marginTop: 18 }]}>Membres</Text>
         {loading ? <Loading /> : team.length === 0 ? <EmptyState title="Aucun membre" /> : team.map((member) => <View key={member.id} style={ui.card}>
