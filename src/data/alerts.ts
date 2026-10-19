@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import type { NavParams, TabKey } from "../ui/navigation";
 
 export type AppAlert = {
   id: string;
@@ -8,6 +9,8 @@ export type AppAlert = {
   order_id: string | null;
   read_at: string | null;
   created_at: string;
+  // Flagged by the recipient (column added by 20261028_alert_important.sql).
+  important?: boolean;
 };
 
 export type NotificationSetting = { event: string; label: string; audience: string; push_enabled: boolean; email_enabled: boolean; sort_order: number };
@@ -24,15 +27,36 @@ export const alertKinds: Record<string, string> = {
   "account.pending": "Comptes",
 };
 
+// Where an alert leads: the order itself, the conversation, the invoices or the account to validate.
+export function alertTarget(event: string | undefined, orderId: string | null | undefined, team: boolean): { tab: TabKey; params?: NavParams } {
+  const order = orderId ? { orderId } : {};
+  switch (event) {
+    case "order.new": return { tab: "orders", params: team ? { section: "decide", ...order } : order };
+    case "order.status":
+    case "order.reconfirm": return { tab: "orders", params: order };
+    case "claim.new": return { tab: "orders", params: team ? { section: "claims", ...order } : order };
+    case "claim.answered": return { tab: "orders", params: order };
+    case "message.new": return { tab: "messages" };
+    case "invoice.issued": return { tab: "invoices" };
+    case "account.pending": return { tab: "admin", params: { page: "accounts" } };
+    default: return { tab: "alerts" };
+  }
+}
+
 function client() {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
   return supabase;
 }
 
 export async function fetchAlerts(): Promise<AppAlert[]> {
-  const { data, error } = await client().from("notifications").select("id, event, title, body, order_id, read_at, created_at").order("created_at", { ascending: false }).limit(200);
+  const { data, error } = await client().from("notifications").select("*").order("created_at", { ascending: false }).limit(200);
   if (error) throw error;
   return (data ?? []) as AppAlert[];
+}
+
+export async function setAlertImportant(id: string, important: boolean): Promise<void> {
+  const { error } = await client().rpc("set_notification_important", { p_id: id, p_important: important });
+  if (error) throw error;
 }
 
 export async function countUnreadAlerts(): Promise<number> {

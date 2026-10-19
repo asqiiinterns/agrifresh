@@ -7,7 +7,7 @@ import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
-import { countUnreadAlerts } from "./src/data/alerts";
+import { alertTarget, countUnreadAlerts, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
@@ -193,8 +193,8 @@ function useUnreadAlerts(userId: string | null) {
       .channel(`alerts-badge-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
         refresh();
-        const alert = payload.new as { title?: string; body?: string };
-        if (!hasPushToken() && alert.title) void showLocalAlert(alert.title, alert.body ?? "");
+        const alert = payload.new as { id?: string; event?: string; order_id?: string | null; title?: string; body?: string };
+        if (!hasPushToken() && alert.title) void showLocalAlert(alert.title, alert.body ?? "", { event: alert.event, order_id: alert.order_id, id: alert.id });
       })
       .subscribe();
     return () => { void client.removeChannel(channel); };
@@ -266,8 +266,12 @@ function Main({ session }: { session: Session }) {
   useEffect(() => {
     if (!isActive) return;
     void registerForPush(true);
-    return onAlertTapped(() => setTab("alerts"));
-  }, [isActive, session.user.id, setTab]);
+    return onAlertTapped((data) => {
+      if (data.id) void markAlertsRead([data.id]).then(alerts.refresh).catch(() => {});
+      const target = alertTarget(data.event, data.order_id, account?.role !== "customer");
+      navigate(target.tab, target.params);
+    });
+  }, [isActive, session.user.id, navigate, account?.role]);
 
   if (!account) {
     return accountError
@@ -303,7 +307,7 @@ function Main({ session }: { session: Session }) {
       case "order":
         return account.client ? <OrderScreen client={account.client} onPlaced={() => { setOrdersKey((key) => key + 1); setTab("orders"); }} /> : null;
       case "orders":
-        return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} /> : null;
+        return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId} /> : null;
       case "messages":
         return kind === "team" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "clients":
@@ -315,7 +319,7 @@ function Main({ session }: { session: Session }) {
       case "deliveries":
         return <DriverScreen />;
       case "alerts":
-        return <AlertsScreen userId={session.user.id} onRead={alerts.refresh} />;
+        return <AlertsScreen userId={session.user.id} team={kind === "team"} onRead={alerts.refresh} />;
       case "admin":
         return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
       default:

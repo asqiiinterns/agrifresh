@@ -6,7 +6,7 @@ export type TabKey = "home" | "order" | "staffOrder" | "orders" | "planning" | "
 export type IconName = ComponentProps<typeof Ionicons>["name"];
 export type TabDef = { key: TabKey; label: string; icon: IconName; description?: string };
 // Opens a tab, optionally at a given section (e.g. Commandes → "À décider").
-export type NavParams = { section?: string; page?: string };
+export type NavParams = { section?: string; page?: string; orderId?: string };
 
 export const NavContext = createContext<{ navigate: (tab: TabKey, params?: NavParams) => void }>({ navigate: () => {} });
 export const useNav = () => useContext(NavContext);

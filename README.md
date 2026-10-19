@@ -35,6 +35,8 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
    - **accueil paramétrable** : par profil (administrateur) puis par utilisateur.
 
    Exécute-la **avant** de déployer cette version de l'application : les écrans lisent ses nouvelles colonnes.
+
+   Puis `supabase/migrations/20261028_alert_important.sql` : étoile « importante » sur les alertes (filtre *Importantes*). Toucher une alerte ouvre directement la commande, la conversation, les factures ou le compte concerné, depuis l'onglet Alertes comme depuis la notification de l'écran de verrouillage.
 8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). La validation par l'administrateur (Admin → Comptes) empêche quelqu'un d'utiliser l'accès d'un client avec son e-mail.
 9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
 10. Redémarre Expo après une modification de `.env.local`.

@@ -23,7 +23,9 @@ import { colors, ui } from "../ui/theme";
 type Section = "decide" | "queue" | "claims" | "done";
 const isSection = (value?: string): value is Section => value === "decide" || value === "queue" || value === "claims" || value === "done";
 
-export function StaffOrdersScreen({ initialSection }: { initialSection?: string } = {}) {
+export function StaffOrdersScreen({ initialSection, initialOrderId }: { initialSection?: string; initialOrderId?: string } = {}) {
+  // Opened from an alert: show that order alone (expanded) until "Voir toutes".
+  const [focusId, setFocusId] = useState<string | null>(initialOrderId ?? null);
   const [orders, setOrders] = useState<StaffOrder[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +100,16 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
   ];
   const hiddenByDate = placed ? orders.filter((order) => !matchesDate(order.created_at, placed)).length : 0;
 
+  const focused = focusId ? orders.find((order) => order.id === focusId) ?? null : null;
+  useEffect(() => {
+    if (!focused) return;
+    const group = (statusGroups.decide as readonly string[]).includes(focused.status) ? "decide"
+      : (statusGroups.progress as readonly string[]).includes(focused.status) ? "queue" : "done";
+    if (section !== "claims") setSection(group);
+  }, [focused?.id]);
+
   const listed = useMemo(() => {
+    if (focused) return [focused];
     if (section === "decide") {
       return [...decide].sort((a, b) => (a.requested_delivery_date ?? "9999").localeCompare(b.requested_delivery_date ?? "9999") || a.order_number - b.order_number);
     }
@@ -108,7 +119,7 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
       return [...staged].sort((a, b) => (positions.get(a.id) ?? 9999) - (positions.get(b.id) ?? 9999) || a.order_number - b.order_number);
     }
     return closed;
-  }, [filtered, section, stage, positions]);
+  }, [filtered, section, stage, positions, focused]);
 
   const filters: Filter[] = [
     { kind: "date", title: "Commandes du", presets: [presets.today, presets.yesterday, presets.last7, presets.last30, presets.thisMonth], value: placed, onChange: setPlaced },
@@ -153,6 +164,10 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
         contentContainerStyle={ui.content}
         refreshControl={refresh}
         ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
+          : focused ? <View style={[ui.row, styles.focusBar]}>
+            <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
+            <Button label="VOIR TOUTES" variant="secondary" onPress={() => setFocusId(null)} />
+          </View>
           : hiddenByDate ? <Text style={[ui.small, { marginTop: 8 }]}>{placed?.label ?? "Période"} : {hiddenByDate} autre(s) commande(s) masquée(s). Changez « Commandes du » pour les voir.</Text> : null}
         ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body="Aucune commande ne correspond à ces filtres." />}
         renderItem={({ item }) => <OrderCard
@@ -161,6 +176,7 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
           claims={claims.filter((claim) => claim.order_id === item.id)}
           onPlan={(mode) => { if (mode === "accept") void accept(item); else setPlanning({ focusId: item.id }); }}
           onShip={() => setShipping([item])}
+          defaultExpanded={item.id === focusId}
           onChanged={() => void reload("silent")}
           onLocalUpdate={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))}
         />}
@@ -181,7 +197,8 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
   </View>;
 }
 
-function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocalUpdate }: {
+function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocalUpdate, defaultExpanded }: {
+  defaultExpanded?: boolean;
   order: StaffOrder;
   position: number | undefined;
   claims: Claim[];
@@ -190,7 +207,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   onChanged: () => void;
   onLocalUpdate: (order: StaffOrder) => void;
 }) {
-  const [expanded, setExpanded] = useState(order.status === "pending");
+  const [expanded, setExpanded] = useState(defaultExpanded || order.status === "pending");
   const can = useCan();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -371,6 +388,7 @@ function ClaimsView({ claims, refreshControl, onChanged }: { claims: Claim[]; re
 }
 
 const styles = StyleSheet.create({
+  focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   origin: { color: colors.green, fontSize: 10 },

@@ -50,17 +50,24 @@ export const hasPushToken = () => currentToken !== null;
 
 // Fallback when push is not available (Expo Go, web): a local notification for an alert
 // received in real time while the app runs.
-export async function showLocalAlert(title: string, body: string): Promise<void> {
+export type AlertData = { event?: string; order_id?: string | null; id?: string };
+
+export async function showLocalAlert(title: string, body: string, data?: AlertData): Promise<void> {
   if (Platform.OS === "web") return;
   try {
-    await Notifications.scheduleNotificationAsync({ content: { title, body, sound: "default" }, trigger: null });
+    await Notifications.scheduleNotificationAsync({ content: { title, body, sound: "default", data: data ?? {} }, trigger: null });
   } catch {
     // Local banners are best effort.
   }
 }
 
-export function onAlertTapped(handler: () => void) {
+// The tapped notification carries its event and order, so the app can open the right screen.
+export function onAlertTapped(handler: (data: AlertData) => void) {
   if (Platform.OS === "web") return () => {};
-  const subscription = Notifications.addNotificationResponseReceivedListener(() => handler());
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => handler((response.notification.request.content.data ?? {}) as AlertData));
+  // A tap that launched the app (it was closed) is delivered once at start-up.
+  void Notifications.getLastNotificationResponseAsync().then((response) => {
+    if (response) handler((response.notification.request.content.data ?? {}) as AlertData);
+  }).catch(() => {});
   return () => subscription.remove();
 }

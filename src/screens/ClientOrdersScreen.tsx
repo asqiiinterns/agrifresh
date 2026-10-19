@@ -27,7 +27,9 @@ const filters = [
   { key: "refused", label: "Déclinées / annulées", statuses: ["declined", "cancelled"] },
 ] as const;
 
-export function ClientOrdersScreen({ session, client }: { session: Session; client: ClientSummary }) {
+export function ClientOrdersScreen({ session, client, initialOrderId }: { session: Session; client: ClientSummary; initialOrderId?: string }) {
+  // Opened from an alert: show that order alone (expanded) until "Voir toutes".
+  const [focusId, setFocusId] = useState<string | null>(initialOrderId ?? null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +38,7 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const [filter, setFilter] = useState<string>("all");
   // Two sheets: orders still moving, and closed ones (history, if AgriFresh enables it).
   const [sheet, setSheet] = useState<"open" | "closed">("open");
-  const [expanded, setExpanded] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<string[]>(initialOrderId ? [initialOrderId] : []);
   const historyEnabled = client.history_enabled !== false;
   const [placed, setPlaced] = useState<DateFilterValue>(null);
   const [search, setSearch] = useState("");
@@ -120,7 +122,8 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const selected = filters.find((item) => item.key === filter) ?? filters[0];
   const term = search.trim().toLocaleLowerCase("fr");
   const inSheet = (order: Order) => closedStatuses.includes(order.status) === (sheet === "closed");
-  const visible = orders.filter((order) => inSheet(order) && (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
+  const focused = focusId ? orders.find((order) => order.id === focusId) ?? null : null;
+  const visible = focused ? [focused] : orders.filter((order) => inSheet(order) && (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
     && matchesDate(order.created_at, placed)
     && (!term || `${order.order_number} ${order.order_items.map((line) => line.product_name_snapshot).join(" ")}`.toLocaleLowerCase("fr").includes(term)));
   const listFilters: Filter[] = [
@@ -147,6 +150,10 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
       contentContainerStyle={ui.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
+        : focused ? <View style={[ui.row, styles.focusBar]}>
+          <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
+          <Button label="VOIR TOUTES" variant="secondary" onPress={() => { setFocusId(null); setSheet(closedStatuses.includes(focused.status) ? "closed" : "open"); }} />
+        </View>
         : client.reception_qr && shippedCount ? <Text style={[ui.body, styles.banner]}>{shippedCount} commande(s) en route : à l’arrivée du livreur, touchez « QR RÉCEPTION » et présentez le code.</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body={filter === "all" ? "Vos commandes apparaîtront ici avec leur statut." : "Aucune commande avec ce statut."} />}
       renderItem={({ item }) => {
@@ -268,6 +275,7 @@ function ClaimModal({ order, onClose, onSent }: { order: Order | null; onClose: 
 }
 
 const styles = StyleSheet.create({
+  focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
   reconfirm: { marginTop: 10, padding: 12, borderRadius: 8, backgroundColor: "#fde7d4" },
   claim: { marginTop: 10, padding: 10, borderRadius: 8, backgroundColor: colors.cream },
   origin: { color: colors.green, fontSize: 10, marginTop: 1 },
