@@ -6,7 +6,7 @@ export type Feature =
   | "home.view" | "alerts.view" | "orders.view"
   | "orders.decide" | "orders.plan" | "orders.ship" | "orders.create" | "production.view" | "production.update"
   | "clients.view" | "clients.edit" | "clients.create" | "invoices.manage" | "products.manage"
-  | "messages.manage" | "claims.manage" | "deliveries" | "fleet.manage" | "audit.view"
+  | "messages.manage" | "team.messages" | "claims.manage" | "deliveries" | "fleet.manage" | "audit.view"
   | "client.home" | "client.order" | "client.orders" | "client.alerts"
   | "client.invoices" | "client.messages" | "client.claims";
 
@@ -41,9 +41,10 @@ export const featureBlocks: SettingsBlock[] = [
     { key: "clients.create", label: "Créer des clients" },
     { key: "products.manage", label: "Gérer les produits" },
   ] },
-  { key: "billing", title: "Factures et messages", icon: "document-text-outline", audience: "team", items: [
-    { key: "invoices.manage", label: "Onglet Factures" },
+  { key: "billing", title: "Messages et factures", icon: "chatbubbles-outline", audience: "team", items: [
+    { key: "team.messages", label: "Messagerie entre membres de l’équipe" },
     { key: "messages.manage", label: "Messagerie avec les clients" },
+    { key: "invoices.manage", label: "Onglet Factures" },
   ] },
   { key: "audit", title: "Traçabilité", icon: "time-outline", audience: "team", items: [
     { key: "audit.view", label: "Consulter le journal des actions" },

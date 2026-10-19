@@ -5,7 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { fetchInbox, fetchMessages, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
-import { CloseButton, EmptyState, Loading, ScreenHeader, formatDateTime } from "../ui/components";
+import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime } from "../ui/components";
+import { TeamMessagesList } from "./TeamMessagesScreen";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
@@ -17,8 +18,24 @@ export function ClientMessagesScreen({ clientId, onRead }: { clientId: string; o
   </View>;
 }
 
+// Team side: conversations with clients and, separately, between team members.
+export function StaffMessagesScreen({ canClients, canTeam, initialSection, initialConversationId, onRead }: {
+  canClients: boolean;
+  canTeam: boolean;
+  initialSection?: string;
+  initialConversationId?: string;
+  onRead: () => void;
+}) {
+  const [sheet, setSheet] = useState<"clients" | "team">(!canClients || (canTeam && initialSection === "team") ? "team" : "clients");
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" />
+    {canClients && canTeam ? <Sheets items={[{ key: "clients", label: "Clients" }, { key: "team", label: "Équipe" }]} value={sheet} onChange={setSheet} /> : null}
+    {sheet === "clients" ? <StaffInboxScreen embedded onRead={onRead} /> : <TeamMessagesList onRead={onRead} initialConversationId={initialConversationId} />}
+  </View>;
+}
+
 // Staff side: one conversation per client, most recent first.
-export function StaffInboxScreen({ onRead }: { onRead: () => void }) {
+export function StaffInboxScreen({ onRead, embedded }: { onRead: () => void; embedded?: boolean }) {
   const [entries, setEntries] = useState<InboxEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,9 +71,9 @@ export function StaffInboxScreen({ onRead }: { onRead: () => void }) {
   const term = search.trim().toLocaleLowerCase("fr");
   const visible = entries.filter((entry) => entry.business_name.toLocaleLowerCase("fr").includes(term));
 
-  return <View style={ui.screen}>
-    <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" />
-    <View style={{ paddingHorizontal: 18, paddingTop: 12 }}>
+  return <View style={embedded ? { flex: 1 } : ui.screen}>
+    {embedded ? null : <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" />}
+    <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client" placeholderTextColor={colors.muted} style={ui.input} />
     </View>
     {loading ? <Loading /> : <FlatList

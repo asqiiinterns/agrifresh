@@ -11,6 +11,8 @@ export type AppAlert = {
   created_at: string;
   // Flagged by the recipient (column added by 20261028_alert_important.sql).
   important?: boolean;
+  // Team conversation the alert is about (20261029_team_messages.sql).
+  conversation_id?: string | null;
 };
 
 export type NotificationSetting = { event: string; label: string; audience: string; push_enabled: boolean; email_enabled: boolean; sort_order: number };
@@ -25,10 +27,11 @@ export const alertKinds: Record<string, string> = {
   "message.new": "Messages",
   "invoice.issued": "Factures",
   "account.pending": "Comptes",
+  "team.message": "Messages",
 };
 
 // Where an alert leads: the order itself, the conversation, the invoices or the account to validate.
-export function alertTarget(event: string | undefined, orderId: string | null | undefined, team: boolean): { tab: TabKey; params?: NavParams } {
+export function alertTarget(event: string | undefined, orderId: string | null | undefined, team: boolean, conversationId?: string | null): { tab: TabKey; params?: NavParams } {
   const order = orderId ? { orderId } : {};
   switch (event) {
     case "order.new": return { tab: "orders", params: team ? { section: "decide", ...order } : order };
@@ -36,7 +39,8 @@ export function alertTarget(event: string | undefined, orderId: string | null | 
     case "order.reconfirm": return { tab: "orders", params: order };
     case "claim.new": return { tab: "orders", params: team ? { section: "claims", ...order } : order };
     case "claim.answered": return { tab: "orders", params: order };
-    case "message.new": return { tab: "messages" };
+    case "message.new": return { tab: "messages", params: { section: "clients" } };
+    case "team.message": return { tab: "messages", params: { section: "team", page: conversationId ?? undefined } };
     case "invoice.issued": return { tab: "invoices" };
     case "account.pending": return { tab: "admin", params: { page: "accounts" } };
     default: return { tab: "alerts" };
@@ -52,6 +56,12 @@ export async function fetchAlerts(): Promise<AppAlert[]> {
   const { data, error } = await client().from("notifications").select("*").order("created_at", { ascending: false }).limit(200);
   if (error) throw error;
   return (data ?? []) as AppAlert[];
+}
+
+// A push notification only carries the alert id: look up the team conversation it opens.
+export async function fetchAlertConversation(id: string): Promise<string | null> {
+  const { data } = await client().from("notifications").select("*").eq("id", id).maybeSingle();
+  return (data as AppAlert | null)?.conversation_id ?? null;
 }
 
 export async function setAlertImportant(id: string, important: boolean): Promise<void> {

@@ -7,12 +7,13 @@ import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
-import { alertTarget, countUnreadAlerts, markAlertsRead } from "./src/data/alerts";
+import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { countUnread } from "./src/data/messages";
+import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
 import { OrderScreen } from "./src/screens/OrderScreen";
@@ -23,7 +24,7 @@ import { StaffInvoicesScreen } from "./src/screens/StaffInvoicesScreen";
 import { ClientInvoicesScreen } from "./src/screens/ClientInvoicesScreen";
 import { DocumentViewerHost } from "./src/ui/DocumentViewer";
 import { DriverScreen } from "./src/screens/DriverScreen";
-import { ClientMessagesScreen, StaffInboxScreen } from "./src/screens/MessagesScreen";
+import { ClientMessagesScreen, StaffMessagesScreen } from "./src/screens/MessagesScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { PlanningTab } from "./src/screens/PlanningScreen";
 import { MoreScreen } from "./src/screens/MoreScreen";
@@ -45,7 +46,7 @@ const TAB = {
   deliveries: { key: "deliveries", label: "Livraisons", icon: "car-outline", description: "Récupérer, livrer, historique." },
   clients: { key: "clients", label: "Clients", icon: "people-outline", description: "Fiches, points de livraison, QR codes." },
   invoices: { key: "invoices", label: "Factures", icon: "document-text-outline", description: "Factures et bons de livraison." },
-  messages: { key: "messages", label: "Messages", icon: "chatbubbles-outline", description: "Échanges avec les clients." },
+  messages: { key: "messages", label: "Messages", icon: "chatbubbles-outline", description: "Échanges avec les clients et entre collègues." },
   admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
   account: { key: "account", label: "Compte", icon: "person-circle-outline", description: "Profil, affichage, déconnexion." },
   more: { key: "more", label: "Plus", icon: "grid-outline" },
@@ -79,7 +80,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   // Planning stays in the bottom bar: it is the key daily task.
   add(tabs, TAB.planning, has("orders.plan"));
   add(tabs, TAB.staffOrder, has("orders.create"));
-  add(tabs, TAB.messages, has("messages.manage"));
+  add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
   if (has("production.view") && !tabs.includes(TAB.production)) tabs.push(TAB.production);
   if (has("deliveries") && !tabs.includes(TAB.deliveries)) tabs.push(TAB.deliveries);
@@ -203,12 +204,14 @@ function useUnreadAlerts(userId: string | null) {
   return { unread, refresh };
 }
 
-function useUnreadMessages(enabled: boolean, isStaff: boolean) {
+// Unread client messages plus, for the team, unread messages between colleagues.
+function useUnreadMessages(enabled: boolean, isStaff: boolean, sources: { clients: boolean; team: boolean }) {
   const [unread, setUnread] = useState(0);
+  const { clients, team } = sources;
   const refresh = useCallback(() => {
     if (!enabled) return;
-    void countUnread(isStaff).then(setUnread);
-  }, [enabled, isStaff]);
+    void Promise.all([clients ? countUnread(isStaff) : 0, team ? countTeamUnread() : 0]).then(([a, b]) => setUnread(a + b));
+  }, [enabled, isStaff, clients, team]);
 
   useEffect(() => {
     const client = supabase;
@@ -220,6 +223,7 @@ function useUnreadMessages(enabled: boolean, isStaff: boolean) {
     const channel = client
       .channel(`unread-${isStaff ? "staff" : "client"}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, refresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, refresh)
       .subscribe();
     return () => { void client.removeChannel(channel); };
   }, [enabled, isStaff, refresh]);
@@ -258,7 +262,10 @@ function Main({ session }: { session: Session }) {
   const current = tab && (tabs.some((item) => item.key === tab) || (tab === "more" && overflow.length > 0)) ? tab : tabs[0]?.key;
   const barCurrent = overflow.some((item) => item.key === current) ? "more" : current;
   const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
-  const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team");
+  const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team", {
+    clients: kind !== "team" || !!account?.features.includes("messages.manage"),
+    team: kind === "team" && !!account?.features.includes("team.messages"),
+  });
   const isActive = !!account && (account.status ?? "active") === "active";
   const alerts = useUnreadAlerts(isActive ? session.user.id : null);
 
@@ -268,8 +275,10 @@ function Main({ session }: { session: Session }) {
     void registerForPush(true);
     return onAlertTapped((data) => {
       if (data.id) void markAlertsRead([data.id]).then(alerts.refresh).catch(() => {});
-      const target = alertTarget(data.event, data.order_id, account?.role !== "customer");
-      navigate(target.tab, target.params);
+      void (data.event === "team.message" && data.id ? fetchAlertConversation(data.id).catch(() => null) : Promise.resolve(null)).then((conversationId) => {
+        const target = alertTarget(data.event, data.order_id, account?.role !== "customer", conversationId);
+        navigate(target.tab, target.params);
+      });
     });
   }, [isActive, session.user.id, navigate, account?.role]);
 
@@ -309,7 +318,7 @@ function Main({ session }: { session: Session }) {
       case "orders":
         return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId} /> : null;
       case "messages":
-        return kind === "team" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
+        return kind === "team" ? <StaffMessagesScreen canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "clients":
         return <StaffClientsScreen />;
       case "production":

@@ -96,7 +96,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       renderItem={({ item }) => <Pressable onPress={() => {
         // Opening an alert marks it read and goes straight to what it is about.
         if (!item.read_at) void read([item.id]);
-        const target = alertTarget(item.event, item.order_id, team);
+        const target = alertTarget(item.event, item.order_id, team, item.conversation_id);
         if (target.tab !== "alerts") navigate(target.tab, target.params);
       }} style={[ui.card, !item.read_at && styles.unread, item.important && styles.important]}>
         <View style={ui.row}>
