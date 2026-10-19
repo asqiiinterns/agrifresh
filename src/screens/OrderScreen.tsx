@@ -147,6 +147,7 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
             {item.isNew && item.description ? <Text style={ui.small} numberOfLines={2}>{item.description}</Text> : null}
             {client.show_origin && item.origin ? <Text style={styles.origin} numberOfLines={2}>Origine : {[formatOrigin(item.origin), item.origin.label].filter(Boolean).join(" · ")}{item.origin.note ? ` — ${item.origin.note}` : ""}</Text> : null}
             <Text style={ui.small}>{client.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
+            {client.show_stock && item.stock !== undefined ? <Text style={[ui.small, { color: item.stock > 0 ? colors.green : colors.danger, fontWeight: "700" }]}>{item.stock > 0 ? `Stock : ${formatQuantity(item.stock)} ${item.unit}` : "Rupture de stock"}</Text> : null}
           </View>
           <View style={styles.stepper}>
             <Pressable onPress={() => step(item.id, -1)} style={styles.stepButton} accessibilityLabel={`Retirer une unité de ${item.name}`}><Text style={styles.stepText}>−</Text></Pressable>

@@ -7,7 +7,8 @@ import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } f
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
-export function StaffClientsScreen() {
+// Only admins create client records (also enforced by the database).
+export function StaffClientsScreen({ canCreate }: { canCreate: boolean }) {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,7 +40,7 @@ export function StaffClientsScreen() {
   }, [clients, search]);
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={<Button label="+ NOUVEAU" onPress={() => setEditing("new")} />} />
+    <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={canCreate ? <Button label="+ NOUVEAU" onPress={() => setEditing("new")} /> : undefined} />
     <View style={{ paddingHorizontal: 18, paddingTop: 12 }}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client" placeholderTextColor={colors.muted} style={ui.input} />
     </View>
@@ -84,6 +85,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
   const [taxId, setTaxId] = useState("");
   const [showPrices, setShowPrices] = useState(true);
   const [showOrigin, setShowOrigin] = useState(false);
+  const [stockManaged, setStockManaged] = useState(true);
+  const [showStock, setShowStock] = useState(false);
   const [invoiceMode, setInvoiceMode] = useState<"auto" | "manual">("manual");
   const [receptionQr, setReceptionQr] = useState(false);
   const [firstPoint, setFirstPoint] = useState<DeliveryPointInput>(emptyPoint);
@@ -101,6 +104,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     setTaxId(record?.tax_id ?? "");
     setShowPrices(record?.show_prices ?? true);
     setShowOrigin(record?.show_origin ?? false);
+    setStockManaged(record?.stock_managed ?? true);
+    setShowStock(record?.show_stock ?? false);
     setInvoiceMode(record?.invoice_mode ?? "manual");
     setReceptionQr(record?.reception_qr ?? false);
     setActive(record?.active ?? true);
@@ -131,7 +136,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
       return;
     }
     void run(async () => {
-      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, show_prices: showPrices, show_origin: showOrigin, invoice_mode: invoiceMode, reception_qr: receptionQr };
+      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, show_prices: showPrices, show_origin: showOrigin, show_stock: showStock, stock_managed: stockManaged, invoice_mode: invoiceMode, reception_qr: receptionQr };
       if (record) await updateClient(record.id, { ...input, active });
       else await createClient(input, firstPoint);
       onSaved();
@@ -208,6 +213,14 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
             <View style={[ui.row, { marginTop: 12 }]}>
               <View style={{ flex: 1 }}><Text style={ui.body}>Afficher l’origine des produits</Text><Text style={ui.small}>Producteur, région et label sur le catalogue, les commandes et les bons de livraison.</Text></View>
               <Switch value={showOrigin} onValueChange={setShowOrigin} trackColor={{ true: colors.green, false: colors.line }} />
+            </View>
+            <View style={[ui.row, { marginTop: 12 }]}>
+              <View style={{ flex: 1 }}><Text style={ui.body}>Gestion du stock</Text><Text style={ui.small}>Activée : ses commandes sont limitées au stock disponible et le réservent. Désactivée : production à la demande, sans limite de stock.</Text></View>
+              <Switch value={stockManaged} onValueChange={setStockManaged} trackColor={{ true: colors.green, false: colors.line }} />
+            </View>
+            <View style={[ui.row, { marginTop: 12 }]}>
+              <View style={{ flex: 1 }}><Text style={ui.body}>Afficher le stock au client</Text><Text style={ui.small}>Le client voit la quantité disponible de chaque produit en commandant.</Text></View>
+              <Switch value={showStock} onValueChange={setShowStock} trackColor={{ true: colors.green, false: colors.line }} />
             </View>
             <View style={[ui.row, { marginTop: 12 }]}>
               <View style={{ flex: 1 }}><Text style={ui.body}>Réception par QR client</Text><Text style={ui.small}>Le livreur scanne le QR affiché dans l’application du client au lieu du QR collé au point de livraison.</Text></View>

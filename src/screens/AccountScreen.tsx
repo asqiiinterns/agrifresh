@@ -2,13 +2,12 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { formatClientNumber, type Account } from "../data/account";
+import { formatClientNumber, isManager, roleLabels, type Account } from "../data/account";
 import { Button, Field, ScreenHeader } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
-
-const roleLabels = { customer: "Client", staff: "Personnel", admin: "Administrateur", driver: "Livreur" } as const;
+import { TeamModal } from "./TeamScreen";
 
 export function AccountScreen({ session, account }: { session: Session; account: Account | null }) {
   const [password, setPassword] = useState("");
@@ -16,7 +15,9 @@ export function AccountScreen({ session, account }: { session: Session; account:
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [productsVisible, setProductsVisible] = useState(false);
-  const isStaff = account?.role === "staff" || account?.role === "admin";
+  const isStaff = isManager(account?.role);
+  const isAdmin = account?.role === "admin";
+  const [teamVisible, setTeamVisible] = useState(false);
 
   async function changePassword() {
     if (!supabase) return;
@@ -60,6 +61,12 @@ export function AccountScreen({ session, account }: { session: Session; account:
         <Button label="GÉRER LES PRODUITS" onPress={() => setProductsVisible(true)} style={{ marginTop: 10 }} />
       </View> : null}
 
+      {isAdmin ? <View style={ui.card}>
+        <Text style={ui.strong}>Équipe</Text>
+        <Text style={ui.small}>Administrateurs, superviseurs, production et livreurs.</Text>
+        <Button label="GÉRER L’ÉQUIPE" onPress={() => setTeamVisible(true)} style={{ marginTop: 10 }} />
+      </View> : null}
+
       <View style={ui.card}>
         <Text style={ui.strong}>Changer mon mot de passe</Text>
         <Field label="Nouveau mot de passe" value={password} onChangeText={setPassword} secureTextEntry />
@@ -73,5 +80,6 @@ export function AccountScreen({ session, account }: { session: Session; account:
       <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 20 }} />
     </ScrollView>
     {isStaff ? <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} /> : null}
+    {isAdmin ? <TeamModal visible={teamVisible} onClose={() => setTeamVisible(false)} /> : null}
   </View>;
 }

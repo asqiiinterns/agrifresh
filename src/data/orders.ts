@@ -29,6 +29,7 @@ export type Order = {
   delivered_at: string | null;
   customer_note: string | null;
   customer_id: string;
+  production_rank: number | string | null;
   client_id: string | null;
   delivery_point_id: string | null;
   delivery_token: string;
@@ -46,7 +47,7 @@ export type Order = {
   order_status_history: StatusEvent[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, client_id, delivery_point_id, delivery_token, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, created_at)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, created_at)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 

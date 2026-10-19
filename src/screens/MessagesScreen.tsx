@@ -146,12 +146,14 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
   }
 
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}>
-    {loading ? <Loading /> : <FlatList
+    {/* The empty state stays outside the inverted list, whose flip differs between platforms. */}
+    {loading ? <Loading /> : messages.length === 0 ? <View style={{ flex: 1, justifyContent: "center" }}>
+      <EmptyState title="Aucun message" body="Écrivez le premier message ci-dessous." />
+    </View> : <FlatList
       inverted
       data={messages}
       keyExtractor={(message) => message.id}
       contentContainerStyle={{ padding: 18, flexGrow: 1 }}
-      ListEmptyComponent={<View style={{ transform: [{ scaleY: -1 }] }}><EmptyState title="Aucun message" body="Écrivez le premier message ci-dessous." /></View>}
       renderItem={({ item }) => {
         const mine = item.from_staff === viewerIsStaff;
         return <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>

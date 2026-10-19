@@ -3,7 +3,8 @@ import { Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
-import { fetchMyAccount, type Account } from "./src/data/account";
+import { fetchMyAccount, isManager, type Account } from "./src/data/account";
+import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { countUnread } from "./src/data/messages";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
@@ -20,10 +21,10 @@ import { Button, EmptyState, Loading } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
 
-type TabKey = "order" | "orders" | "messages" | "clients" | "invoices" | "deliveries" | "account";
+type TabKey = "order" | "orders" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "account";
 type TabDef = { key: TabKey; label: string; icon: string };
 
-const tabsByRole: Record<"client" | "unlinked" | "staff" | "driver", TabDef[]> = {
+const tabsByRole: Record<"client" | "unlinked" | "staff" | "production" | "driver", TabDef[]> = {
   client: [
     { key: "order", label: "Commander", icon: "＋" },
     { key: "orders", label: "Commandes", icon: "▤" },
@@ -34,9 +35,14 @@ const tabsByRole: Record<"client" | "unlinked" | "staff" | "driver", TabDef[]> =
   unlinked: [{ key: "account", label: "Compte", icon: "◉" }],
   staff: [
     { key: "orders", label: "Commandes", icon: "▤" },
+    { key: "production", label: "Production", icon: "⚙" },
     { key: "clients", label: "Clients", icon: "☷" },
     { key: "invoices", label: "Factures", icon: "€" },
     { key: "messages", label: "Messages", icon: "✉" },
+    { key: "account", label: "Compte", icon: "◉" },
+  ],
+  production: [
+    { key: "production", label: "Production", icon: "⚙" },
     { key: "account", label: "Compte", icon: "◉" },
   ],
   driver: [
@@ -168,7 +174,8 @@ function Main({ session }: { session: Session }) {
   }, [session.user.id, loadAccount]);
 
   const kind = !account ? null
-    : account.role === "staff" || account.role === "admin" ? "staff"
+    : isManager(account.role) ? "staff"
+    : account.role === "production" ? "production"
     : account.role === "driver" ? "driver"
     : account.client ? "client" : "unlinked";
   const tabs = kind ? tabsByRole[kind] : [];
@@ -191,7 +198,9 @@ function Main({ session }: { session: Session }) {
       case "messages":
         return kind === "staff" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "clients":
-        return <StaffClientsScreen />;
+        return <StaffClientsScreen canCreate={account.role === "admin"} />;
+      case "production":
+        return <ProductionScreen />;
       case "invoices":
         return kind === "staff" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
       case "deliveries":

@@ -1,8 +1,7 @@
-import * as Print from "expo-print";
 import { Platform, Share } from "react-native";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "./account";
-import { escapeHtml } from "./pdf";
+import { escapeHtml, outputPdf } from "./pdf";
 import { QR, qrSvg } from "../ui/Qr";
 
 export type DeliveryPoint = {
@@ -29,13 +28,15 @@ export type ClientRecord = {
   active: boolean;
   show_prices: boolean;
   show_origin: boolean;
+  show_stock: boolean;
+  stock_managed: boolean;
   invoice_mode: "auto" | "manual";
   reception_qr: boolean;
   client_delivery_points: DeliveryPoint[];
   has_account: boolean;
 };
 
-export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes" | "show_prices" | "show_origin" | "invoice_mode" | "reception_qr"> & { email: string; tax_id: string };
+export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes" | "show_prices" | "show_origin" | "show_stock" | "stock_managed" | "invoice_mode" | "reception_qr"> & { email: string; tax_id: string };
 export type DeliveryPointInput = Pick<DeliveryPoint, "label" | "address_line" | "city" | "phone" | "instructions">;
 
 function client() {
@@ -46,7 +47,7 @@ function client() {
 export async function fetchClients(): Promise<ClientRecord[]> {
   const { data, error } = await client()
     .from("clients")
-    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, invoice_mode, reception_qr, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
+    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
   type Row = Omit<ClientRecord, "has_account"> & {
@@ -70,6 +71,8 @@ const clean = (input: ClientInput) => ({
   tax_id: input.tax_id.trim() || null,
   show_prices: input.show_prices,
   show_origin: input.show_origin,
+  show_stock: input.show_stock,
+  stock_managed: input.stock_managed,
   invoice_mode: input.invoice_mode,
   reception_qr: input.reception_qr,
 });
@@ -130,7 +133,7 @@ export async function printDeliveryPointQr(record: ClientRecord, points: Deliver
     .address{font-size:14px}.hint{margin-top:14px;font-size:12px;color:#737b71}
   </style></head><body>${sheets}</body></html>`;
 
-  await Print.printAsync({ html });
+  await outputPdf(html, `QR-${record.business_name}-${points.length > 1 ? "points" : points[0].label}`, `QR codes · ${record.business_name}`);
 }
 
 export async function shareInvitation(record: ClientRecord): Promise<"shared" | "copied"> {

@@ -19,6 +19,7 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
 7. Exécute **seul** `supabase/migrations/20261018_b2b_1_enums.sql` (nouveaux statuts et rôle livreur), puis `supabase/migrations/20261018_b2b_2_flow.sql` (fiches clients, points de livraison, QR codes, décisions du personnel, livraison par scan, messagerie). Le second fichier peut être relancé sans risque.
    Puis `supabase/migrations/20261019_invoices_delivery_notes.sql` : TVA par produit, options de fiche (prix affichés, réception par QR client, facturation automatique ou manuelle), factures et livraison en deux scans. Renseigne ensuite le taux de TVA de chaque produit dans **Table Editor → products → vat_rate** (0, 7, 13 ou 19) et les coordonnées légales d'AgriFresh dans `src/config/company.ts`.
    Puis **seul** `supabase/migrations/20261020_1_enums.sql` (statut « À reconfirmer »), puis `supabase/migrations/20261020_2_reconfirm_drafts.sql` (reconfirmation par le client, brouillons de facture, origine des produits, gestion du catalogue, réclamations).
+   Puis **seul** `supabase/migrations/20261021_1_roles.sql` (rôles superviseur et production), puis `supabase/migrations/20261021_2_planning_stock.sql` (rôles et droits, file de production, options de stock par client, gestion de l'équipe). Les anciens comptes « staff » deviennent superviseurs ; nomme ensuite un administrateur (requête en fin de fichier) qui gérera l'équipe depuis **Compte → Gérer l'équipe**.
 8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). Garde **Confirm email** activé dans Supabase Auth : c'est ce qui empêche quelqu'un d'activer l'accès d'un client avec son e-mail.
 9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
 10. Redémarre Expo après une modification de `.env.local`.
@@ -51,12 +52,17 @@ Application de commande professionnelle pour des clients connus et récurrents.
 - **Factures** : factures émises, à régler ou réglées, consultables en PDF.
 - **Messages** : échange direct avec l'équipe AgriFresh.
 
-**Personnel** (`staff` / `admin`)
-- **Commandes** : recherche, filtre par jour de livraison, cartes repliables. *À décider* (accepter, mettre en attente, décliner, proposer à reconfirmer), *En cours* par étape, *Quantités à préparer* (totaux par produit, dépliables par client), *Réclamations*, *Historique*.
-- **Clients** : fiches, e-mail de connexion, matricule fiscal, options (prix affichés, réception par QR client, facturation), points de livraison, impression des QR codes, partage de l'invitation.
+**Rôles internes** : *administrateur* (tout, seul à créer des clients et à gérer l'équipe), *superviseur* (commandes, planification, factures, réclamations, messages), *production* (onglet Production uniquement), *livreur*.
+
+**Administrateur et superviseur**
+- **Commandes** : recherche et bouton *Filtres* (jour de livraison, étape). *À décider* : accepter en choisissant la place dans la file de production, mettre en attente, décliner, proposer à reconfirmer. *En cours* dans l'ordre d'exécution (bouton *Déplacer*), *Réclamations*, *Historique*.
+- **Production** : comme l'équipe de production.
+- **Clients** : fiches (création par l'administrateur), e-mail de connexion, matricule fiscal, options (prix affichés, origine, gestion et affichage du stock, réception par QR client, facturation), points de livraison, impression des QR codes, partage de l'invitation.
 - **Factures** : brouillons modifiables puis validation (numéro attribué à la validation), PDF, suivi payé / à encaisser.
 - **Produits** (onglet Compte) : création, prix, TVA, stock, disponibilité, origine et qualité.
 - **Messages** : une conversation par client, compteur de non-lus.
+
+**Production** : *À préparer* (totaux par produit à cocher, dépliables par client), *File d'exécution* dans l'ordre fixé par l'administration (Commencer / Prête), *Historique* des préparations filtrable.
 
 **Livreur** (`driver`) : *À livrer* (commandes expédiées) et *Historique* filtrable par client, période et tranche horaire. Remise en deux scans : le QR de chaque bon de livraison, puis le QR du client — celui collé au point de livraison, ou le QR de réception affiché dans l'appli du client si sa fiche l'exige.
 
@@ -66,4 +72,6 @@ Application de commande professionnelle pour des clients connus et récurrents.
 
 Statuts : Nouvelle → Acceptée / En attente / Déclinée (→ À reconfirmer → reconfirmée par le client) → En préparation → Préparée → Expédiée → Livrée (uniquement par les deux scans). Un refus ou une annulation remet le stock.
 
-Les nouveaux produits s'ajoutent depuis **Compte → Gérer les produits** et sont affichés comme *Nouveau* pendant 30 jours. Les documents (BL, factures) s'ouvrent d'abord en aperçu ; l'impression ou le partage se fait ensuite. Vérifie les mentions légales des factures (coordonnées, matricule fiscal, taux de TVA) avec ton comptable avant de les émettre.
+Les nouveaux produits s'ajoutent depuis **Compte → Gérer les produits** et sont affichés comme *Nouveau* pendant 30 jours. Les documents (BL, factures, étiquettes QR) s'ouvrent d'abord en aperçu : téléchargement PDF ou impression sur le web, impression ou partage sur mobile.
+
+**Stock** : chaque produit a un stock (Compte → Gérer les produits). Pour un client en *gestion du stock*, ses commandes sont limitées au stock disponible et le réservent ; un refus ou une annulation le rend. Sans gestion du stock, ses commandes ne sont pas limitées (production à la demande). *Afficher le stock* montre au client les quantités disponibles. Vérifie les mentions légales des factures (coordonnées, matricule fiscal, taux de TVA) avec ton comptable avant de les émettre.

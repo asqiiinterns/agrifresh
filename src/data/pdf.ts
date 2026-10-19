@@ -1,7 +1,6 @@
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
-import { Platform } from "react-native";
 import { company } from "../config/company";
 
 export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
@@ -50,10 +49,10 @@ export function subscribeToDocuments(listener: (document: PendingDocument | null
   return () => { if (documentListener === listener) documentListener = null; };
 }
 
-// Web: the browser print preview (print or save as PDF). Native: the in-app preview
-// (DocumentViewerHost), from which the user prints or shares.
+// Opens the in-app preview (DocumentViewerHost) on web and mobile; the browser print
+// dialog is only a fallback when the preview is not mounted.
 export async function outputPdf(html: string, fileName: string, title: string): Promise<void> {
-  if (Platform.OS === "web" || !documentListener) {
+  if (!documentListener) {
     await Print.printAsync({ html });
     return;
   }

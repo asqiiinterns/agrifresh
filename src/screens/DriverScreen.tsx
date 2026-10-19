@@ -6,6 +6,7 @@ import { confirmHandover, fetchDeliveryHistory, fetchShipments, lookupDeliveryNo
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { parseQr } from "../ui/Qr";
+import { FilterPanel, type FilterGroup } from "../ui/FilterPanel";
 import { colors, ui } from "../ui/theme";
 
 type Tab = "todo" | "history";
@@ -130,23 +131,20 @@ function DeliveryHistory() {
     });
   }, [orders, search, period, slot]);
 
-  if (loading) return <Loading />;
-  return <FlatList
+  const groups: FilterGroup[] = [
+    { title: "Période", options: periods.map(({ key, label }) => ({ key, label })), value: period, defaultValue: "week", onChange: (value) => setPeriod(value as typeof period) },
+    { title: "Heure de livraison", options: slots.map(({ key, label }) => ({ key, label })), value: slot, defaultValue: "all", onChange: (value) => setSlot(value as typeof slot) },
+  ];
+
+  return <View style={{ flex: 1 }}>
+    <FilterPanel search={search} onSearch={setSearch} placeholder="Client ou ville" groups={groups} />
+    {loading ? <Loading /> : <FlatList
     data={visible}
     keyExtractor={(item) => item.id}
     contentContainerStyle={ui.content}
     keyboardShouldPersistTaps="handled"
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
-    ListHeaderComponent={<View>
-      <TextInput value={search} onChangeText={setSearch} placeholder="Filtrer par client ou ville" placeholderTextColor={colors.muted} style={ui.input} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        {periods.map((item) => <Chip key={item.key} label={item.label} selected={period === item.key} onPress={() => setPeriod(item.key)} />)}
-      </ScrollView>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        {slots.map((item) => <Chip key={item.key} label={item.label} selected={slot === item.key} onPress={() => setSlot(item.key)} />)}
-      </ScrollView>
-      <Text style={ui.small}>{error || `${visible.length} livraison(s)`}</Text>
-    </View>}
+    ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || `${visible.length} livraison(s)`}</Text>}
     ListEmptyComponent={error ? null : <EmptyState title="Aucune livraison" body="Aucune livraison ne correspond à ces filtres." />}
     renderItem={({ item }) => <View style={ui.card}>
       <View style={ui.row}>
@@ -157,7 +155,8 @@ function DeliveryHistory() {
       <Text style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Livrée le {formatDateTime(item.delivered_at)}{item.driver_name ? ` · ${item.driver_name}` : ""}</Text>
       <Text style={ui.small}>{item.item_count} produit(s)</Text>
     </View>}
-  />;
+  />}
+  </View>;
 }
 
 function HandoverModal({ visible, onClose, onDelivered }: { visible: boolean; onClose: () => void; onDelivered: () => void }) {

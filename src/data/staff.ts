@@ -56,6 +56,20 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, no
   if (error) throw error;
 }
 
+// Puts an accepted order before another one in the execution queue (or at the end when null).
+export async function scheduleOrder(orderId: string, beforeOrderId: string | null): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("staff_schedule_order", { p_order_id: orderId, p_before_order_id: beforeOrderId });
+  if (error) throw error;
+}
+
+export const queueStatuses = ["confirmed", "preparing", "ready"] as const;
+
+// Accepted orders in execution order.
+export const executionQueue = <T extends Order>(orders: T[]) => orders
+  .filter((order) => (queueStatuses as readonly string[]).includes(order.status))
+  .sort((a, b) => Number(a.production_rank ?? Number.MAX_SAFE_INTEGER) - Number(b.production_rank ?? Number.MAX_SAFE_INTEGER) || a.order_number - b.order_number);
+
 export type PreparationClient = { key: string; name: string; quantity: number; orders: number[]; day: string | null };
 export type PreparationLine = { key: string; name: string; unit: string; quantity: number; orders: number; clients: PreparationClient[] };
 

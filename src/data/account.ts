@@ -1,6 +1,17 @@
 import { supabase } from "../lib/supabase";
 
-export type Role = "customer" | "staff" | "admin" | "driver";
+export type Role = "customer" | "staff" | "admin" | "supervisor" | "production" | "driver";
+
+export const roleLabels: Record<Role, string> = {
+  customer: "Client",
+  staff: "Superviseur",
+  supervisor: "Superviseur",
+  admin: "Administrateur",
+  production: "Production",
+  driver: "Livreur",
+};
+
+export const isManager = (role: Role | undefined) => role === "admin" || role === "supervisor" || role === "staff";
 
 export type DeliveryPointSummary = {
   id: string;
@@ -17,6 +28,8 @@ export type ClientSummary = {
   phone: string;
   show_prices: boolean;
   show_origin: boolean;
+  show_stock: boolean;
+  stock_managed: boolean;
   reception_qr: boolean;
   reception_token: string | null;
   delivery_points: DeliveryPointSummary[];

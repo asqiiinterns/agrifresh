@@ -11,6 +11,7 @@ type CatalogRow = {
   price: number | string;
   active: boolean;
   created_at: string;
+  stock_quantity: number | string;
   origin_producer: string | null;
   origin_region: string | null;
   origin_label: string | null;
@@ -32,7 +33,7 @@ export async function fetchCatalog(): Promise<Product[]> {
 
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, description, image_url, unit_label, price, active, created_at, origin_producer, origin_region, origin_label, origin_note, categories(name)")
+    .select("id, name, description, image_url, unit_label, price, active, created_at, stock_quantity, origin_producer, origin_region, origin_label, origin_note, categories(name)")
     .eq("active", true)
     .order("created_at", { ascending: false });
 
@@ -51,6 +52,7 @@ export async function fetchCatalog(): Promise<Product[]> {
       unit: row.unit_label ?? "unité",
       image: row.image_url || demoProducts.find((item) => item.category === category)?.image || demoProducts[0].image,
       available: row.active,
+      stock: Number(row.stock_quantity),
       origin: row.origin_producer || row.origin_region || row.origin_label || row.origin_note
         ? { producer: row.origin_producer ?? undefined, region: row.origin_region ?? undefined, label: row.origin_label ?? undefined, note: row.origin_note ?? undefined }
         : null,
