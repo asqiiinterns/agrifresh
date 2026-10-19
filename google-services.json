@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "751609751038",
+    "project_id": "agrifresh-6b7f8",
+    "storage_bucket": "agrifresh-6b7f8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:751609751038:android:99a599249cf98deddf8caf",
+        "android_client_info": {
+          "package_name": "com.agrifresh.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9Rn40kTzmBeaDybHl36GCazVdVvhjVA8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
