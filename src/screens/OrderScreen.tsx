@@ -31,7 +31,17 @@ function nextDays(count: number) {
   return days;
 }
 
-export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPlaced: () => void }) {
+type PlaceOrder = typeof placeClientOrder;
+
+// The client's own order screen; the team reuses it to order for a client (staffFor set):
+// same catalogue and quantities, sent with the team's function, history of that client.
+export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, loadHistory = fetchMyOrders, staffFor }: {
+  client: ClientSummary;
+  onPlaced: () => void;
+  placeOrder?: PlaceOrder;
+  loadHistory?: () => Promise<Order[]>;
+  staffFor?: { onBack: () => void };
+}) {
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -120,9 +130,10 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
 
   return <View style={ui.screen}>
     <ScreenHeader
-      eyebrow={client.business_name.toLocaleUpperCase("fr")}
-      title="Commander"
+      eyebrow={staffFor ? "COMMANDE POUR LE CLIENT" : client.business_name.toLocaleUpperCase("fr")}
+      title={staffFor ? client.business_name : "Commander"}
       subtitle="Saisissez les quantités souhaitées pour chaque produit."
+      right={staffFor ? <Button label="‹ CLIENTS" variant="secondary" onPress={staffFor.onBack} /> : undefined}
     />
     <View style={styles.toolbar}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un produit" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
@@ -184,6 +195,8 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
       client={client}
       lines={lines}
       total={total}
+      placeOrder={placeOrder}
+      staff={!!staffFor}
       onClose={() => setReviewVisible(false)}
       onPlaced={() => {
         // Clear the saved cart right away: the screen unmounts when switching to the orders tab.
@@ -197,14 +210,17 @@ export function OrderScreen({ client, onPlaced }: { client: ClientSummary; onPla
     <RepeatModal
       visible={repeatVisible}
       showPrices={client.show_prices}
+      loadHistory={loadHistory}
       onClose={() => setRepeatVisible(false)}
       onFill={fillFromOrders}
     />
   </View>;
 }
 
-function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
+function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose, onPlaced }: {
   visible: boolean;
+  placeOrder: PlaceOrder;
+  staff: boolean;
   client: ClientSummary;
   lines: { product: Product; quantity: number }[];
   total: number;
@@ -233,7 +249,7 @@ function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
     setBusy(true);
     setError("");
     try {
-      const order = await placeClientOrder({
+      const order = await placeOrder({
         items: lines.map((line) => ({ product_id: line.product.id, quantity: line.quantity })),
         deliveryPointId: pointId,
         requestedDate: day,
@@ -241,7 +257,9 @@ function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
       });
       setNote("");
       setDay(null);
-      notify("Commande envoyée", `Commande #${order.order_number} transmise à AgriFresh${client.show_prices ? ` (${formatPrice(order.total)} HT)` : ""}. Vous serez informé de son acceptation.`);
+      notify("Commande envoyée", staff
+        ? `Commande #${order.order_number} enregistrée pour ${client.business_name} (${formatPrice(order.total)} HT). Elle attend la décision dans Commandes.`
+        : `Commande #${order.order_number} transmise à AgriFresh${client.show_prices ? ` (${formatPrice(order.total)} HT)` : ""}. Vous serez informé de son acceptation.`);
       onPlaced();
     } catch (cause) {
       setError(errorMessage(cause, "La commande n’a pas pu être envoyée."));
@@ -291,7 +309,7 @@ function ReviewModal({ visible, client, lines, total, onClose, onPlaced }: {
   </Modal>;
 }
 
-function RepeatModal({ visible, showPrices, onClose, onFill }: { visible: boolean; showPrices: boolean; onClose: () => void; onFill: (orders: Order[]) => void }) {
+function RepeatModal({ visible, showPrices, loadHistory, onClose, onFill }: { visible: boolean; showPrices: boolean; loadHistory: () => Promise<Order[]>; onClose: () => void; onFill: (orders: Order[]) => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -301,7 +319,7 @@ function RepeatModal({ visible, showPrices, onClose, onFill }: { visible: boolea
     if (!visible) return;
     setLoading(true);
     setError("");
-    void fetchMyOrders()
+    void loadHistory()
       .then((all) => {
         const recent = all.filter((order) => order.status !== "cancelled").slice(0, 12);
         setOrders(recent);

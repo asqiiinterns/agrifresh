@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
+import { Linking, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
 import { Text } from "./src/ui/Text";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
@@ -24,45 +24,67 @@ import { ClientInvoicesScreen } from "./src/screens/ClientInvoicesScreen";
 import { DocumentViewerHost } from "./src/ui/DocumentViewer";
 import { DriverScreen } from "./src/screens/DriverScreen";
 import { ClientMessagesScreen, StaffInboxScreen } from "./src/screens/MessagesScreen";
+import { HomeScreen } from "./src/screens/HomeScreen";
+import { MoreScreen } from "./src/screens/MoreScreen";
+import { StaffOrderEntryScreen } from "./src/screens/StaffOrderEntryScreen";
+import { Ionicons } from "@expo/vector-icons";
+import { NavContext, type IconName, type NavParams, type TabDef, type TabKey } from "./src/ui/navigation";
 import { Button, EmptyState, Loading } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
 
-type TabKey = "order" | "orders" | "alerts" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "admin" | "account";
-type TabDef = { key: TabKey; label: string; icon: string };
-
 const TAB = {
-  order: { key: "order", label: "Commander", icon: "＋" },
-  alerts: { key: "alerts", label: "Alertes", icon: "🔔" },
-  orders: { key: "orders", label: "Commandes", icon: "▤" },
-  production: { key: "production", label: "Production", icon: "⚙" },
-  deliveries: { key: "deliveries", label: "Livraisons", icon: "⇥" },
-  clients: { key: "clients", label: "Clients", icon: "☷" },
-  invoices: { key: "invoices", label: "Factures", icon: "€" },
-  messages: { key: "messages", label: "Messages", icon: "✉" },
-  admin: { key: "admin", label: "Admin", icon: "⚒" },
-  account: { key: "account", label: "Compte", icon: "◉" },
+  home: { key: "home", label: "Accueil", icon: "home-outline", description: "Tableau de bord du moment." },
+  order: { key: "order", label: "Commander", icon: "add-circle-outline" },
+  staffOrder: { key: "staffOrder", label: "Commander", icon: "add-circle-outline", description: "Saisir une commande pour un client." },
+  alerts: { key: "alerts", label: "Alertes", icon: "notifications-outline", description: "Notifications reçues." },
+  orders: { key: "orders", label: "Commandes", icon: "receipt-outline", description: "Décisions, file de préparation, réclamations." },
+  production: { key: "production", label: "Production", icon: "construct-outline", description: "Quantités à préparer." },
+  deliveries: { key: "deliveries", label: "Livraisons", icon: "car-outline", description: "Récupérer, livrer, historique." },
+  clients: { key: "clients", label: "Clients", icon: "people-outline", description: "Fiches, points de livraison, QR codes." },
+  invoices: { key: "invoices", label: "Factures", icon: "document-text-outline", description: "Factures et bons de livraison." },
+  messages: { key: "messages", label: "Messages", icon: "chatbubbles-outline", description: "Échanges avec les clients." },
+  admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
+  account: { key: "account", label: "Compte", icon: "person-circle-outline", description: "Profil, affichage, déconnexion." },
+  more: { key: "more", label: "Plus", icon: "grid-outline" },
 } satisfies Record<TabKey, TabDef>;
 
-// Tabs follow the features the admin enabled for the account's role.
+// Bottom bar: at most five entries, the rest goes into "Plus".
+const MAX_BAR = 5;
+
+// Tabs follow the features the admin enabled for the account's role, most used first.
 function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
   const has = (feature: string) => account.features.includes(feature);
   if (account.role === "customer") {
     if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
-    return { kind: "client", tabs: [TAB.order, TAB.orders, TAB.alerts, ...(has("client.invoices") ? [TAB.invoices] : []), ...(has("client.messages") ? [TAB.messages] : []), TAB.account] };
+    return { kind: "client", tabs: [TAB.order, TAB.orders, ...(has("client.messages") ? [TAB.messages] : []), TAB.alerts, ...(has("client.invoices") ? [TAB.invoices] : []), TAB.account] };
   }
+  const managesOrders = ["orders.decide", "orders.plan", "claims.manage"].some(has);
   const tabs: TabDef[] = [];
-  if (["orders.decide", "orders.plan", "orders.ship", "claims.manage"].some(has)) tabs.push(TAB.orders);
+  if (managesOrders || has("production.view")) tabs.push(TAB.home);
+  // The driver's and the production team's own work comes right after.
+  if (account.role === "driver" && has("deliveries")) tabs.push(TAB.deliveries);
+  if (account.role === "production" && has("production.view")) tabs.push(TAB.production);
+  // Drivers ship from Livraisons (« À récupérer »), they do not need the orders screen.
+  if (managesOrders || (has("orders.ship") && account.role !== "driver")) tabs.push(TAB.orders);
+  if (has("orders.create")) tabs.push(TAB.staffOrder);
+  if (has("messages.manage")) tabs.push(TAB.messages);
   tabs.push(TAB.alerts);
-  if (has("production.view")) tabs.push(TAB.production);
-  if (has("deliveries")) tabs.push(TAB.deliveries);
+  if (has("production.view") && !tabs.includes(TAB.production)) tabs.push(TAB.production);
+  if (has("deliveries") && !tabs.includes(TAB.deliveries)) tabs.push(TAB.deliveries);
   if (has("clients.view")) tabs.push(TAB.clients);
   if (has("invoices.manage")) tabs.push(TAB.invoices);
-  if (has("messages.manage")) tabs.push(TAB.messages);
   if (account.role === "admin") tabs.push(TAB.admin);
   tabs.push(TAB.account);
   return { kind: "team", tabs };
 }
+
+function splitBar(tabs: TabDef[]): { bar: TabDef[]; overflow: TabDef[] } {
+  if (tabs.length <= MAX_BAR) return { bar: tabs, overflow: [] };
+  return { bar: [...tabs.slice(0, MAX_BAR - 1), TAB.more], overflow: tabs.slice(MAX_BAR - 1) };
+}
+
+const filledIcon = (icon: IconName) => icon.replace(/-outline$/, "") as IconName;
 
 function useSession() {
   const [session, setSession] = useState<Session | null>(null);
@@ -197,8 +219,13 @@ function useUnreadMessages(enabled: boolean, isStaff: boolean) {
 function Main({ session }: { session: Session }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [accountError, setAccountError] = useState("");
-  const [tab, setTab] = useState<TabKey | null>(null);
+  const [nav, setNav] = useState<{ tab: TabKey | null; params?: NavParams; nonce: number }>({ tab: null, nonce: 0 });
+  const tab = nav.tab;
   const [ordersKey, setOrdersKey] = useState(0);
+  // A tile or shortcut opens a tab at a given section; each call remounts the target screen.
+  const navigate = useCallback((next: TabKey, params?: NavParams) => setNav((state) => ({ tab: next, params, nonce: state.nonce + 1 })), []);
+  const setTab = useCallback((next: TabKey | null) => setNav((state) => ({ tab: next, nonce: state.nonce })), []);
+  const navValue = useMemo(() => ({ navigate }), [navigate]);
 
   const loadAccount = useCallback(async () => {
     setAccountError("");
@@ -216,7 +243,9 @@ function Main({ session }: { session: Session }) {
   }, [session.user.id, loadAccount]);
 
   const { kind, tabs } = account ? tabsFor(account) : { kind: null, tabs: [] as TabDef[] };
-  const current = tab && tabs.some((item) => item.key === tab) ? tab : tabs[0]?.key;
+  const { bar, overflow } = splitBar(tabs);
+  const current = tab && (tabs.some((item) => item.key === tab) || (tab === "more" && overflow.length > 0)) ? tab : tabs[0]?.key;
+  const barCurrent = overflow.some((item) => item.key === current) ? "more" : current;
   const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
   const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team");
   const isActive = !!account && (account.status ?? "active") === "active";
@@ -227,7 +256,7 @@ function Main({ session }: { session: Session }) {
     if (!isActive) return;
     void registerForPush(true);
     return onAlertTapped(() => setTab("alerts"));
-  }, [isActive, session.user.id]);
+  }, [isActive, session.user.id, setTab]);
 
   if (!account) {
     return accountError
@@ -252,10 +281,16 @@ function Main({ session }: { session: Session }) {
   function renderTab() {
     if (!account) return null;
     switch (current) {
+      case "home":
+        return <HomeScreen account={account} unreadMessages={unread} unreadAlerts={alerts.unread} />;
+      case "more":
+        return <MoreScreen items={overflow} badges={{ messages: unread, alerts: alerts.unread }} />;
+      case "staffOrder":
+        return <StaffOrderEntryScreen onPlaced={() => navigate("orders", { section: "decide" })} />;
       case "order":
         return account.client ? <OrderScreen client={account.client} onPlaced={() => { setOrdersKey((key) => key + 1); setTab("orders"); }} /> : null;
       case "orders":
-        return kind === "team" ? <StaffOrdersScreen /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} /> : null;
+        return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} /> : null;
       case "messages":
         return kind === "team" ? <StaffInboxScreen onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "clients":
@@ -269,7 +304,7 @@ function Main({ session }: { session: Session }) {
       case "alerts":
         return <AlertsScreen userId={session.user.id} onRead={alerts.refresh} />;
       case "admin":
-        return <AdminScreen />;
+        return <AdminScreen initialPage={nav.params?.page} />;
       default:
         return <View style={{ flex: 1 }}>
           {kind === "unlinked" ? <View style={[ui.card, { marginHorizontal: 18, marginTop: 18 }]}>
@@ -282,22 +317,27 @@ function Main({ session }: { session: Session }) {
     }
   }
 
-  return <PermissionsContext.Provider value={permissions}>
-    <View style={{ flex: 1 }}>{renderTab()}</View>
-    {tabs.length > 1 ? <ScrollView horizontal={tabs.length > 6} scrollEnabled={tabs.length > 6} showsHorizontalScrollIndicator={false} style={styles.tabBarWrap} contentContainerStyle={[styles.tabBar, tabs.length <= 6 && { flex: 1 }]}>
-      {tabs.map((item) => {
-        const selected = item.key === current;
-        return <Pressable key={item.key} onPress={() => setTab(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }}>
-          <View>
-            <Text style={[styles.tabIcon, selected && styles.tabActive]}>{item.icon}</Text>
-            {item.key === "messages" && unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
-            {item.key === "alerts" && alerts.unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{alerts.unread > 99 ? "99+" : alerts.unread}</Text></View> : null}
+  const badgeFor = (key: TabKey) => key === "messages" ? unread
+    : key === "alerts" ? alerts.unread
+    : key === "more" ? overflow.reduce((sum, item) => sum + (item.key === "messages" ? unread : item.key === "alerts" ? alerts.unread : 0), 0)
+    : 0;
+
+  return <PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
+    <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}>{renderTab()}</View>
+    {bar.length > 1 ? <View style={styles.tabBar}>
+      {bar.map((item) => {
+        const selected = item.key === barCurrent;
+        const badge = badgeFor(item.key);
+        return <Pressable key={item.key} onPress={() => setTab(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}>
+          <View style={[styles.tabPill, selected && styles.tabPillActive]}>
+            <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.green : "#8a9187"} />
+            {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
           </View>
-          <Text style={[styles.tabLabel, selected && styles.tabActive]}>{item.label}</Text>
+          <Text style={[styles.tabLabel, selected && styles.tabActive]} numberOfLines={1}>{item.label}</Text>
         </Pressable>;
       })}
-    </ScrollView> : null}
-  </PermissionsContext.Provider>;
+    </View> : null}
+  </NavContext.Provider></PermissionsContext.Provider>;
 }
 
 export default function App() {
@@ -318,12 +358,12 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  tabBarWrap: { flexGrow: 0, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
-  tabBar: { flexDirection: "row", paddingTop: 6, paddingBottom: 4 },
-  tab: { flex: 1, minWidth: 64, alignItems: "center", gap: 2, paddingVertical: 4, paddingHorizontal: 4 },
-  tabIcon: { color: "#92998f", fontSize: 20, lineHeight: 24, textAlign: "center" },
-  tabLabel: { color: "#92998f", fontSize: 10, fontWeight: "600" },
+  tabBar: { flexDirection: "row", paddingTop: 6, paddingBottom: 6, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.white },
+  tab: { flex: 1, alignItems: "center", gap: 3, paddingHorizontal: 2 },
+  tabPill: { width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  tabPillActive: { backgroundColor: "#e3eee0" },
+  tabLabel: { color: "#8a9187", fontSize: 11, fontWeight: "600" },
   tabActive: { color: colors.green, fontWeight: "800" },
-  badge: { position: "absolute", top: -4, right: -12, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  badge: { position: "absolute", top: -3, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   badgeText: { color: colors.white, fontSize: 9, fontWeight: "800" },
 });

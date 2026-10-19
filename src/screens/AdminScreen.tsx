@@ -17,8 +17,8 @@ import { StaffProductsModal } from "./StaffProductsScreen";
 type Page = "menu" | "accounts" | "permissions" | "alerts";
 
 // Administration home: each button opens its own page.
-export function AdminScreen() {
-  const [page, setPage] = useState<Page>("menu");
+export function AdminScreen({ initialPage }: { initialPage?: string } = {}) {
+  const [page, setPage] = useState<Page>(initialPage === "accounts" || initialPage === "permissions" || initialPage === "alerts" ? initialPage : "menu");
   const [productsVisible, setProductsVisible] = useState(false);
 
   if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} />;

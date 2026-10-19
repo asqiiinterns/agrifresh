@@ -3,7 +3,9 @@ import { FlatList, Modal, RefreshControl, ScrollView, StyleSheet, View } from "r
 import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { confirmHandover, fetchDeliveryHistory, fetchShipments, lookupDeliveryNote, type DeliveredOrder, type ScannedDeliveryNote, type Shipment } from "../data/delivery";
+import { confirmHandover, fetchDeliveryHistory, fetchPickups, fetchShipments, lookupDeliveryNote, type DeliveredOrder, type Pickup, type ScannedDeliveryNote, type Shipment } from "../data/delivery";
+import { updateOrderStatus } from "../data/staff";
+import { useCan } from "../data/permissions";
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { parseQr } from "../ui/Qr";
@@ -11,20 +13,22 @@ import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { colors, ui } from "../ui/theme";
 
-type Tab = "todo" | "history";
+type Tab = "pickup" | "todo" | "history";
 
 export function DriverScreen() {
-  const [tab, setTab] = useState<Tab>("todo");
+  const canShip = useCan()("orders.ship");
+  const [tab, setTab] = useState<Tab>(canShip ? "pickup" : "todo");
   const [scannerVisible, setScannerVisible] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ESPACE LIVREUR" title="Livraisons" />
     <View style={styles.tabs}>
+      {canShip ? <Chip label="À récupérer" selected={tab === "pickup"} onPress={() => setTab("pickup")} /> : null}
       <Chip label="À livrer" selected={tab === "todo"} onPress={() => setTab("todo")} />
       <Chip label="Historique" selected={tab === "history"} onPress={() => setTab("history")} />
     </View>
-    {tab === "todo" ? <>
+    {tab === "pickup" ? <PickupList key={`pickup-${refreshKey}`} onShipped={() => setRefreshKey((key) => key + 1)} /> : tab === "todo" ? <>
       <View style={{ paddingHorizontal: 18 }}>
         <Button label="SCANNER UNE LIVRAISON" onPress={() => setScannerVisible(true)} style={{ minHeight: 56 }} />
       </View>
@@ -32,6 +36,64 @@ export function DriverScreen() {
     </> : <DeliveryHistory key={`history-${refreshKey}`} />}
     <HandoverModal visible={scannerVisible} onClose={() => setScannerVisible(false)} onDelivered={() => setRefreshKey((key) => key + 1)} />
   </View>;
+}
+
+// Prepared orders: the driver ships each one when taking it from the warehouse.
+function PickupList({ onShipped }: { onShipped: () => void }) {
+  const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function reload(refresh = false) {
+    if (refresh) setRefreshing(true);
+    setError("");
+    try {
+      setPickups(await fetchPickups());
+    } catch (cause) {
+      setError(errorMessage(cause, "Impossible de charger les commandes prêtes."));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  useEffect(() => { void reload(); }, []);
+
+  async function ship(pickup: Pickup) {
+    setBusyId(pickup.id);
+    try {
+      await updateOrderStatus(pickup.id, "out_for_delivery");
+      setPickups((current) => current.filter((item) => item.id !== pickup.id));
+      notify("Commande prise en charge", `${pickup.business_name} · commande #${pickup.order_number} est expédiée : elle apparaît dans « À livrer ».`);
+      onShipped();
+    } catch (cause) {
+      notify("Expédition impossible", errorMessage(cause, "La commande n’a pas pu être expédiée."));
+      void reload();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (loading) return <Loading />;
+  return <FlatList
+    data={pickups}
+    keyExtractor={(item) => item.id}
+    contentContainerStyle={ui.content}
+    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+    ListHeaderComponent={<Text style={[ui.small, { marginTop: 4 }]}>{error || `${pickups.length} commande(s) prête(s) à récupérer. Touchez « Prendre en charge » au moment de les charger.`}</Text>}
+    ListEmptyComponent={error ? null : <EmptyState title="Rien à récupérer" body="Les commandes préparées apparaîtront ici." />}
+    renderItem={({ item }) => <View style={ui.card}>
+      <Text style={styles.clientName}>{item.business_name}</Text>
+      <Text style={ui.small}>Commande #{item.order_number}{item.requested_delivery_date ? ` · livraison ${formatDay(item.requested_delivery_date)}` : ""}</Text>
+      <Text style={ui.body}>{item.point_label} — {item.address_line}, {item.city}</Text>
+      <View style={ui.divider}>
+        {item.items.map((line, index) => <Text key={`${item.id}-${index}`} style={ui.body}><Text style={{ fontWeight: "800" }}>{formatQuantity(line.quantity)} {line.unit}</Text> · {line.name}</Text>)}
+      </View>
+      <Button label="PRENDRE EN CHARGE (EXPÉDIER)" onPress={() => void ship(item)} busy={busyId === item.id} style={{ marginTop: 12 }} />
+    </View>}
+  />;
 }
 
 function ShipmentList() {
@@ -258,6 +320,7 @@ function HandoverModal({ visible, onClose, onDelivered }: { visible: boolean; on
 }
 
 const styles = StyleSheet.create({
+  clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   tabs: { flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingVertical: 10 },
   filterRow: { gap: 7, paddingVertical: 8 },
   cameraFrame: { height: 300, marginHorizontal: 18, marginTop: 12, borderRadius: 16, overflow: "hidden", backgroundColor: "#000", alignItems: "center", justifyContent: "center" },

@@ -68,8 +68,8 @@ export function PlanningScreen({ visible, focusId, queue, onClose, onChanged }: 
           return <Pressable onPress={() => setSelectedId(isSelected ? null : item.id)} style={[styles.row, isSelected && styles.rowSelected]}>
             <Text style={[styles.position, isSelected && styles.positionSelected]}>{index + 1}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={ui.strong} numberOfLines={1}>#{item.order_number} · {name(item)}</Text>
-              <Text style={ui.small}>{item.requested_delivery_date ? `Livraison ${formatDay(item.requested_delivery_date)}` : "Dès que possible"} · {item.order_items.length} produit(s)</Text>
+              <Text style={styles.clientName} numberOfLines={1}>{name(item)}</Text>
+              <Text style={ui.small}>Commande #{item.order_number} · {item.requested_delivery_date ? `Livraison ${formatDay(item.requested_delivery_date)}` : "Dès que possible"} · {item.order_items.length} produit(s)</Text>
               <View style={{ marginTop: 4 }}><StatusBadge status={item.status} /></View>
               {selectedOrder && !isSelected ? <Pressable onPress={() => void place(selectedOrder.id, item.id)} disabled={busy} style={styles.insert}>
                 <Text style={styles.insertText}>↳ Insérer #{selectedOrder.order_number} avant celle-ci</Text>
@@ -87,6 +87,7 @@ export function PlanningScreen({ visible, focusId, queue, onClose, onChanged }: 
 }
 
 const styles = StyleSheet.create({
+  clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, marginTop: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
   rowSelected: { borderColor: colors.green, borderWidth: 2, backgroundColor: "#f3f8f1" },
   position: { minWidth: 28, height: 28, borderRadius: 14, backgroundColor: colors.cream, color: colors.green, textAlign: "center", lineHeight: 28, fontWeight: "800" },

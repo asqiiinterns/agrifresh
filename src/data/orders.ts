@@ -68,6 +68,33 @@ export async function placeClientOrder(params: {
   return data as { id: string; order_number: number; total: number };
 }
 
+// Team order for a client (phone order): same rules as the client's own order.
+export async function staffPlaceOrder(clientId: string, params: {
+  items: OrderDraftLine[];
+  deliveryPointId: string | null;
+  requestedDate: string | null;
+  note: string;
+}): Promise<{ id: string; order_number: number; total: number }> {
+  if (!supabase) throw new Error("La connexion au service de commande n’est pas configurée.");
+  const { data, error } = await supabase.rpc("staff_place_order", {
+    p_client_id: clientId,
+    p_items: params.items,
+    p_delivery_point_id: params.deliveryPointId,
+    p_requested_date: params.requestedDate,
+    p_note: params.note.trim() || null,
+  });
+  if (error) throw error;
+  return data as { id: string; order_number: number; total: number };
+}
+
+// A client's recent orders, for the team ("Reprendre" when ordering for that client).
+export async function fetchClientOrders(clientId: string): Promise<Order[]> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { data, error } = await supabase.from("orders").select(ORDER_FIELDS).eq("client_id", clientId).order("created_at", { ascending: false }).limit(30);
+  if (error) throw error;
+  return (data ?? []) as unknown as Order[];
+}
+
 // RLS limits customers to their own orders.
 export async function fetchMyOrders(): Promise<Order[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");

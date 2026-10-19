@@ -46,6 +46,25 @@ function client() {
   return supabase;
 }
 
+export type Pickup = {
+  id: string;
+  order_number: number;
+  requested_delivery_date: string | null;
+  business_name: string;
+  point_label: string;
+  address_line: string;
+  city: string;
+  phone: string;
+  items: { name: string; quantity: number | string; unit: string }[];
+};
+
+// Orders prepared and waiting for the driver.
+export async function fetchPickups(): Promise<Pickup[]> {
+  const { data, error } = await client().rpc("driver_pickups");
+  if (error) throw error;
+  return (data ?? []) as Pickup[];
+}
+
 export async function fetchShipments(): Promise<Shipment[]> {
   const { data, error } = await client().rpc("driver_shipments");
   if (error) throw error;

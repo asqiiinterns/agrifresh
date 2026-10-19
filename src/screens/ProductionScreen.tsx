@@ -13,6 +13,9 @@ import { useCan } from "../data/permissions";
 
 type Tab = "totals" | "queue" | "history";
 
+// Client name: the record's name, or the one saved on the order.
+const clientOf = (order: StaffOrder) => order.clients?.business_name ?? order.address_snapshot?.business_name ?? "Client";
+
 // When the order was marked ready ("Préparée"), from its status history.
 const preparedAt = (order: StaffOrder) => [...(order.order_status_history ?? [])]
   .filter((event) => event.status === "ready")
@@ -98,7 +101,10 @@ export function ProductionScreen() {
         ListEmptyComponent={<EmptyState title="Aucune préparation" body="Aucune commande préparée sur cette période." />}
         renderItem={({ item }) => <View style={ui.card}>
           <View style={ui.row}>
-            <Text style={[ui.strong, { flex: 1 }]}>#{item.order.order_number} · {item.order.clients?.business_name ?? ""}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clientName} numberOfLines={1}>{clientOf(item.order)}</Text>
+              <Text style={ui.small}>Commande #{item.order.order_number}</Text>
+            </View>
             <StatusBadge status={item.order.status} />
           </View>
           <Text style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Préparée le {formatDateTime(item.at)}</Text>
@@ -188,7 +194,10 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
     renderItem={({ item, index }) => <View style={[ui.card, item.status === "preparing" && styles.activeCard]}>
       <View style={ui.row}>
         <Text style={styles.position}>{index + 1}</Text>
-        <Text style={[ui.strong, { flex: 1 }]}>#{item.order_number} · {item.clients?.business_name ?? ""}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.clientName} numberOfLines={1}>{clientOf(item)}</Text>
+          <Text style={ui.small}>Commande #{item.order_number}</Text>
+        </View>
         <StatusBadge status={item.status} />
       </View>
       <Text style={[ui.small, { marginTop: 3 }]}>{item.requested_delivery_date ? `Livraison ${formatDay(item.requested_delivery_date)}` : "Dès que possible"}{item.address_snapshot?.point_label ? ` · ${item.address_snapshot.point_label}` : ""}</Text>
@@ -204,6 +213,7 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
 
 const styles = StyleSheet.create({
   tabs: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
+  clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   totalBlock: { borderBottomWidth: 1, borderBottomColor: colors.line },
   clientList: { paddingLeft: 34, paddingBottom: 10, gap: 2 },
   quantity: { color: colors.text, fontSize: 14, fontWeight: "800", minWidth: 92, textAlign: "right" },

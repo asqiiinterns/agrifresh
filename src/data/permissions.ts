@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import type { Role } from "./account";
 
 export type Feature =
-  | "orders.decide" | "orders.plan" | "orders.ship" | "production.view" | "production.update"
+  | "orders.decide" | "orders.plan" | "orders.ship" | "orders.create" | "production.view" | "production.update"
   | "clients.view" | "clients.edit" | "clients.create" | "invoices.manage" | "products.manage"
   | "messages.manage" | "claims.manage" | "deliveries"
   | "client.invoices" | "client.messages" | "client.claims";
@@ -11,6 +11,7 @@ export type Feature =
 // Labels for the admin rights screen, grouped as the team reads them.
 export const featureCatalog: { group: string; audience: "team" | "customer"; items: { key: Feature; label: string }[] }[] = [
   { group: "Commandes", audience: "team", items: [
+    { key: "orders.create", label: "Passer une commande pour un client" },
     { key: "orders.decide", label: "Accepter, décliner, mettre en attente" },
     { key: "orders.plan", label: "Planifier la file de production" },
     { key: "orders.ship", label: "Expédier les commandes" },

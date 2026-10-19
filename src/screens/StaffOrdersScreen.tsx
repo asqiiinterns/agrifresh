@@ -19,14 +19,15 @@ import { OrderTimeline } from "../ui/OrderTimeline";
 import { colors, ui } from "../ui/theme";
 
 type Section = "decide" | "queue" | "claims" | "done";
+const isSection = (value?: string): value is Section => value === "decide" || value === "queue" || value === "claims" || value === "done";
 
-export function StaffOrdersScreen() {
+export function StaffOrdersScreen({ initialSection }: { initialSection?: string } = {}) {
   const [orders, setOrders] = useState<StaffOrder[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [section, setSection] = useState<Section>("decide");
+  const [section, setSection] = useState<Section>(isSection(initialSection) ? initialSection : "decide");
   const [search, setSearch] = useState("");
   const [delivery, setDelivery] = useState<DateFilterValue>(null);
   const [placed, setPlaced] = useState<DateFilterValue>(null);
@@ -236,11 +237,11 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
     <Pressable onPress={() => setExpanded((value) => !value)}>
       <View style={ui.row}>
         {position ? <Text style={styles.position}>{position}</Text> : null}
-        <Text style={[ui.strong, { flex: 1 }]} numberOfLines={1}>{expanded ? "▾" : "▸"} #{order.order_number} · {clientName}</Text>
+        <Text style={[styles.clientName, { flex: 1 }]} numberOfLines={1}>{expanded ? "▾ " : "▸ "}{clientName}</Text>
         <StatusBadge status={order.status} />
       </View>
       <Text style={[ui.small, { marginTop: 3 }]}>
-        {order.requested_delivery_date ? `Livraison ${formatDay(order.requested_delivery_date)}` : "Dès que possible"}
+        Commande #{order.order_number} · {order.requested_delivery_date ? `Livraison ${formatDay(order.requested_delivery_date)}` : "Dès que possible"}
         {address.point_label ? ` · ${address.point_label}` : ""} · {order.order_items.length} produit(s) · {formatPrice(order.total)}
         {openClaims ? ` · ⚠ ${openClaims} réclamation(s)` : ""}
       </Text>
@@ -354,6 +355,7 @@ const styles = StyleSheet.create({
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   origin: { color: colors.green, fontSize: 10 },
+  clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   claimLine: { marginTop: 6, color: colors.amber, fontWeight: "700" },
   position: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.green, color: colors.white, textAlign: "center", lineHeight: 24, fontWeight: "800", fontSize: 12, paddingHorizontal: 4 },
 });
