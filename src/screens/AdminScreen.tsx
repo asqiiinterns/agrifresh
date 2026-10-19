@@ -11,9 +11,10 @@ import { FilterBar, type Filter } from "../ui/FilterBar";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { PermissionsPanel } from "./PermissionsPanel";
+import { AlertSettingsPanel } from "./NotificationSettings";
 import { StaffProductsModal } from "./StaffProductsScreen";
 
-type Page = "menu" | "accounts" | "permissions";
+type Page = "menu" | "accounts" | "permissions" | "alerts";
 
 // Administration home: each button opens its own page.
 export function AdminScreen() {
@@ -21,6 +22,10 @@ export function AdminScreen() {
   const [productsVisible, setProductsVisible] = useState(false);
 
   if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} />;
+  if (page === "alerts") return <View style={ui.screen}>
+    <ScreenHeader eyebrow="ADMINISTRATION" title="Alertes et e-mails" right={<BackButton onPress={() => setPage("menu")} />} />
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
+  </View>;
   if (page === "permissions") return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Profils et droits" right={<BackButton onPress={() => setPage("menu")} />} />
     <ScrollView contentContainerStyle={ui.content}><PermissionsPanel /></ScrollView>
@@ -30,6 +35,7 @@ export function AdminScreen() {
     { key: "accounts", title: "Comptes", body: "Tous les comptes : validation des inscriptions, suspension, refus, rôle, ajout d’un compte.", icon: "👤", onPress: () => setPage("accounts") },
     { key: "permissions", title: "Profils et droits", body: "Ce que chaque profil peut faire : superviseur, production, livreur, client.", icon: "🔑", onPress: () => setPage("permissions") },
     { key: "products", title: "Produits", body: "Catalogue, prix, TVA, stock, nouveautés et origine.", icon: "🥬", onPress: () => setProductsVisible(true) },
+    { key: "alerts", title: "Alertes et e-mails", body: "Quels événements envoient une notification ou un e-mail, et le service d’envoi.", icon: "🔔", onPress: () => setPage("alerts") },
   ];
 
   return <View style={ui.screen}>

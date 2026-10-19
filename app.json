@@ -39,6 +39,14 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#24543B",
+          "defaultChannel": "alerts"
+        }
       ]
     ],
     "icon": "./assets/icon.png"

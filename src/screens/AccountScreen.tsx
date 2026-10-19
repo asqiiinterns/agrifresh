@@ -9,6 +9,8 @@ import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
 import { useCan } from "../data/permissions";
+import { MyNotificationsCard } from "./NotificationSettings";
+import { unregisterPush } from "../notifications";
 import { fontScales, useDisplay } from "../ui/display";
 import { Chip } from "../ui/components";
 
@@ -37,6 +39,7 @@ export function AccountScreen({ session, account }: { session: Session; account:
   async function signOut() {
     if (!supabase) return;
     setBusy(true);
+    await unregisterPush().catch(() => {});
     const { error: authError } = await supabase.auth.signOut();
     if (authError) setError(authError.message);
     setBusy(false);
@@ -64,6 +67,8 @@ export function AccountScreen({ session, account }: { session: Session; account:
       </View> : null}
 
 
+
+      {account && (account.status ?? "active") === "active" ? <MyNotificationsCard /> : null}
 
       <DisplaySettingsCard showProducts={account?.role === "customer"} />
 

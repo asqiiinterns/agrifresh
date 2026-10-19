@@ -7,6 +7,9 @@ import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
+import { countUnreadAlerts } from "./src/data/alerts";
+import { AlertsScreen } from "./src/screens/AlertsScreen";
+import { hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { countUnread } from "./src/data/messages";
@@ -25,11 +28,12 @@ import { Button, EmptyState, Loading } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
 
-type TabKey = "order" | "orders" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "admin" | "account";
+type TabKey = "order" | "orders" | "alerts" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "admin" | "account";
 type TabDef = { key: TabKey; label: string; icon: string };
 
 const TAB = {
   order: { key: "order", label: "Commander", icon: "＋" },
+  alerts: { key: "alerts", label: "Alertes", icon: "🔔" },
   orders: { key: "orders", label: "Commandes", icon: "▤" },
   production: { key: "production", label: "Production", icon: "⚙" },
   deliveries: { key: "deliveries", label: "Livraisons", icon: "⇥" },
@@ -45,10 +49,11 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   const has = (feature: string) => account.features.includes(feature);
   if (account.role === "customer") {
     if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
-    return { kind: "client", tabs: [TAB.order, TAB.orders, ...(has("client.invoices") ? [TAB.invoices] : []), ...(has("client.messages") ? [TAB.messages] : []), TAB.account] };
+    return { kind: "client", tabs: [TAB.order, TAB.orders, TAB.alerts, ...(has("client.invoices") ? [TAB.invoices] : []), ...(has("client.messages") ? [TAB.messages] : []), TAB.account] };
   }
   const tabs: TabDef[] = [];
   if (["orders.decide", "orders.plan", "orders.ship", "claims.manage"].some(has)) tabs.push(TAB.orders);
+  tabs.push(TAB.alerts);
   if (has("production.view")) tabs.push(TAB.production);
   if (has("deliveries")) tabs.push(TAB.deliveries);
   if (has("clients.view")) tabs.push(TAB.clients);
@@ -136,6 +141,35 @@ function useAuthCallback() {
   }, []);
 }
 
+// Unread alerts badge; without push (Expo Go, web) a live alert also shows a local banner.
+function useUnreadAlerts(userId: string | null) {
+  const [unread, setUnread] = useState(0);
+  const refresh = useCallback(() => {
+    if (!userId) return;
+    void countUnreadAlerts().then(setUnread);
+  }, [userId]);
+
+  useEffect(() => {
+    const client = supabase;
+    if (!userId || !client) {
+      setUnread(0);
+      return;
+    }
+    refresh();
+    const channel = client
+      .channel(`alerts-badge-${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
+        refresh();
+        const alert = payload.new as { title?: string; body?: string };
+        if (!hasPushToken() && alert.title) void showLocalAlert(alert.title, alert.body ?? "");
+      })
+      .subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, [userId, refresh]);
+
+  return { unread, refresh };
+}
+
 function useUnreadMessages(enabled: boolean, isStaff: boolean) {
   const [unread, setUnread] = useState(0);
   const refresh = useCallback(() => {
@@ -185,6 +219,15 @@ function Main({ session }: { session: Session }) {
   const current = tab && tabs.some((item) => item.key === tab) ? tab : tabs[0]?.key;
   const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
   const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team");
+  const isActive = !!account && (account.status ?? "active") === "active";
+  const alerts = useUnreadAlerts(isActive ? session.user.id : null);
+
+  // Register this phone for lock-screen alerts once the account is active; a tap opens Alertes.
+  useEffect(() => {
+    if (!isActive) return;
+    void registerForPush(true);
+    return onAlertTapped(() => setTab("alerts"));
+  }, [isActive, session.user.id]);
 
   if (!account) {
     return accountError
@@ -223,6 +266,8 @@ function Main({ session }: { session: Session }) {
         return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
       case "deliveries":
         return <DriverScreen />;
+      case "alerts":
+        return <AlertsScreen userId={session.user.id} onRead={alerts.refresh} />;
       case "admin":
         return <AdminScreen />;
       default:
@@ -246,6 +291,7 @@ function Main({ session }: { session: Session }) {
           <View>
             <Text style={[styles.tabIcon, selected && styles.tabActive]}>{item.icon}</Text>
             {item.key === "messages" && unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
+            {item.key === "alerts" && alerts.unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{alerts.unread > 99 ? "99+" : alerts.unread}</Text></View> : null}
           </View>
           <Text style={[styles.tabLabel, selected && styles.tabActive]}>{item.label}</Text>
         </Pressable>;
