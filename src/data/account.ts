@@ -48,7 +48,9 @@ export async function fetchMyAccount(): Promise<Account> {
   const { data, error } = await supabase.rpc("my_account");
   if (error) throw error;
   if (!data) throw new Error("Profil introuvable. Déconnectez-vous puis reconnectez-vous.");
-  return data as Account;
+  const account = data as Account;
+  // Databases without the permissions migration return no feature list.
+  return { ...account, features: Array.isArray(account.features) ? account.features : [] };
 }
 
 export const formatClientNumber = (value: number) => `CL-${String(value).padStart(4, "0")}`;
