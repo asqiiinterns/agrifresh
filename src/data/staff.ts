@@ -30,7 +30,7 @@ export const statusGroups = {
 } as const;
 
 export type StaffOrder = Order & {
-  clients: { business_name: string; client_number: number; show_prices: boolean; show_origin: boolean } | null;
+  clients: { business_name: string; client_number: number; show_prices: boolean; show_origin: boolean; reconfirm_declined?: boolean } | null;
   client_invoices: { invoice_number: string | null; status: string } | null;
   delivered_by_profile: { full_name: string } | null;
 };
@@ -39,7 +39,7 @@ export async function fetchAllOrders(): Promise<StaffOrder[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
   const { data, error } = await supabase
     .from("orders")
-    .select(`${ORDER_FIELDS}, clients(business_name, client_number, show_prices, show_origin), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
+    .select(`${ORDER_FIELDS}, clients(business_name, client_number, show_prices, show_origin, reconfirm_declined), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
     .order("created_at", { ascending: false })
     .limit(300);
   if (error) throw error;

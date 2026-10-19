@@ -11,6 +11,14 @@ export type Shipment = {
   city: string;
   phone: string;
   item_count: number;
+  client_id: string;
+  point_id: string;
+  reception_qr: boolean;
+  scan_delivery_note: boolean;
+  scan_client_qr: boolean;
+  shipment_number: number | null;
+  vehicle_label: string | null;
+  driver_name: string | null;
 };
 
 export type ScannedDeliveryNote = {
@@ -20,6 +28,8 @@ export type ScannedDeliveryNote = {
   client_id: string;
   business_name: string;
   reception_qr: boolean;
+  scan_delivery_note: boolean;
+  scan_client_qr: boolean;
   point_id: string;
   point_label: string;
   address_line: string;
@@ -39,6 +49,8 @@ export type DeliveredOrder = {
   total: number | string;
   driver_name: string | null;
   item_count: number;
+  shipment_number: number | null;
+  vehicle_label: string | null;
 };
 
 function client() {
@@ -49,6 +61,7 @@ function client() {
 export type Pickup = {
   id: string;
   order_number: number;
+  client_id: string;
   requested_delivery_date: string | null;
   business_name: string;
   point_label: string;

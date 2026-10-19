@@ -13,7 +13,9 @@ import { useCan, type Feature } from "../data/permissions";
 
 const actionFeature = (status: OrderStatus): Feature =>
   status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
-import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
+import { Button, Chip, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
+import { ShipModal } from "../ui/ShipModal";
+import { useNav } from "../ui/navigation";
 import { errorMessage, notify } from "../ui/notify";
 import { OrderTimeline } from "../ui/OrderTimeline";
 import { colors, ui } from "../ui/theme";
@@ -30,7 +32,10 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
   const [section, setSection] = useState<Section>(isSection(initialSection) ? initialSection : "decide");
   const [search, setSearch] = useState("");
   const [delivery, setDelivery] = useState<DateFilterValue>(null);
-  const [placed, setPlaced] = useState<DateFilterValue>(null);
+  // Orders of the day by default; the filter chip clears it in one tap.
+  const [placed, setPlaced] = useState<DateFilterValue>(() => presets.today.value());
+  const [shipping, setShipping] = useState<StaffOrder[] | null>(null);
+  const { navigate } = useNav();
   const [stage, setStage] = useState<string>("all");
   const [planning, setPlanning] = useState<{ focusId: string | null } | null>(null);
   const can = useCan();
@@ -84,12 +89,14 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
   const inProgress = filtered.filter((order) => (statusGroups.progress as readonly string[]).includes(order.status));
   const openClaims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress");
 
-  const sections: { key: Section; label: string }[] = [
-    { key: "decide", label: `À décider (${decide.length})` },
-    { key: "queue", label: `En cours (${inProgress.length})` },
-    ...(can("claims.manage") ? [{ key: "claims" as const, label: `Réclamations (${openClaims.length})` }] : []),
-    { key: "done", label: "Historique" },
+  const closed = filtered.filter((order) => (statusGroups.done as readonly string[]).includes(order.status));
+  const sections: { key: Section; label: string; count?: number }[] = [
+    { key: "decide", label: "À décider", count: decide.length },
+    { key: "queue", label: "En cours", count: inProgress.length },
+    ...(can("claims.manage") ? [{ key: "claims" as const, label: "Réclamations", count: openClaims.length }] : []),
+    { key: "done", label: "Clôturées", count: closed.length },
   ];
+  const hiddenByDate = placed ? orders.filter((order) => !matchesDate(order.created_at, placed)).length : 0;
 
   const listed = useMemo(() => {
     if (section === "decide") {
@@ -100,10 +107,11 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
       const staged = stage === "all" ? inProgress : inProgress.filter((order) => order.status === stage);
       return [...staged].sort((a, b) => (positions.get(a.id) ?? 9999) - (positions.get(b.id) ?? 9999) || a.order_number - b.order_number);
     }
-    return filtered.filter((order) => (statusGroups.done as readonly string[]).includes(order.status));
+    return closed;
   }, [filtered, section, stage, positions]);
 
   const filters: Filter[] = [
+    { kind: "date", title: "Commandes du", presets: [presets.today, presets.yesterday, presets.last7, presets.last30, presets.thisMonth], value: placed, onChange: setPlaced },
     { kind: "date", title: "Livraison", presets: [presets.late, presets.today, presets.tomorrow, presets.next7, presets.noDate], value: delivery, onChange: setDelivery },
     ...(section === "queue" ? [{
       kind: "choice" as const,
@@ -113,7 +121,6 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
       defaultValue: "all",
       onChange: setStage,
     }] : []),
-    ...(section === "done" ? [{ kind: "date" as const, title: "Passée le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: placed, onChange: setPlaced }] : []),
   ];
 
   // Accepting puts the order at the end of the queue, then opens the queue to place it.
@@ -134,13 +141,9 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
     <ScreenHeader
       eyebrow={`${decide.length} À DÉCIDER · ${queue.length} EN FILE · ${openClaims.length} RÉCLAMATION(S)`}
       title="Commandes"
-      right={can("orders.plan") && queue.length ? <Button label="PLANIFIER" variant="secondary" onPress={() => setPlanning({ focusId: null })} /> : undefined}
+      right={can("orders.plan") ? <Button label="PLANNING" onPress={() => navigate("planning")} /> : undefined}
     />
-    <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {sections.map((item) => <Chip key={item.key} label={item.label} selected={section === item.key} onPress={() => setSection(item.key)} />)}
-      </ScrollView>
-    </View>
+    <Sheets items={sections} value={section} onChange={setSection} />
     {section !== "claims" ? <FilterBar search={search} onSearch={setSearch} placeholder="Client, point de livraison ou n°" filters={filters} /> : null}
 
     {loading ? <Loading /> : section === "claims" ? <ClaimsView claims={claims} refreshControl={refresh} onChanged={() => void reload("silent")} />
@@ -150,18 +153,24 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
         contentContainerStyle={ui.content}
         refreshControl={refresh}
         ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
-          : section === "queue" ? <Text style={[ui.small, { marginTop: 8 }]}>Ordre d’exécution de la production. « Planifier » ouvre la file pour monter, descendre ou insérer une commande.</Text> : null}
+          : hiddenByDate ? <Text style={[ui.small, { marginTop: 8 }]}>{placed?.label ?? "Période"} : {hiddenByDate} autre(s) commande(s) masquée(s). Changez « Commandes du » pour les voir.</Text> : null}
         ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body="Aucune commande ne correspond à ces filtres." />}
         renderItem={({ item }) => <OrderCard
           order={item}
           position={positions.get(item.id)}
           claims={claims.filter((claim) => claim.order_id === item.id)}
           onPlan={(mode) => { if (mode === "accept") void accept(item); else setPlanning({ focusId: item.id }); }}
+          onShip={() => setShipping([item])}
           onChanged={() => void reload("silent")}
           onLocalUpdate={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))}
         />}
       />}
 
+    <ShipModal
+      orders={shipping ? shipping.map((order) => ({ id: order.id, order_number: order.order_number, business_name: order.clients?.business_name ?? order.address_snapshot?.business_name ?? "Client" })) : null}
+      onClose={() => setShipping(null)}
+      onShipped={() => void reload("silent")}
+    />
     <PlanningScreen
       visible={planning !== null}
       focusId={planning?.focusId ?? null}
@@ -172,11 +181,12 @@ export function StaffOrdersScreen({ initialSection }: { initialSection?: string 
   </View>;
 }
 
-function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }: {
+function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocalUpdate }: {
   order: StaffOrder;
   position: number | undefined;
   claims: Claim[];
   onPlan: (mode: "accept" | "move") => void;
+  onShip: () => void;
   onChanged: () => void;
   onLocalUpdate: (order: StaffOrder) => void;
 }) {
@@ -185,7 +195,12 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
-  const actions = (staffActions[order.status as OrderStatus] ?? []).filter((action) => can(actionFeature(action.status)));
+  // Without client reconfirmation, reopening a declined order accepts it at once.
+  const actions = (staffActions[order.status as OrderStatus] ?? [])
+    .filter((action) => can(actionFeature(action.status)))
+    .map((action) => action.status === "awaiting_client" && order.clients?.reconfirm_declined === false
+      ? { ...action, label: "ROUVRIR ET ACCEPTER", askReason: true }
+      : action);
   const needsReason = actions.some((action) => action.askReason);
   const address = order.address_snapshot ?? {};
   const clientName = order.clients?.business_name ?? address.business_name ?? address.recipient_name ?? "Client";
@@ -210,6 +225,10 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
     if (action.status === "confirmed") {
       // Accepting = placing the order in the production queue.
       onPlan("accept");
+      return;
+    }
+    if (action.status === "out_for_delivery") {
+      onShip();
       return;
     }
     if (action.status !== "declined" && action.status !== "cancelled") {
@@ -284,7 +303,7 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
       {position && can("orders.plan") ? <Button label="PLANIFIER" variant="secondary" onPress={() => onPlan("move")} /> : null}
       {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => void printDeliveryNote()} /> : null}
     </View>
-    {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En attente des scans du livreur (bon de livraison + QR client).</Text> : null}
+    {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En route : en attente de la remise au client par le livreur.</Text> : null}
     {order.status === "awaiting_client" ? <Text style={[ui.small, { marginTop: 6, color: "#9a4f0f" }]}>En attente de la reconfirmation du client.</Text> : null}
   </View>;
 }

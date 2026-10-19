@@ -26,6 +26,15 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
    Puis `supabase/migrations/20261025_alerts.sql` : onglet **Alertes**, notifications sur l'écran de verrouillage (Expo Push) et e-mails (Resend), envoyés par la base avec pg_net. Réglages dans **Admin → Alertes et e-mails** (événements, expéditeur, clé API stockée dans Vault) et **Compte → Notifications** (choix de chacun). Pour Android, les notifications d'écran de verrouillage demandent un projet Firebase : `google-services.json` à la racine, `"googleServicesFile": "./google-services.json"` dans `app.json` (android), et la clé FCM V1 importée dans EAS (`npx eas-cli credentials`).
 
    Puis `supabase/migrations/20261026_staff_orders.sql` : l'administrateur et le superviseur peuvent passer une commande pour un client (droit « Passer une commande pour un client »), et le livreur expédie lui-même les commandes préparées au moment de les récupérer (onglet **Livraisons → À récupérer**).
+
+   Puis `supabase/migrations/20261027_settings_fleet_audit.sql` :
+   - **paramétrage par thème** (Admin → Paramétrage) : chaque onglet et chaque droit se règle par profil, puis par utilisateur (exception) ; les onglets client aussi par fiche client ;
+   - **options des clients** : une valeur commune à tous les clients (prix, origine, stock, historique visible, reconfirmation des commandes rouvertes, scan du bon, scan du QR client, QR de réception, facturation), que chaque fiche peut remplacer ;
+   - **flotte** (Admin → Flotte) et **expéditions groupées** : le livreur coche plusieurs bons et choisit le véhicule ;
+   - **journal des actions** (Admin → Journal) : chaque modification, son auteur et sa date ;
+   - **accueil paramétrable** : par profil (administrateur) puis par utilisateur.
+
+   Exécute-la **avant** de déployer cette version de l'application : les écrans lisent ses nouvelles colonnes.
 8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). La validation par l'administrateur (Admin → Comptes) empêche quelqu'un d'utiliser l'accès d'un client avec son e-mail.
 9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
 10. Redémarre Expo après une modification de `.env.local`.
@@ -65,7 +74,7 @@ Application de commande professionnelle pour des clients connus et récurrents.
 
 **Rôles internes** : *administrateur* (tout, seul à créer des clients et à gérer l'équipe), *superviseur* (commandes, planification, factures, réclamations, messages), *production* (onglet Production uniquement), *livreur*.
 
-**Navigation** : barre du bas limitée à cinq rubriques, les autres dans **Plus**. L'équipe arrive sur **Accueil** : chiffres du moment (à décider, à préparer, prêtes, en livraison, à livrer aujourd'hui, réclamations, comptes à valider, messages, alertes), chaque tuile ouvrant directement le bon écran, et raccourcis.
+**Navigation** : barre du bas limitée à cinq rubriques, les autres dans **Plus**. **Accueil** (équipe et clients) : chiffres du moment et raccourcis, chaque élément ouvrant directement le bon écran ; « Personnaliser » choisit et ordonne ce qui s'affiche. **Planning** : onglet dédié à la file de production (monter, descendre, insérer avant).
 
 **Administrateur et superviseur**
 - **Commander** : choisir un client puis saisir sa commande comme lui (prix, origine et stock visibles) ; le client la retrouve dans son historique et en est averti.
@@ -78,7 +87,7 @@ Application de commande professionnelle pour des clients connus et récurrents.
 
 **Production** : *À préparer* (totaux par produit à cocher, dépliables par client), *File d'exécution* dans l'ordre fixé par l'administration (Commencer / Prête), *Historique* des préparations filtrable.
 
-**Livreur** (`driver`) : *À récupérer* (commandes préparées : « Prendre en charge » les passe en *Expédiée* au chargement), *À livrer* (commandes expédiées) et *Historique* filtrable par client, période et tranche horaire. Remise en deux scans : le QR de chaque bon de livraison, puis le QR du client — celui collé au point de livraison, ou le QR de réception affiché dans l'appli du client si sa fiche l'exige.
+**Livreur** (`driver`) : *À récupérer* (cocher les bons chargés, choisir le véhicule, « Expédier »), *À livrer* groupé par client (cocher puis « Livrer » : scans selon les options du client), *À livrer* (commandes expédiées) et *Historique* filtrable par client, période et tranche horaire. Remise en deux scans : le QR de chaque bon de livraison, puis le QR du client — celui collé au point de livraison, ou le QR de réception affiché dans l'appli du client si sa fiche l'exige.
 
 **Documents**
 - *Bon de livraison* (BL-000123) : un par commande, avec QR code et zones de signature ; prix masqués si la fiche du client le demande.

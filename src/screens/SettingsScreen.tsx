@@ -1,0 +1,339 @@
+import { useEffect, useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Switch, View } from "react-native";
+import { Text, TextInput } from "../ui/Text";
+import { fetchRoleHomeLayouts, roleLabels, setRoleHomeLayout, type HomeLayout, type Role } from "../data/account";
+import { fetchAccounts, type AdminAccount } from "../data/admin";
+import { fetchClients, updateClientOptions, type ClientRecord } from "../data/clients";
+import {
+  boolToOption, clientOptionBlocks, configurableRoles, featureBlocks, fetchClientDefaults, fetchRolePermissions, fetchUserPermissions,
+  optionToBool, setClientDefault, setRolePermission, setUserPermission,
+  type ClientOptionKey, type Feature, type SettingsBlock,
+} from "../data/permissions";
+import { BackButton, ListGroup, ListRow, Loading, ScreenHeader, Sheets, TriState } from "../ui/components";
+import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
+import { errorMessage, notify } from "../ui/notify";
+import { colors, ui } from "../ui/theme";
+import { HomeEditor } from "./HomeEditor";
+import type { IconName } from "../ui/navigation";
+
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions" } | { kind: "home" };
+
+// Admin settings, by theme: each theme is set per role, then per user (and per client record).
+export function SettingsScreen({ onBack }: { onBack: () => void }) {
+  const [page, setPage] = useState<Page>({ kind: "menu" });
+  const [rolePerms, setRolePerms] = useState<Record<string, boolean>>({});
+  const [userPerms, setUserPerms] = useState<Record<string, boolean>>({});
+  const [accounts, setAccounts] = useState<AdminAccount[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [defaults, setDefaults] = useState<Partial<Record<ClientOptionKey, unknown>>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void Promise.all([fetchRolePermissions(), fetchUserPermissions(), fetchAccounts(), fetchClients(), fetchClientDefaults()])
+      .then(([roles, users, nextAccounts, nextClients, nextDefaults]) => {
+        setRolePerms(Object.fromEntries(roles.map((row) => [`${row.role}|${row.feature}`, row.allowed])));
+        setUserPerms(Object.fromEntries(users.map((row) => [`${row.user_id}|${row.feature}`, row.allowed])));
+        setAccounts(nextAccounts);
+        setClients(nextClients);
+        setDefaults(nextDefaults);
+      })
+      .catch((cause: unknown) => setError(errorMessage(cause, "Impossible de charger le paramétrage. La migration 20261027 est-elle exécutée ?")))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Optimistic update, rolled back if the database refuses.
+  async function save<T>(apply: (value: T) => void, next: T, previous: T, task: () => Promise<void>) {
+    apply(next);
+    try {
+      await task();
+    } catch (cause) {
+      apply(previous);
+      notify("Paramétrage", errorMessage(cause, "Le réglage n’a pas pu être enregistré."));
+    }
+  }
+
+  const roleValue = (role: Role, feature: Feature) => rolePerms[`${role === "staff" ? "supervisor" : role}|${feature}`] ?? false;
+  const setRole = (role: Role, feature: Feature, value: boolean) => {
+    const key = `${role}|${feature}`;
+    void save((v: boolean) => setRolePerms((current) => ({ ...current, [key]: v })), value, !value, () => setRolePermission(role, feature, value));
+  };
+  const userValue = (userId: string, feature: Feature): boolean | null => userPerms[`${userId}|${feature}`] ?? null;
+  const setUser = (userId: string, feature: Feature, value: boolean | null) => {
+    const key = `${userId}|${feature}`;
+    const previous = userValue(userId, feature);
+    const apply = (v: boolean | null) => setUserPerms((current) => {
+      const next = { ...current };
+      if (v === null) delete next[key]; else next[key] = v;
+      return next;
+    });
+    void save(apply, value, previous, () => setUserPermission(userId, feature, value));
+  };
+  const patchClient = (id: string, patch: Partial<ClientRecord>) => setClients((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+
+  const back = <BackButton label="Paramétrage" onPress={() => setPage({ kind: "menu" })} />;
+
+  if (page.kind === "block") {
+    return <BlockPage
+      block={page.block}
+      header={back}
+      accounts={accounts}
+      clients={clients}
+      roleValue={roleValue}
+      setRole={setRole}
+      userValue={userValue}
+      setUser={setUser}
+      setClientFeature={(record, feature, value) => {
+        const overrides = { ...record.feature_overrides };
+        if (value === null) delete overrides[feature]; else overrides[feature] = value;
+        void save((v: Record<string, boolean>) => patchClient(record.id, { feature_overrides: v }), overrides, record.feature_overrides, () => updateClientOptions(record.id, { feature_overrides: overrides }));
+      }}
+    />;
+  }
+  if (page.kind === "clientOptions") {
+    return <ClientOptionsPage
+      header={back}
+      clients={clients}
+      defaults={defaults}
+      setDefault={(key, value) => {
+        const previous = defaults[key];
+        void save((v: unknown) => {
+          setDefaults((current) => ({ ...current, [key]: v }));
+          // Clients without their own value follow the new default.
+          setClients((current) => current.map((item) => item.custom_settings.includes(key) ? item : { ...item, [key]: v }));
+        }, boolToOption(key, value), previous, () => setClientDefault(key, boolToOption(key, value)));
+      }}
+      setClientOption={(record, key, value) => {
+        const custom = value === null ? record.custom_settings.filter((item) => item !== key) : [...new Set([...record.custom_settings, key])];
+        const effective = value === null ? defaults[key] : boolToOption(key, value);
+        const patch = { custom_settings: custom, [key]: effective } as Partial<ClientRecord>;
+        const previous = { custom_settings: record.custom_settings, [key]: record[key] } as Partial<ClientRecord>;
+        void save((v: Partial<ClientRecord>) => patchClient(record.id, v), patch, previous, () => updateClientOptions(record.id, patch));
+      }}
+    />;
+  }
+  if (page.kind === "home") return <HomeRolesPage header={back} />;
+
+  const exceptionCount = (block: SettingsBlock) => Object.keys(userPerms).filter((key) => block.items.some((item) => key.endsWith(`|${item.key}`))).length
+    + (block.audience === "customer" ? clients.reduce((sum, record) => sum + Object.keys(record.feature_overrides ?? {}).length, 0) : 0);
+  const customClients = clients.filter((record) => record.custom_settings?.length).length;
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="ADMINISTRATION" title="Paramétrage" right={<BackButton label="Admin" onPress={onBack} />} />
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content}>
+      {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
+      <Text style={[ui.small, { marginTop: 8 }]}>Chaque thème se règle par profil, puis par utilisateur (exception). Les clients suivent un réglage commun, que chaque fiche peut adapter. L’administrateur garde tous les droits.</Text>
+      <ListGroup title="Onglets et droits de l’équipe">
+        {featureBlocks.filter((block) => block.audience === "team").map((block) => {
+          const count = exceptionCount(block);
+          return <ListRow key={block.key} icon={block.icon as IconName} title={block.title} detail={`${block.items.length} réglage(s)${count ? ` · ${count} exception(s) utilisateur` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
+        })}
+      </ListGroup>
+      <ListGroup title="Clients">
+        {featureBlocks.filter((block) => block.audience === "customer").map((block) => {
+          const count = exceptionCount(block);
+          return <ListRow key={block.key} icon={block.icon as IconName} title={`${block.title} : onglets`} detail={`Commander, commandes, factures, messages…${count ? ` · ${count} exception(s)` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
+        })}
+        <ListRow icon="options-outline" title="Options des clients" detail={`Prix, stock, historique, reconfirmation, QR de livraison, facturation${customClients ? ` · ${customClients} fiche(s) adaptée(s)` : ""}`} onPress={() => setPage({ kind: "clientOptions" })} />
+      </ListGroup>
+      <ListGroup title="Accueil">
+        <ListRow icon="home-outline" title="Accueil par profil" detail="Chiffres et raccourcis proposés à chaque profil ; chacun peut ensuite personnaliser le sien." onPress={() => setPage({ kind: "home" })} />
+      </ListGroup>
+    </ScrollView>}
+  </View>;
+}
+
+function Search({ value, onChange, placeholder }: { value: string; onChange: (text: string) => void; placeholder: string }) {
+  return <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 10 }]} autoCorrect={false} />;
+}
+
+function BlockPage({ block, header, accounts, clients, roleValue, setRole, userValue, setUser, setClientFeature }: {
+  block: SettingsBlock;
+  header: React.ReactNode;
+  accounts: AdminAccount[];
+  clients: ClientRecord[];
+  roleValue: (role: Role, feature: Feature) => boolean;
+  setRole: (role: Role, feature: Feature, value: boolean) => void;
+  userValue: (userId: string, feature: Feature) => boolean | null;
+  setUser: (userId: string, feature: Feature, value: boolean | null) => void;
+  setClientFeature: (record: ClientRecord, feature: Feature, value: boolean | null) => void;
+}) {
+  type Sheet = "roles" | "users" | "clients";
+  const [sheet, setSheet] = useState<Sheet>("roles");
+  const [search, setSearch] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const roles = configurableRoles.filter((item) => item.audience === block.audience);
+  const term = search.trim().toLocaleLowerCase("fr");
+  const people = accounts.filter((account) => (block.audience === "customer" ? account.role === "customer" : !["customer", "admin"].includes(account.role))
+    && `${account.email} ${account.full_name} ${account.client_name ?? ""}`.toLocaleLowerCase("fr").includes(term));
+  const records = clients.filter((record) => record.business_name.toLocaleLowerCase("fr").includes(term));
+  const user = accounts.find((account) => account.id === userId);
+  const record = clients.find((item) => item.id === clientId);
+
+  const sheets: { key: Sheet; label: string }[] = [
+    { key: "roles", label: "Par profil" },
+    ...(block.audience === "customer" ? [{ key: "clients" as const, label: "Par client" }] : []),
+    { key: "users", label: "Par utilisateur" },
+  ];
+
+  let body: React.ReactNode;
+  if (sheet === "roles") {
+    body = <View style={[ui.card, { paddingVertical: 4 }]}>
+      {roles.length > 1 ? <View style={[styles.matrixRow, { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+        <Text style={[ui.small, { flex: 1 }]}>Fonctionnalité</Text>
+        {roles.map((item) => <Text key={item.role} style={styles.roleHead}>{item.short}</Text>)}
+      </View> : null}
+      {block.items.map((item) => <View key={item.key} style={styles.matrixRow}>
+        <Text style={[ui.body, { flex: 1 }]}>{item.label}</Text>
+        {roles.map((role) => <View key={role.role} style={styles.cell}>
+          <Switch value={roleValue(role.role, item.key)} onValueChange={(value) => setRole(role.role, item.key, value)} trackColor={{ true: colors.green, false: colors.line }} />
+        </View>)}
+      </View>)}
+    </View>;
+  } else if (sheet === "users") {
+    body = user ? <View>
+      <ListRow icon="person-outline" title={user.full_name || user.email} detail={`${roleLabels[user.role] ?? user.role}${user.client_name ? ` · ${user.client_name}` : ""} · ${user.email}`} right={<BackButton label="Liste" onPress={() => setUserId(null)} />} />
+      {block.items.map((item) => {
+        const fromClient = user.role === "customer" ? clients.find((c) => c.business_name === user.client_name)?.feature_overrides?.[item.key] : undefined;
+        const inherited = fromClient ?? roleValue(user.role, item.key);
+        return <View key={item.key} style={ui.card}>
+          <Text style={ui.body}>{item.label}</Text>
+          <TriState value={userValue(user.id, item.key)} inherited={inherited} inheritLabel={fromClient !== undefined ? "Fiche" : "Profil"} onChange={(value) => setUser(user.id, item.key, value)} />
+        </View>;
+      })}
+    </View> : <>
+      <Search value={search} onChange={setSearch} placeholder="Nom ou e-mail" />
+      <ListGroup>
+        {people.map((account) => {
+          const count = block.items.filter((item) => userValue(account.id, item.key) !== null).length;
+          return <ListRow key={account.id} title={account.full_name || account.email} detail={`${roleLabels[account.role] ?? account.role}${account.client_name ? ` · ${account.client_name}` : ""}${count ? ` · ${count} exception(s)` : ""}`} onPress={() => setUserId(account.id)} />;
+        })}
+        {people.length === 0 ? <ListRow title="Aucun compte" /> : null}
+      </ListGroup>
+    </>;
+  } else {
+    body = record ? <View>
+      <ListRow icon="storefront-outline" title={record.business_name} detail="Ces réglages s’appliquent à tous les comptes de cette fiche." right={<BackButton label="Liste" onPress={() => setClientId(null)} />} />
+      {block.items.map((item) => <View key={item.key} style={ui.card}>
+        <Text style={ui.body}>{item.label}</Text>
+        <TriState value={record.feature_overrides?.[item.key] ?? null} inherited={roleValue("customer", item.key)} inheritLabel="Profil" onChange={(value) => setClientFeature(record, item.key, value)} />
+      </View>)}
+    </View> : <>
+      <Search value={search} onChange={setSearch} placeholder="Client" />
+      <ListGroup>
+        {records.map((item) => {
+          const count = block.items.filter((feature) => item.feature_overrides?.[feature.key] !== undefined).length;
+          return <ListRow key={item.id} title={item.business_name} detail={count ? `${count} réglage(s) propre(s)` : "Suit le profil Client"} onPress={() => setClientId(item.id)} />;
+        })}
+      </ListGroup>
+    </>;
+  }
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title={block.title} right={header} />
+    <Sheets items={sheets} value={sheet} onChange={(next) => { setSheet(next); setSearch(""); setUserId(null); setClientId(null); }} />
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">{body}</ScrollView>
+  </View>;
+}
+
+function ClientOptionsPage({ header, clients, defaults, setDefault, setClientOption }: {
+  header: React.ReactNode;
+  clients: ClientRecord[];
+  defaults: Partial<Record<ClientOptionKey, unknown>>;
+  setDefault: (key: ClientOptionKey, value: boolean) => void;
+  setClientOption: (record: ClientRecord, key: ClientOptionKey, value: boolean | null) => void;
+}) {
+  const [sheet, setSheet] = useState<"all" | "client">("all");
+  const [search, setSearch] = useState("");
+  const [clientId, setClientId] = useState<string | null>(null);
+  const record = clients.find((item) => item.id === clientId);
+  const term = search.trim().toLocaleLowerCase("fr");
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Options des clients" right={header} />
+    <Sheets items={[{ key: "all", label: "Tous les clients" }, { key: "client", label: "Par client" }]} value={sheet} onChange={(next) => { setSheet(next); setClientId(null); }} />
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      {sheet === "all" ? <>
+        <Text style={[ui.small, { marginTop: 8 }]}>Réglage commun à tous les clients. Une fiche peut avoir sa propre valeur (onglet « Par client » ou dans la fiche).</Text>
+        {clientOptionBlocks.map((block) => <ListGroup key={block.title} title={block.title}>
+          {block.items.map((item) => <ListRow key={item.key} title={item.label} detail={item.hint} right={<Switch value={optionToBool(item.key, defaults[item.key])} onValueChange={(value) => setDefault(item.key, value)} trackColor={{ true: colors.green, false: colors.line }} />} />)}
+        </ListGroup>)}
+      </> : record ? <>
+        <ListRow icon="storefront-outline" title={record.business_name} detail={`${record.custom_settings.length} option(s) propre(s)`} right={<BackButton label="Liste" onPress={() => setClientId(null)} />} />
+        <ClientOptionsEditor record={record} defaults={defaults} onChange={(key, value) => setClientOption(record, key, value)} />
+      </> : <>
+        <Search value={search} onChange={setSearch} placeholder="Client" />
+        <ListGroup>
+          {clients.filter((item) => item.business_name.toLocaleLowerCase("fr").includes(term)).map((item) => <ListRow key={item.id} title={item.business_name} detail={item.custom_settings.length ? `${item.custom_settings.length} option(s) propre(s)` : "Suit le réglage commun"} onPress={() => setClientId(item.id)} />)}
+        </ListGroup>
+      </>}
+    </ScrollView>
+  </View>;
+}
+
+// Each option: follow the default for all clients, or this client's own yes / no.
+export function ClientOptionsEditor({ record, defaults, onChange, disabled }: {
+  record: Pick<ClientRecord, ClientOptionKey | "custom_settings">;
+  defaults: Partial<Record<ClientOptionKey, unknown>>;
+  onChange: (key: ClientOptionKey, value: boolean | null) => void;
+  disabled?: boolean;
+}) {
+  return <>
+    {clientOptionBlocks.map((block) => <View key={block.title} style={{ marginTop: 10 }}>
+      <Text style={styles.groupTitle}>{block.title.toLocaleUpperCase("fr")}</Text>
+      {block.items.map((item) => <View key={item.key} style={[ui.card, { marginTop: 4 }]}>
+        <Text style={ui.body}>{item.label}</Text>
+        <Text style={ui.small}>{item.hint}</Text>
+        <TriState
+          value={record.custom_settings.includes(item.key) ? optionToBool(item.key, record[item.key]) : null}
+          inherited={optionToBool(item.key, defaults[item.key])}
+          inheritLabel="Tous"
+          onChange={(value) => onChange(item.key, value)}
+          disabled={disabled}
+        />
+      </View>)}
+    </View>)}
+  </>;
+}
+
+function HomeRolesPage({ header }: { header: React.ReactNode }) {
+  const [layouts, setLayouts] = useState<Partial<Record<Role, HomeLayout>>>({});
+  const [editing, setEditing] = useState<Role | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const reload = () => fetchRoleHomeLayouts().then(setLayouts).catch((cause: unknown) => notify("Accueil", errorMessage(cause, "Impossible de charger les accueils."))).finally(() => setLoading(false));
+  useEffect(() => { void reload(); }, []);
+
+  const audience = editing === "customer" ? "customer" : "team";
+  const tiles = useMemo(() => homeTiles.filter((tile) => tile.audience === audience).map(({ key, label, icon }) => ({ key, label, icon })), [audience]);
+  const shortcuts = useMemo(() => homeShortcuts.filter((item) => item.audience === audience).map(({ key, label, icon }) => ({ key, label, icon })), [audience]);
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Accueil par profil" right={header} />
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content}>
+      <Text style={[ui.small, { marginTop: 8 }]}>L’accueil proposé à chaque profil. Chacun voit seulement ce que ses droits permettent, et peut personnaliser le sien depuis l’Accueil.</Text>
+      <ListGroup>
+        {configurableRoles.map((item) => <ListRow key={item.role} icon="home-outline" title={item.label} detail={layouts[item.role] ? `Personnalisé : ${layouts[item.role]!.tiles.length} chiffre(s), ${layouts[item.role]!.shortcuts.length} raccourci(s)` : "Accueil standard"} onPress={() => setEditing(item.role)} />)}
+      </ListGroup>
+    </ScrollView>}
+    <HomeEditor
+      visible={editing !== null}
+      title={editing ? `Accueil · ${roleLabels[editing]}` : "Accueil"}
+      tiles={tiles}
+      shortcuts={shortcuts}
+      value={(editing && layouts[editing]) || defaultLayout(audience)}
+      resetLabel="REVENIR À L’ACCUEIL STANDARD"
+      onSave={async (layout) => { if (editing) { await setRoleHomeLayout(editing, layout); await reload(); } }}
+      onReset={async () => { if (editing) { await setRoleHomeLayout(editing, null); await reload(); } }}
+      onClose={() => setEditing(null)}
+    />
+  </View>;
+}
+
+const styles = StyleSheet.create({
+  matrixRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 },
+  roleHead: { width: 58, textAlign: "center", color: "#405447", fontSize: 10, fontWeight: "800" },
+  cell: { width: 58, alignItems: "center" },
+  groupTitle: { color: "#6f7a6b", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginLeft: 2 },
+});

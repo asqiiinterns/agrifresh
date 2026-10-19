@@ -69,7 +69,7 @@ export function StaffInvoicesScreen() {
   }, [invoices, search, filter, issued]);
   const listFilters: Filter[] = [
     { kind: "choice", title: "Statut", options: statusFilters.map((item) => ({ key: item.key, label: item.label, count: item.key === "all" ? invoices.length : invoices.filter((invoice) => invoice.status === item.key).length })), value: filter, defaultValue: "all", onChange: setFilter },
-    { kind: "date", title: "Émise le", presets: [presets.today, presets.last7, presets.last30], value: issued, onChange: setIssued },
+    { kind: "date", title: "Émise le", presets: [presets.today, presets.yesterday, presets.last7, presets.thisMonth, presets.lastMonth], value: issued, onChange: setIssued },
   ];
   const outstanding = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
   const drafts = invoices.filter((invoice) => invoice.status === "draft").length;

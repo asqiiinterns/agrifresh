@@ -3,44 +3,75 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-n
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../ui/Text";
 import { supabase } from "../lib/supabase";
-import type { Account } from "../data/account";
+import { setMyHomeLayout, type Account } from "../data/account";
 import { fetchAccounts } from "../data/admin";
 import { fetchClaims } from "../data/claims";
+import { fetchInvoices } from "../data/invoices";
+import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
-import { fetchAllOrders, type StaffOrder } from "../data/staff";
-import { Loading, toDayKey } from "../ui/components";
-import { useNav, type IconName, type NavParams, type TabKey } from "../ui/navigation";
-import { errorMessage } from "../ui/notify";
+import { fetchAllOrders } from "../data/staff";
+import { ListGroup, ListRow, Loading, ScreenHeader, toDayKey } from "../ui/components";
+import { allowedFor, defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
+import { useNav } from "../ui/navigation";
 import { colors, ui } from "../ui/theme";
+import { HomeEditor } from "./HomeEditor";
 
-type Tile = { key: string; label: string; value: number; icon: IconName; tone: "action" | "info" | "warn"; tab: TabKey; params?: NavParams };
-
-// Team dashboard: what needs attention now, each figure opening the right screen.
-export function HomeScreen({ account, unreadMessages, unreadAlerts }: { account: Account; unreadMessages: number; unreadAlerts: number }) {
+// Home: the figures that need attention and the user's shortcuts, both configurable.
+export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChanged }: {
+  account: Account;
+  unreadMessages: number;
+  unreadAlerts: number;
+  onLayoutChanged: () => void;
+}) {
   const can = useCan();
   const { navigate } = useNav();
-  const [orders, setOrders] = useState<StaffOrder[]>([]);
-  const [openClaims, setOpenClaims] = useState(0);
-  const [pendingAccounts, setPendingAccounts] = useState(0);
+  const isAdmin = account.role === "admin";
+  const audience = account.role === "customer" ? "customer" : "team";
+  const [values, setValues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const isAdmin = account.role === "admin";
+  const [editing, setEditing] = useState(false);
+
+  const allowedTiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile.need, can, isAdmin));
+  const allowedShortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item.need, can, isAdmin));
+  const layout = account.home_layout ?? defaultLayout(audience);
+  const tiles = layout.tiles.map((key) => allowedTiles.find((tile) => tile.key === key)).filter((tile) => !!tile);
+  const shortcuts = layout.shortcuts.map((key) => allowedShortcuts.find((item) => item.key === key)).filter((item) => !!item);
+  const shows = (key: string) => tiles.some((tile) => tile.key === key);
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
-    setError("");
+    const next: Record<string, number> = {};
+    const today = toDayKey(new Date());
+    const count = (orders: Order[], statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length;
     try {
-      const [nextOrders, claims, accounts] = await Promise.all([
-        fetchAllOrders(),
-        can("claims.manage") ? fetchClaims() : Promise.resolve([]),
-        isAdmin ? fetchAccounts() : Promise.resolve([]),
-      ]);
-      setOrders(nextOrders);
-      setOpenClaims(claims.filter((claim) => claim.status === "open" || claim.status === "in_progress").length);
-      setPendingAccounts(accounts.filter((item) => item.status === "pending").length);
-    } catch (cause) {
-      setError(errorMessage(cause, "Impossible de charger le tableau de bord."));
+      if (audience === "team") {
+        const needsOrders = ["decide", "placedToday", "queue", "prepare", "ready", "shipping", "dueToday"].some(shows);
+        const [orders, claims, accounts] = await Promise.all([
+          needsOrders ? fetchAllOrders().catch(() => []) : Promise.resolve([]),
+          shows("claims") ? fetchClaims().catch(() => []) : Promise.resolve([]),
+          shows("accounts") ? fetchAccounts().catch(() => []) : Promise.resolve([]),
+        ]);
+        next.decide = count(orders, ["pending", "on_hold", "awaiting_client"]);
+        next.placedToday = orders.filter((order) => toDayKey(new Date(order.created_at)) === today).length;
+        next.queue = count(orders, ["confirmed", "preparing", "ready"]);
+        next.prepare = count(orders, ["confirmed", "preparing"]);
+        next.ready = count(orders, ["ready"]);
+        next.shipping = count(orders, ["out_for_delivery"]);
+        next.dueToday = orders.filter((order) => order.requested_delivery_date === today && !["delivered", "declined", "cancelled"].includes(order.status)).length;
+        next.claims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress").length;
+        next.accounts = accounts.filter((item) => item.status === "pending").length;
+      } else {
+        const [orders, invoices] = await Promise.all([
+          fetchMyOrders().catch(() => [] as Order[]),
+          shows("c_invoices") ? fetchInvoices().catch(() => []) : Promise.resolve([]),
+        ]);
+        next.c_progress = count(orders, ["pending", "on_hold", "confirmed", "preparing", "ready", "out_for_delivery"]);
+        next.c_reconfirm = count(orders, ["awaiting_client"]);
+        next.c_shipped = count(orders, ["out_for_delivery"]);
+        next.c_invoices = invoices.filter((invoice) => invoice.status === "issued").length;
+      }
+      setValues(next);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,90 +82,74 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts }: { account:
     const realtime = supabase;
     void reload();
     if (!realtime) return;
-    const channel = realtime.channel("home-orders")
+    const channel = realtime.channel(`home-${audience}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(); })
       .subscribe();
     return () => { void realtime.removeChannel(channel); };
-  }, []);
+  }, [layout.tiles.join(",")]);
 
-  const tiles = useMemo<Tile[]>(() => {
-    const count = (statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length;
-    const today = toDayKey(new Date());
-    const dueToday = orders.filter((order) => order.requested_delivery_date === today && !["delivered", "declined", "cancelled"].includes(order.status)).length;
-    const list: (Tile | false)[] = [
-      can("orders.decide") && { key: "decide", label: "À décider", value: count(["pending", "on_hold", "awaiting_client"]), icon: "hourglass-outline", tone: "action", tab: "orders", params: { section: "decide" } },
-      { key: "prepare", label: "À préparer", value: count(["confirmed", "preparing"]), icon: "construct-outline", tone: "info", tab: can("production.view") ? "production" : "orders", params: can("production.view") ? undefined : { section: "queue" } },
-      { key: "ready", label: "Prêtes à expédier", value: count(["ready"]), icon: "cube-outline", tone: "info", tab: can("deliveries") ? "deliveries" : "orders", params: can("deliveries") ? undefined : { section: "queue" } },
-      { key: "shipping", label: "En livraison", value: count(["out_for_delivery"]), icon: "car-outline", tone: "info", tab: can("deliveries") ? "deliveries" : "orders", params: can("deliveries") ? undefined : { section: "queue" } },
-      { key: "today", label: "À livrer aujourd’hui", value: dueToday, icon: "today-outline", tone: dueToday ? "warn" : "info", tab: "orders", params: { section: "queue" } },
-      can("claims.manage") && { key: "claims", label: "Réclamations ouvertes", value: openClaims, icon: "alert-circle-outline", tone: openClaims ? "warn" : "info", tab: "orders", params: { section: "claims" } },
-      isAdmin && { key: "accounts", label: "Comptes à valider", value: pendingAccounts, icon: "person-add-outline", tone: pendingAccounts ? "warn" : "info", tab: "admin", params: { page: "accounts" } },
-      can("messages.manage") && { key: "messages", label: "Messages non lus", value: unreadMessages, icon: "chatbubbles-outline", tone: unreadMessages ? "action" : "info", tab: "messages" },
-      { key: "alerts", label: "Alertes non lues", value: unreadAlerts, icon: "notifications-outline", tone: unreadAlerts ? "action" : "info", tab: "alerts" },
-    ];
-    return list.filter((tile): tile is Tile => tile !== false);
-  }, [orders, openClaims, pendingAccounts, unreadMessages, unreadAlerts]);
+  const valueOf = (key: string) => key === "messages" || key === "c_messages" ? unreadMessages
+    : key === "alerts" || key === "c_alerts" ? unreadAlerts
+    : values[key] ?? 0;
 
-  const shortcuts: { label: string; icon: IconName; tab: TabKey; params?: NavParams; show: boolean }[] = [
-    { label: "Commander pour un client", icon: "add-circle-outline", tab: "staffOrder", show: can("orders.create") },
-    { label: "Planifier la production", icon: "list-outline", tab: "orders", params: { section: "queue" }, show: can("orders.plan") },
-    { label: "Quantités à préparer", icon: "construct-outline", tab: "production", show: can("production.view") },
-    { label: "Fiches clients", icon: "people-outline", tab: "clients", show: can("clients.view") },
-    { label: "Factures", icon: "document-text-outline", tab: "invoices", show: can("invoices.manage") },
-  ];
-
-  const hour = new Date().getHours();
-  const greeting = hour < 18 ? "Bonjour" : "Bonsoir";
-  const name = account.full_name?.split(" ")[0];
+  const today = new Date().toLocaleDateString("fr-TN", { weekday: "long", day: "numeric", month: "long" });
+  const name = audience === "customer" ? account.client?.business_name : account.full_name?.split(" ")[0];
+  const editorTiles = useMemo(() => allowedTiles.map(({ key, label, icon }) => ({ key, label, icon })), [allowedTiles.length]);
+  const editorShortcuts = useMemo(() => allowedShortcuts.map(({ key, label, icon }) => ({ key, label, icon })), [allowedShortcuts.length]);
 
   return <View style={ui.screen}>
-    <View style={styles.hero}>
-      <Text style={styles.heroDate}>{new Date().toLocaleDateString("fr-TN", { weekday: "long", day: "numeric", month: "long" })}</Text>
-      <Text style={styles.heroTitle}>{greeting}{name ? ` ${name}` : ""}</Text>
-      <Text style={styles.heroBody}>Voici ce qui demande votre attention.</Text>
-    </View>
+    <ScreenHeader
+      eyebrow={today.toLocaleUpperCase("fr")}
+      title={`${new Date().getHours() < 18 ? "Bonjour" : "Bonsoir"}${name ? ` ${name}` : ""}`}
+      right={<Pressable onPress={() => setEditing(true)} style={styles.edit} accessibilityLabel="Personnaliser l’accueil">
+        <Ionicons name="options-outline" size={16} color={colors.green} />
+        <Text style={styles.editText}>Personnaliser</Text>
+      </Pressable>}
+    />
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
-      {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-      <View style={styles.grid}>
-        {tiles.map((tile) => <Pressable key={tile.key} onPress={() => navigate(tile.tab, tile.params)} style={({ pressed }) => [styles.tile, tile.tone === "warn" && tile.value > 0 && styles.tileWarn, tile.tone === "action" && tile.value > 0 && styles.tileAction, pressed && styles.pressed]}>
-          <View style={styles.tileTop}>
-            <Ionicons name={tile.icon} size={20} color={tile.value > 0 && tile.tone !== "info" ? (tile.tone === "warn" ? colors.amber : colors.green) : colors.muted} />
-            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-          </View>
-          <Text style={styles.tileValue}>{tile.value}</Text>
-          <Text style={styles.tileLabel} numberOfLines={2}>{tile.label}</Text>
-        </Pressable>)}
-      </View>
+      {tiles.length ? <View style={styles.grid}>
+        {tiles.map((tile) => {
+          const value = valueOf(tile.key);
+          const highlight = value > 0 && tile.tone;
+          return <Pressable key={tile.key} onPress={() => navigate(tile.tab, tile.params)} style={({ pressed }) => [styles.tile, highlight === "action" && styles.tileAction, highlight === "warn" && styles.tileWarn, pressed && { opacity: 0.7 }]}>
+            <View style={styles.tileTop}>
+              <Text style={styles.tileValue}>{value}</Text>
+              <Ionicons name={tile.icon} size={16} color={highlight === "warn" ? colors.amber : highlight ? colors.green : colors.muted} />
+            </View>
+            <Text style={styles.tileLabel} numberOfLines={2}>{tile.label}</Text>
+          </Pressable>;
+        })}
+      </View> : null}
 
-      {shortcuts.some((item) => item.show) ? <>
-        <Text style={styles.sectionTitle}>Raccourcis</Text>
-        <View style={styles.shortcuts}>
-          {shortcuts.filter((item) => item.show).map((item) => <Pressable key={item.label} onPress={() => navigate(item.tab, item.params)} style={({ pressed }) => [styles.shortcut, pressed && styles.pressed]}>
-            <View style={styles.shortcutIcon}><Ionicons name={item.icon} size={20} color={colors.green} /></View>
-            <Text style={[ui.body, { flex: 1, fontWeight: "700" }]}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-          </Pressable>)}
-        </View>
-      </> : null}
+      {shortcuts.length ? <ListGroup title="Raccourcis">
+        {shortcuts.map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} onPress={() => navigate(item.tab, item.params)} />)}
+      </ListGroup> : null}
+
+      {!tiles.length && !shortcuts.length ? <Text style={[ui.small, { marginTop: 14 }]}>Votre accueil est vide : touchez « Personnaliser » pour choisir vos chiffres et raccourcis.</Text> : null}
     </ScrollView>}
+
+    <HomeEditor
+      visible={editing}
+      title="Mon accueil"
+      tiles={editorTiles}
+      shortcuts={editorShortcuts}
+      value={layout}
+      resetLabel={account.role_home_layout ? "REVENIR À L’ACCUEIL DE MON PROFIL" : "REVENIR À L’ACCUEIL PAR DÉFAUT"}
+      onSave={async (next) => { await setMyHomeLayout(next); onLayoutChanged(); }}
+      onReset={async () => { await setMyHomeLayout(null); onLayoutChanged(); }}
+      onClose={() => setEditing(false)}
+    />
   </View>;
 }
 
 const styles = StyleSheet.create({
-  hero: { backgroundColor: colors.dark, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 22 },
-  heroDate: { color: "#c3d5b6", fontSize: 12, fontWeight: "700", textTransform: "capitalize" },
-  heroTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: 4 },
-  heroBody: { color: "#d4dfd3", fontSize: 13, marginTop: 4 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
-  tile: { flexBasis: "47%", flexGrow: 1, backgroundColor: colors.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.line, shadowColor: "#183c2a", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  edit: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.white },
+  editText: { color: colors.green, fontSize: 11, fontWeight: "800" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  tile: { flexBasis: "31%", flexGrow: 1, backgroundColor: colors.white, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.line },
   tileAction: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
   tileWarn: { borderColor: "#e3c46f", backgroundColor: "#fffbef" },
   tileTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  tileValue: { color: colors.text, fontSize: 30, fontWeight: "800", marginTop: 8 },
-  tileLabel: { color: colors.muted, fontSize: 12, fontWeight: "700", marginTop: 2 },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginTop: 22 },
-  shortcuts: { marginTop: 8, backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
-  shortcut: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.line },
-  shortcutIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#e6efe4", alignItems: "center", justifyContent: "center" },
-  pressed: { opacity: 0.7 },
+  tileValue: { color: colors.text, fontSize: 20, fontWeight: "800" },
+  tileLabel: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 1 },
 });

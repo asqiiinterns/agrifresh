@@ -6,7 +6,8 @@ import { formatClientNumber } from "../data/account";
 import { createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
-import { useCan } from "../data/permissions";
+import { boolToOption, clientOptionKeys, fetchClientDefaults, useCan, type ClientOptionKey } from "../data/permissions";
+import { ClientOptionsEditor } from "./SettingsScreen";
 import { colors, ui } from "../ui/theme";
 
 // Creating and editing client records follow the admin-defined permissions (also enforced by the database).
@@ -77,6 +78,10 @@ export function StaffClientsScreen() {
   </View>;
 }
 
+type Options = Pick<ClientRecord, ClientOptionKey | "custom_settings">;
+const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, custom_settings: [] };
+const pickOptions = (record: ClientRecord): Options => ({ ...Object.fromEntries(clientOptionKeys.map((key) => [key, record[key]])), custom_settings: record.custom_settings ?? [] }) as Options;
+
 const emptyPoint: DeliveryPointInput = { label: "Principal", address_line: "", city: "", phone: "", instructions: "" };
 
 function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRecord | null; visible: boolean; onClose: () => void; onSaved: () => void }) {
@@ -89,12 +94,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
   const [notes, setNotes] = useState("");
   const [active, setActive] = useState(true);
   const [taxId, setTaxId] = useState("");
-  const [showPrices, setShowPrices] = useState(true);
-  const [showOrigin, setShowOrigin] = useState(false);
-  const [stockManaged, setStockManaged] = useState(true);
-  const [showStock, setShowStock] = useState(false);
-  const [invoiceMode, setInvoiceMode] = useState<"auto" | "manual">("manual");
-  const [receptionQr, setReceptionQr] = useState(false);
+  const [options, setOptions] = useState<Options>(blankOptions);
+  const [defaults, setDefaults] = useState<Partial<Record<ClientOptionKey, unknown>>>({});
   const [firstPoint, setFirstPoint] = useState<DeliveryPointInput>(emptyPoint);
   const [pointForm, setPointForm] = useState<{ id: string | null; values: DeliveryPointInput } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,12 +109,12 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     setPhone(record?.phone ?? "");
     setNotes(record?.notes ?? "");
     setTaxId(record?.tax_id ?? "");
-    setShowPrices(record?.show_prices ?? true);
-    setShowOrigin(record?.show_origin ?? false);
-    setStockManaged(record?.stock_managed ?? true);
-    setShowStock(record?.show_stock ?? false);
-    setInvoiceMode(record?.invoice_mode ?? "manual");
-    setReceptionQr(record?.reception_qr ?? false);
+    setOptions(record ? pickOptions(record) : blankOptions);
+    void fetchClientDefaults().then((next) => {
+      setDefaults(next);
+      // A new record starts on the defaults for all clients.
+      if (!record) setOptions((current) => ({ ...current, ...next }) as Options);
+    }).catch(() => setDefaults({}));
     setActive(record?.active ?? true);
     setFirstPoint(emptyPoint);
     setPointForm(null);
@@ -142,7 +143,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
       return;
     }
     void run(async () => {
-      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, show_prices: showPrices, show_origin: showOrigin, show_stock: showStock, stock_managed: stockManaged, invoice_mode: invoiceMode, reception_qr: receptionQr };
+      // Only this client's own options are sent; the database applies the defaults to the others.
+      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, custom_settings: options.custom_settings, ...Object.fromEntries(options.custom_settings.map((key) => [key, options[key]])) };
       if (record) await updateClient(record.id, { ...input, active });
       else await createClient(input, firstPoint);
       onSaved();
@@ -212,31 +214,12 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
 
           <View style={ui.card}>
             <Text style={ui.strong}>Options</Text>
-            <View style={[ui.row, { marginTop: 12 }]}>
-              <View style={{ flex: 1 }}><Text style={ui.body}>Afficher les prix au client</Text><Text style={ui.small}>Dans l’application et sur les bons de livraison.</Text></View>
-              <Switch value={showPrices} onValueChange={setShowPrices} trackColor={{ true: colors.green, false: colors.line }} />
-            </View>
-            <View style={[ui.row, { marginTop: 12 }]}>
-              <View style={{ flex: 1 }}><Text style={ui.body}>Afficher l’origine des produits</Text><Text style={ui.small}>Producteur, région et label sur le catalogue, les commandes et les bons de livraison.</Text></View>
-              <Switch value={showOrigin} onValueChange={setShowOrigin} trackColor={{ true: colors.green, false: colors.line }} />
-            </View>
-            <View style={[ui.row, { marginTop: 12 }]}>
-              <View style={{ flex: 1 }}><Text style={ui.body}>Gestion du stock</Text><Text style={ui.small}>Activée : ses commandes sont limitées au stock disponible et le réservent. Désactivée : production à la demande, sans limite de stock.</Text></View>
-              <Switch value={stockManaged} onValueChange={setStockManaged} trackColor={{ true: colors.green, false: colors.line }} />
-            </View>
-            <View style={[ui.row, { marginTop: 12 }]}>
-              <View style={{ flex: 1 }}><Text style={ui.body}>Afficher le stock au client</Text><Text style={ui.small}>Le client voit la quantité disponible de chaque produit en commandant.</Text></View>
-              <Switch value={showStock} onValueChange={setShowStock} trackColor={{ true: colors.green, false: colors.line }} />
-            </View>
-            <View style={[ui.row, { marginTop: 12 }]}>
-              <View style={{ flex: 1 }}><Text style={ui.body}>Réception par QR client</Text><Text style={ui.small}>Le livreur scanne le QR affiché dans l’application du client au lieu du QR collé au point de livraison.</Text></View>
-              <Switch value={receptionQr} onValueChange={setReceptionQr} trackColor={{ true: colors.green, false: colors.line }} />
-            </View>
-            <Text style={[ui.body, { marginTop: 14 }]}>Facturation</Text>
-            <View style={[ui.wrapRow, { marginTop: 6 }]}>
-              <Chip label="Automatique (1 facture par commande acceptée)" selected={invoiceMode === "auto"} onPress={() => setInvoiceMode("auto")} />
-              <Chip label="Manuelle (regroupée par le staff)" selected={invoiceMode === "manual"} onPress={() => setInvoiceMode("manual")} />
-            </View>
+            <Text style={ui.small}>« Tous » suit le réglage commun à tous les clients (Admin → Paramétrage) ; Oui / Non est propre à ce client.</Text>
+            <ClientOptionsEditor record={options} defaults={defaults} disabled={!canEdit} onChange={(key, value) => setOptions((current) => ({
+              ...current,
+              custom_settings: value === null ? current.custom_settings.filter((item) => item !== key) : [...new Set([...current.custom_settings, key])],
+              [key]: value === null ? defaults[key] ?? current[key] : boolToOption(key, value),
+            }))} />
             {record ? <View style={[ui.row, { marginTop: 12 }]}>
               <Text style={ui.body}>Fiche active (peut commander)</Text>
               <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.green, false: colors.line }} />

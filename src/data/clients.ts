@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "./account";
 import { escapeHtml, outputPdf } from "./pdf";
 import { QR, qrSvg } from "../ui/Qr";
+import type { ClientOptionKey } from "./permissions";
 
 export type DeliveryPoint = {
   id: string;
@@ -32,11 +33,19 @@ export type ClientRecord = {
   stock_managed: boolean;
   invoice_mode: "auto" | "manual";
   reception_qr: boolean;
+  history_enabled: boolean;
+  reconfirm_declined: boolean;
+  scan_delivery_note: boolean;
+  scan_client_qr: boolean;
+  // Options set apart from the "all clients" default, and client tabs switched on/off for this client.
+  custom_settings: ClientOptionKey[];
+  feature_overrides: Record<string, boolean>;
   client_delivery_points: DeliveryPoint[];
   has_account: boolean;
 };
 
-export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes" | "show_prices" | "show_origin" | "show_stock" | "stock_managed" | "invoice_mode" | "reception_qr"> & { email: string; tax_id: string };
+export type ClientOptions = Pick<ClientRecord, ClientOptionKey | "custom_settings" | "feature_overrides">;
+export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes"> & Partial<ClientOptions> & { email: string; tax_id: string };
 export type DeliveryPointInput = Pick<DeliveryPoint, "label" | "address_line" | "city" | "phone" | "instructions">;
 
 function client() {
@@ -47,7 +56,7 @@ function client() {
 export async function fetchClients(): Promise<ClientRecord[]> {
   const { data, error } = await client()
     .from("clients")
-    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
+    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, history_enabled, reconfirm_declined, scan_delivery_note, scan_client_qr, custom_settings, feature_overrides, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
   type Row = Omit<ClientRecord, "has_account"> & {
@@ -69,13 +78,15 @@ const clean = (input: ClientInput) => ({
   phone: input.phone.trim(),
   notes: input.notes?.trim() || null,
   tax_id: input.tax_id.trim() || null,
-  show_prices: input.show_prices,
-  show_origin: input.show_origin,
-  show_stock: input.show_stock,
-  stock_managed: input.stock_managed,
-  invoice_mode: input.invoice_mode,
-  reception_qr: input.reception_qr,
+  // Options are only sent when edited; the database applies the defaults to the others.
+  ...Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== undefined
+    && !["business_name", "contact_name", "email", "phone", "notes", "tax_id"].includes(key))),
 });
+
+export async function updateClientOptions(id: string, options: Partial<ClientOptions>): Promise<void> {
+  const { error } = await client().from("clients").update({ ...options, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}
 
 export async function createClient(input: ClientInput, firstPoint: DeliveryPointInput): Promise<string> {
   const { data, error } = await client().from("clients").insert(clean(input)).select("id").single();

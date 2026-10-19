@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { ActivityIndicator, Image, Pressable, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Text, TextInput } from "./Text";
 import { colors, ui } from "./theme";
 
@@ -98,6 +99,98 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
     {action ? <View style={{ marginTop: 16 }}>{action}</View> : null}
   </View>;
 }
+
+// Sheets at the top of a screen (e.g. "En cours" / "Clôturées"), as a segmented control.
+export function Sheets<K extends string>({ items, value, onChange }: { items: { key: K; label: string; count?: number }[]; value: K; onChange: (key: K) => void }) {
+  return <View style={local.sheetsWrap}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={local.sheets}>
+      {items.map((item) => {
+        const selected = item.key === value;
+        return <Pressable key={item.key} onPress={() => onChange(item.key)} style={[local.sheet, selected && local.sheetSelected]} accessibilityRole="tab" accessibilityState={{ selected }}>
+          <Text style={[local.sheetText, selected && local.sheetTextSelected]}>{item.label}</Text>
+          {item.count !== undefined ? <View style={[local.sheetCount, selected && local.sheetCountSelected]}><Text style={[local.sheetCountText, selected && { color: colors.green }]}>{item.count}</Text></View> : null}
+        </Pressable>;
+      })}
+    </ScrollView>
+  </View>;
+}
+
+// Inherit / yes / no, used wherever a value can follow a default (role, all clients).
+export function TriState({ value, inherited, onChange, inheritLabel = "Défaut", disabled }: {
+  value: boolean | null;
+  inherited: boolean;
+  onChange: (value: boolean | null) => void;
+  inheritLabel?: string;
+  disabled?: boolean;
+}) {
+  const options: { key: "inherit" | "yes" | "no"; label: string; value: boolean | null }[] = [
+    { key: "inherit", label: `${inheritLabel} (${inherited ? "oui" : "non"})`, value: null },
+    { key: "yes", label: "Oui", value: true },
+    { key: "no", label: "Non", value: false },
+  ];
+  return <View style={[local.tri, disabled && ui.disabled]}>
+    {options.map((option) => {
+      const selected = option.value === value;
+      return <Pressable key={option.key} disabled={disabled} onPress={() => onChange(option.value)} style={[local.triItem, selected && (option.value === null ? local.triInherit : option.value ? local.triYes : local.triNo)]}>
+        <Text style={[local.triText, selected && { color: option.value === null ? colors.text : colors.white, fontWeight: "800" }]} numberOfLines={1}>{option.label}</Text>
+      </Pressable>;
+    })}
+  </View>;
+}
+
+// One line of a menu or a list: icon, title, optional detail, chevron.
+export function ListRow({ icon, title, detail, onPress, right, badge }: { icon?: ComponentProps<typeof Ionicons>["name"]; title: string; detail?: string; onPress?: () => void; right?: ReactNode; badge?: number }) {
+  return <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [local.listRow, pressed && { opacity: 0.7 }]}>
+    {icon ? <View style={local.listIcon}><Ionicons name={icon} size={18} color={colors.green} /></View> : null}
+    <View style={{ flex: 1 }}>
+      <Text style={ui.strong} numberOfLines={1}>{title}</Text>
+      {detail ? <Text style={ui.small} numberOfLines={2}>{detail}</Text> : null}
+    </View>
+    {badge ? <View style={local.badge}><Text style={local.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
+    {right ?? (onPress ? <Ionicons name="chevron-forward" size={16} color={colors.muted} /> : null)}
+  </Pressable>;
+}
+
+// Group of ListRow inside one rounded box.
+export function ListGroup({ title, children }: { title?: string; children: ReactNode }) {
+  return <View style={{ marginTop: 12 }}>
+    {title ? <Text style={local.groupTitle}>{title.toLocaleUpperCase("fr")}</Text> : null}
+    <View style={local.group}>{children}</View>
+  </View>;
+}
+
+export function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={local.back} accessibilityLabel="Retour" hitSlop={6}>
+    <Ionicons name="chevron-back" size={14} color={colors.green} />
+    <Text style={local.backText}>{label}</Text>
+  </Pressable>;
+}
+
+const local = StyleSheet.create({
+  sheetsWrap: { borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.paper },
+  sheets: { paddingHorizontal: 14, paddingVertical: 6, gap: 6 },
+  sheet: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  sheetSelected: { backgroundColor: colors.green },
+  sheetText: { color: "#5f685d", fontSize: 12, fontWeight: "700" },
+  sheetTextSelected: { color: colors.white },
+  sheetCount: { minWidth: 20, paddingHorizontal: 5, height: 18, borderRadius: 9, backgroundColor: "#ecebe4", alignItems: "center", justifyContent: "center" },
+  sheetCountSelected: { backgroundColor: colors.white },
+  sheetCountText: { color: "#5f685d", fontSize: 10, fontWeight: "800" },
+  tri: { flexDirection: "row", borderWidth: 1, borderColor: colors.line, borderRadius: 8, overflow: "hidden", marginTop: 6, backgroundColor: colors.white },
+  triItem: { flex: 1, paddingVertical: 6, paddingHorizontal: 4, alignItems: "center", borderRightWidth: 1, borderRightColor: colors.line },
+  triInherit: { backgroundColor: "#ecebe4" },
+  triYes: { backgroundColor: colors.green },
+  triNo: { backgroundColor: colors.danger },
+  triText: { color: "#5f685d", fontSize: 11, fontWeight: "600" },
+  listRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },
+  listIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: "#e6efe4", alignItems: "center", justifyContent: "center" },
+  group: { backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
+  groupTitle: { color: "#6f7a6b", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 5, marginLeft: 2 },
+  badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center" },
+  badgeText: { color: colors.white, fontSize: 10, fontWeight: "800" },
+  back: { flexDirection: "row", alignItems: "center", gap: 2, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.white },
+  backText: { color: colors.green, fontSize: 12, fontWeight: "800" },
+});
 
 export function ProductImage({ uri, style }: { uri: string; style: ComponentProps<typeof Image>["style"] }) {
   const [failed, setFailed] = useState(false);

@@ -25,6 +25,7 @@ import { DocumentViewerHost } from "./src/ui/DocumentViewer";
 import { DriverScreen } from "./src/screens/DriverScreen";
 import { ClientMessagesScreen, StaffInboxScreen } from "./src/screens/MessagesScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
+import { PlanningTab } from "./src/screens/PlanningScreen";
 import { MoreScreen } from "./src/screens/MoreScreen";
 import { StaffOrderEntryScreen } from "./src/screens/StaffOrderEntryScreen";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,7 +39,8 @@ const TAB = {
   order: { key: "order", label: "Commander", icon: "add-circle-outline" },
   staffOrder: { key: "staffOrder", label: "Commander", icon: "add-circle-outline", description: "Saisir une commande pour un client." },
   alerts: { key: "alerts", label: "Alertes", icon: "notifications-outline", description: "Notifications reçues." },
-  orders: { key: "orders", label: "Commandes", icon: "receipt-outline", description: "Décisions, file de préparation, réclamations." },
+  orders: { key: "orders", label: "Commandes", icon: "receipt-outline", description: "À décider, en cours, clôturées, réclamations." },
+  planning: { key: "planning", label: "Planning", icon: "list-outline", description: "File de production : ordre d’exécution." },
   production: { key: "production", label: "Production", icon: "construct-outline", description: "Quantités à préparer." },
   deliveries: { key: "deliveries", label: "Livraisons", icon: "car-outline", description: "Récupérer, livrer, historique." },
   clients: { key: "clients", label: "Clients", icon: "people-outline", description: "Fiches, points de livraison, QR codes." },
@@ -55,26 +57,35 @@ const MAX_BAR = 5;
 // Tabs follow the features the admin enabled for the account's role, most used first.
 function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
   const has = (feature: string) => account.features.includes(feature);
+  const add = (tabs: TabDef[], tab: TabDef, allowed: boolean) => { if (allowed && !tabs.includes(tab)) tabs.push(tab); };
   if (account.role === "customer") {
     if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
-    return { kind: "client", tabs: [TAB.order, TAB.orders, ...(has("client.messages") ? [TAB.messages] : []), TAB.alerts, ...(has("client.invoices") ? [TAB.invoices] : []), TAB.account] };
+    const tabs: TabDef[] = [];
+    add(tabs, TAB.home, has("client.home"));
+    add(tabs, TAB.order, has("client.order"));
+    add(tabs, TAB.orders, has("client.orders"));
+    add(tabs, TAB.messages, has("client.messages"));
+    add(tabs, TAB.alerts, has("client.alerts"));
+    add(tabs, TAB.invoices, has("client.invoices"));
+    tabs.push(TAB.account);
+    return { kind: "client", tabs };
   }
-  const managesOrders = ["orders.decide", "orders.plan", "claims.manage"].some(has);
   const tabs: TabDef[] = [];
-  if (managesOrders || has("production.view")) tabs.push(TAB.home);
+  add(tabs, TAB.home, has("home.view"));
   // The driver's and the production team's own work comes right after.
-  if (account.role === "driver" && has("deliveries")) tabs.push(TAB.deliveries);
-  if (account.role === "production" && has("production.view")) tabs.push(TAB.production);
-  // Drivers ship from Livraisons (« À récupérer »), they do not need the orders screen.
-  if (managesOrders || (has("orders.ship") && account.role !== "driver")) tabs.push(TAB.orders);
-  if (has("orders.create")) tabs.push(TAB.staffOrder);
-  if (has("messages.manage")) tabs.push(TAB.messages);
-  tabs.push(TAB.alerts);
+  add(tabs, TAB.deliveries, account.role === "driver" && has("deliveries"));
+  add(tabs, TAB.production, account.role === "production" && has("production.view"));
+  add(tabs, TAB.orders, has("orders.view"));
+  // Planning stays in the bottom bar: it is the key daily task.
+  add(tabs, TAB.planning, has("orders.plan"));
+  add(tabs, TAB.staffOrder, has("orders.create"));
+  add(tabs, TAB.messages, has("messages.manage"));
+  add(tabs, TAB.alerts, has("alerts.view"));
   if (has("production.view") && !tabs.includes(TAB.production)) tabs.push(TAB.production);
   if (has("deliveries") && !tabs.includes(TAB.deliveries)) tabs.push(TAB.deliveries);
   if (has("clients.view")) tabs.push(TAB.clients);
   if (has("invoices.manage")) tabs.push(TAB.invoices);
-  if (account.role === "admin") tabs.push(TAB.admin);
+  add(tabs, TAB.admin, account.role === "admin" || has("fleet.manage") || has("audit.view"));
   tabs.push(TAB.account);
   return { kind: "team", tabs };
 }
@@ -282,7 +293,9 @@ function Main({ session }: { session: Session }) {
     if (!account) return null;
     switch (current) {
       case "home":
-        return <HomeScreen account={account} unreadMessages={unread} unreadAlerts={alerts.unread} />;
+        return <HomeScreen account={account} unreadMessages={unread} unreadAlerts={alerts.unread} onLayoutChanged={() => void loadAccount()} />;
+      case "planning":
+        return <PlanningTab />;
       case "more":
         return <MoreScreen items={overflow} badges={{ messages: unread, alerts: alerts.unread }} />;
       case "staffOrder":
@@ -304,7 +317,7 @@ function Main({ session }: { session: Session }) {
       case "alerts":
         return <AlertsScreen userId={session.user.id} onRead={alerts.refresh} />;
       case "admin":
-        return <AdminScreen initialPage={nav.params?.page} />;
+        return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
       default:
         return <View style={{ flex: 1 }}>
           {kind === "unlinked" ? <View style={[ui.card, { marginHorizontal: 18, marginTop: 18 }]}>

@@ -6,56 +6,54 @@ import { roleLabels, type Role } from "../data/account";
 import { createAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, type AdminAccount } from "../data/admin";
 import type { AccountStatus } from "../data/account";
 import { assignableRoles } from "../data/team";
-import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, formatDateTime } from "../ui/components";
+import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime } from "../ui/components";
+import { useCan } from "../data/permissions";
+import { SettingsScreen } from "./SettingsScreen";
+import { AuditPage, FleetPage } from "./FleetAuditScreens";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
-import { PermissionsPanel } from "./PermissionsPanel";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import { StaffProductsModal } from "./StaffProductsScreen";
 
-type Page = "menu" | "accounts" | "permissions" | "alerts";
+type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit";
+const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit"];
 
 // Administration home: each button opens its own page.
-export function AdminScreen({ initialPage }: { initialPage?: string } = {}) {
-  const [page, setPage] = useState<Page>(initialPage === "accounts" || initialPage === "permissions" || initialPage === "alerts" ? initialPage : "menu");
+export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean; initialPage?: string } = {}) {
+  const [page, setPage] = useState<Page>(pages.includes(initialPage as Page) ? initialPage as Page : "menu");
   const [productsVisible, setProductsVisible] = useState(false);
+  const can = useCan();
 
   if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} />;
   if (page === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Alertes et e-mails" right={<BackButton onPress={() => setPage("menu")} />} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
   </View>;
-  if (page === "permissions") return <View style={ui.screen}>
-    <ScreenHeader eyebrow="ADMINISTRATION" title="Profils et droits" right={<BackButton onPress={() => setPage("menu")} />} />
-    <ScrollView contentContainerStyle={ui.content}><PermissionsPanel /></ScrollView>
-  </View>;
-
-  const entries: { key: string; title: string; body: string; icon: string; onPress: () => void }[] = [
-    { key: "accounts", title: "Comptes", body: "Tous les comptes : validation des inscriptions, suspension, refus, rôle, ajout d’un compte.", icon: "👤", onPress: () => setPage("accounts") },
-    { key: "permissions", title: "Profils et droits", body: "Ce que chaque profil peut faire : superviseur, production, livreur, client.", icon: "🔑", onPress: () => setPage("permissions") },
-    { key: "products", title: "Produits", body: "Catalogue, prix, TVA, stock, nouveautés et origine.", icon: "🥬", onPress: () => setProductsVisible(true) },
-    { key: "alerts", title: "Alertes et e-mails", body: "Quels événements envoient une notification ou un e-mail, et le service d’envoi.", icon: "🔔", onPress: () => setPage("alerts") },
-  ];
+  if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} />;
+  if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
+  if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Admin" />
     <ScrollView contentContainerStyle={ui.content}>
-      {entries.map((entry) => <Pressable key={entry.key} onPress={entry.onPress} style={[ui.card, styles.entry]}>
-        <Text style={styles.entryIcon}>{entry.icon}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={ui.strong}>{entry.title}</Text>
-          <Text style={ui.small}>{entry.body}</Text>
-        </View>
-        <Text style={styles.chevron}>›</Text>
-      </Pressable>)}
+      {isAdmin ? <ListGroup title="Comptes et réglages">
+        <ListRow icon="person-outline" title="Comptes" detail="Validation des inscriptions, suspension, rôle, ajout d’un compte." onPress={() => setPage("accounts")} />
+        <ListRow icon="options-outline" title="Paramétrage" detail="Onglets et droits par thème, profil et utilisateur ; options des clients ; accueil." onPress={() => setPage("settings")} />
+        <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés et service d’envoi." onPress={() => setPage("alerts")} />
+      </ListGroup> : null}
+      <ListGroup title="Exploitation">
+        {can("products.manage") ? <ListRow icon="leaf-outline" title="Produits" detail="Catalogue, prix, TVA, stock, nouveautés et origine." onPress={() => setProductsVisible(true)} /> : null}
+        {can("fleet.manage") ? <ListRow icon="car-outline" title="Flotte" detail="Véhicules proposés au livreur à l’expédition." onPress={() => setPage("fleet")} /> : null}
+        {can("audit.view") ? <ListRow icon="time-outline" title="Journal des actions" detail="Qui a fait quoi et quand, sur tout le système." onPress={() => setPage("audit")} /> : null}
+      </ListGroup>
     </ScrollView>
     <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} />
   </View>;
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
-  return <Pressable onPress={onPress} style={styles.back} accessibilityLabel="Retour"><Text style={styles.backText}>‹ Admin</Text></Pressable>;
+  return <Back label="Admin" onPress={onPress} />;
 }
 
 const statusOptions = [
@@ -253,11 +251,6 @@ function AddAccountModal({ visible, onClose, onCreated }: { visible: boolean; on
 }
 
 const styles = StyleSheet.create({
-  entry: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 18 },
-  entryIcon: { fontSize: 26 },
-  chevron: { color: colors.muted, fontSize: 26 },
-  back: { borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.white },
-  backText: { color: colors.green, fontSize: 12, fontWeight: "800" },
   pendingCard: { borderColor: "#e3c46f", backgroundColor: "#fffbef" },
   roleOption: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
   roleSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },

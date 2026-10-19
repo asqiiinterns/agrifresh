@@ -16,7 +16,7 @@ export function OrderTimeline({ order, viewer }: { order: Order; viewer: "client
     </Pressable>
     {open ? <View style={styles.list}>
       {events.map((event, index) => {
-        const actor = event.byClient ? (viewer === "client" ? "Vous" : "Client") : (viewer === "client" ? "AgriFresh" : "Personnel");
+        const actor = event.byClient ? (viewer === "client" ? "Vous" : event.changed_by_name ?? "Client") : (viewer === "client" ? "AgriFresh" : event.changed_by_name ?? "Personnel");
         return <View key={`${event.created_at}-${index}`} style={styles.item}>
           <View style={[styles.dot, event.byClient && styles.dotClient]} />
           <View style={{ flex: 1 }}>

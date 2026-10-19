@@ -22,6 +22,14 @@ export const presets = {
   yesterday: { label: "Hier", value: () => ({ label: "Hier", from: shift(-1), to: shift(-1) }) },
   last7: { label: "7 derniers jours", value: () => ({ label: "7 derniers jours", from: shift(-6), to: shift(0) }) },
   last30: { label: "30 derniers jours", value: () => ({ label: "30 derniers jours", from: shift(-29), to: shift(0) }) },
+  thisMonth: { label: "Ce mois-ci", value: () => {
+    const today = new Date();
+    return { label: "Ce mois-ci", from: toDayKey(new Date(today.getFullYear(), today.getMonth(), 1)), to: shift(0) };
+  } },
+  lastMonth: { label: "Mois dernier", value: () => {
+    const today = new Date();
+    return { label: "Mois dernier", from: toDayKey(new Date(today.getFullYear(), today.getMonth() - 1, 1)), to: toDayKey(new Date(today.getFullYear(), today.getMonth(), 0)) };
+  } },
   noDate: { label: "Sans date", value: () => ({ label: "Sans date", noDate: true }) },
 } satisfies Record<string, DatePreset>;
 

@@ -32,12 +32,18 @@ export type ClientSummary = {
   stock_managed: boolean;
   reception_qr: boolean;
   reception_token: string | null;
+  // Off: finished orders and order timelines are hidden from the client.
+  history_enabled?: boolean;
   delivery_points: DeliveryPointSummary[];
 };
 
 export type AccountStatus = "pending" | "active" | "refused" | "suspended";
 
+// Home screen: figures (tiles) and shortcuts, in display order.
+export type HomeLayout = { tiles: string[]; shortcuts: string[] };
+
 export type Account = {
+  id?: string;
   role: Role;
   full_name: string;
   // Features enabled for this account (see role_permissions); admins get all of them.
@@ -46,6 +52,9 @@ export type Account = {
   // Decided by the admin: a new sign-up stays pending until validated.
   status?: AccountStatus;
   client: ClientSummary | null;
+  // The user's own layout, else the one set by the admin for the role (null = built-in default).
+  home_layout?: HomeLayout | null;
+  role_home_layout?: HomeLayout | null;
 };
 
 export async function fetchMyAccount(): Promise<Account> {
@@ -58,4 +67,23 @@ export async function fetchMyAccount(): Promise<Account> {
   return { ...account, features: Array.isArray(account.features) ? account.features : [] };
 }
 
+export async function setMyHomeLayout(layout: HomeLayout | null): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("set_my_home_layout", { p_layout: layout });
+  if (error) throw error;
+}
+
+export async function setRoleHomeLayout(role: Role, layout: HomeLayout | null): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("admin_set_home_layout", { p_role: role, p_layout: layout });
+  if (error) throw error;
+}
+
 export const formatClientNumber = (value: number) => `CL-${String(value).padStart(4, "0")}`;
+
+export async function fetchRoleHomeLayouts(): Promise<Partial<Record<Role, HomeLayout>>> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { data, error } = await supabase.from("home_layouts").select("role, layout");
+  if (error) throw error;
+  return Object.fromEntries((data ?? []).map((row: { role: Role; layout: HomeLayout }) => [row.role, row.layout]));
+}

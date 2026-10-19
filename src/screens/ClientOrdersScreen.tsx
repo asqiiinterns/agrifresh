@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Modal, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
@@ -11,11 +11,12 @@ import { OrderTimeline } from "../ui/OrderTimeline";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { useCan } from "../data/permissions";
-import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { QR, QrCode } from "../ui/Qr";
 import { colors, ui } from "../ui/theme";
 
+const closedStatuses = ["delivered", "declined", "cancelled"];
 const filters = [
   { key: "all", label: "Toutes", statuses: null },
   { key: "reconfirm", label: "À reconfirmer", statuses: ["awaiting_client"] },
@@ -33,6 +34,10 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const [error, setError] = useState("");
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
+  // Two sheets: orders still moving, and closed ones (history, if AgriFresh enables it).
+  const [sheet, setSheet] = useState<"open" | "closed">("open");
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const historyEnabled = client.history_enabled !== false;
   const [placed, setPlaced] = useState<DateFilterValue>(null);
   const [search, setSearch] = useState("");
   const [receptionVisible, setReceptionVisible] = useState(false);
@@ -114,11 +119,12 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
     : orders.length])), [orders]);
   const selected = filters.find((item) => item.key === filter) ?? filters[0];
   const term = search.trim().toLocaleLowerCase("fr");
-  const visible = orders.filter((order) => (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
+  const inSheet = (order: Order) => closedStatuses.includes(order.status) === (sheet === "closed");
+  const visible = orders.filter((order) => inSheet(order) && (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
     && matchesDate(order.created_at, placed)
     && (!term || `${order.order_number} ${order.order_items.map((line) => line.product_name_snapshot).join(" ")}`.toLocaleLowerCase("fr").includes(term)));
   const listFilters: Filter[] = [
-    { kind: "choice", title: "Statut", options: filters.map((item) => ({ key: item.key, label: item.label, count: counts[item.key] ?? 0 })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "choice", title: "Statut", options: filters.filter((item) => !item.statuses || item.statuses.some((status) => closedStatuses.includes(status) === (sheet === "closed"))).map((item) => ({ key: item.key, label: item.label, count: item.statuses ? counts[item.key] ?? 0 : orders.filter(inSheet).length })), value: filter, defaultValue: "all", onChange: setFilter },
     { kind: "date", title: "Passée le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: placed, onChange: setPlaced },
   ];
   const shippedCount = counts.shipped ?? 0;
@@ -129,6 +135,11 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
       title="Mes commandes"
       right={client.reception_qr && client.reception_token ? <Button label="QR RÉCEPTION" onPress={() => setReceptionVisible(true)} /> : undefined}
     />
+    {historyEnabled ? <Sheets
+      items={[{ key: "open", label: "En cours", count: orders.filter((order) => !closedStatuses.includes(order.status)).length }, { key: "closed", label: "Clôturées", count: orders.filter((order) => closedStatuses.includes(order.status)).length }]}
+      value={sheet}
+      onChange={(next) => { setSheet(next); setFilter("all"); }}
+    /> : null}
     <FilterBar search={search} onSearch={setSearch} placeholder="N° de commande ou produit" filters={listFilters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
@@ -138,8 +149,14 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
         : client.reception_qr && shippedCount ? <Text style={[ui.body, styles.banner]}>{shippedCount} commande(s) en route : à l’arrivée du livreur, touchez « QR RÉCEPTION » et présentez le code.</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body={filter === "all" ? "Vos commandes apparaîtront ici avec leur statut." : "Aucune commande avec ce statut."} />}
-      renderItem={({ item }) => <View style={ui.card}>
-        <View style={ui.row}><Text style={ui.strong}>Commande #{item.order_number}</Text><StatusBadge status={item.status} /></View>
+      renderItem={({ item }) => {
+        const open = item.status === "awaiting_client" || expanded.includes(item.id);
+        return <View style={ui.card}>
+        <Pressable onPress={() => setExpanded((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])}>
+          <View style={ui.row}><Text style={ui.strong}>{open ? "▾" : "▸"} Commande #{item.order_number}</Text><StatusBadge status={item.status} /></View>
+          {!open ? <Text style={[ui.small, { marginTop: 2 }]}>{formatDateTime(item.created_at)} · {item.order_items.length} produit(s){client.show_prices ? ` · ${formatPrice(item.total)}` : ""}</Text> : null}
+        </Pressable>
+        {open ? <>
         <Text style={[ui.small, { marginTop: 4 }]}>
           {deliveryNoteNumber(item)} · passée le {formatDateTime(item.created_at)}
           {item.requested_delivery_date ? ` · livraison souhaitée ${formatDay(item.requested_delivery_date)}` : ""}
@@ -175,12 +192,14 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
           <Text style={ui.small}>{claim.description}</Text>
           {claim.staff_response ? <Text style={[ui.body, { marginTop: 4 }]}>Réponse AgriFresh : {claim.staff_response}</Text> : null}
         </View>)}
-        <OrderTimeline order={item} viewer="client" />
+        {historyEnabled ? <OrderTimeline order={item} viewer="client" /> : null}
         {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} />
           {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
         </View> : null}
-      </View>}
+        </> : null}
+      </View>;
+      }}
     />}
 
     <ClaimModal order={claimOrder} onClose={() => setClaimOrder(null)} onSent={() => { setClaimOrder(null); void reload("silent"); }} />

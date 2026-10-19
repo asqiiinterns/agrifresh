@@ -55,7 +55,7 @@ export function ClientInvoicesScreen() {
   const visible = invoices.filter((invoice) => (filter === "all" || invoice.status === filter) && matchesDate(invoice.issued_at, issued));
   const listFilters: Filter[] = [
     { kind: "choice", title: "Statut", options: filters.map((item) => ({ key: item.key, label: item.label })), value: filter, defaultValue: "all", onChange: setFilter },
-    { kind: "date", title: "Émise le", presets: [presets.last7, presets.last30], value: issued, onChange: setIssued },
+    { kind: "date", title: "Émise le", presets: [presets.last7, presets.last30, presets.thisMonth, presets.lastMonth], value: issued, onChange: setIssued },
   ];
   const due = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
 
