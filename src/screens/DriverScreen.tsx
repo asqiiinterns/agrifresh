@@ -6,7 +6,8 @@ import { confirmHandover, fetchDeliveryHistory, fetchShipments, lookupDeliveryNo
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { parseQr } from "../ui/Qr";
-import { FilterPanel, type FilterGroup } from "../ui/FilterPanel";
+import { FilterBar, type Filter } from "../ui/FilterBar";
+import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { colors, ui } from "../ui/theme";
 
 type Tab = "todo" | "history";
@@ -75,13 +76,6 @@ function ShipmentList() {
   />;
 }
 
-const periods = [
-  { key: "today", label: "Aujourd’hui", days: 0 },
-  { key: "yesterday", label: "Hier", days: 1 },
-  { key: "week", label: "7 jours", days: 7 },
-  { key: "month", label: "30 jours", days: 30 },
-  { key: "quarter", label: "90 jours", days: 90 },
-] as const;
 const slots = [
   { key: "all", label: "Toute la journée", from: 0, to: 24 },
   { key: "morning", label: "Matin (avant 12 h)", from: 0, to: 12 },
@@ -95,16 +89,22 @@ function DeliveryHistory() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [period, setPeriod] = useState<(typeof periods)[number]["key"]>("week");
+  const [period, setPeriod] = useState<DateFilterValue>(() => presets.last7.value());
   const [slot, setSlot] = useState<(typeof slots)[number]["key"]>("all");
+
+  // History is loaded from 90 days back, or from the first calendar day picked if earlier.
+  const since = useMemo(() => {
+    const ninety = new Date();
+    ninety.setDate(ninety.getDate() - 90);
+    const floor = toDayKey(ninety);
+    return period?.from && period.from < floor ? period.from : floor;
+  }, [period]);
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
     setError("");
     try {
-      const since = new Date();
-      since.setDate(since.getDate() - 90);
-      setOrders(await fetchDeliveryHistory(toDayKey(since)));
+      setOrders(await fetchDeliveryHistory(since));
     } catch (cause) {
       setError(errorMessage(cause, "Impossible de charger l’historique."));
     } finally {
@@ -113,31 +113,26 @@ function DeliveryHistory() {
     }
   }
 
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => { void reload(); }, [since]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
-    const selectedPeriod = periods.find((item) => item.key === period)!;
     const selectedSlot = slots.find((item) => item.key === slot)!;
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - selectedPeriod.days);
-    const end = period === "yesterday" ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : null;
     return orders.filter((order) => {
-      const deliveredAt = new Date(order.delivered_at);
-      const hour = deliveredAt.getHours();
-      return deliveredAt >= start && (!end || deliveredAt < end)
+      const hour = new Date(order.delivered_at).getHours();
+      return matchesDate(order.delivered_at, period)
         && hour >= selectedSlot.from && hour < selectedSlot.to
         && `${order.business_name} ${order.point_label} ${order.city}`.toLocaleLowerCase("fr").includes(term);
     });
   }, [orders, search, period, slot]);
 
-  const groups: FilterGroup[] = [
-    { title: "Période", options: periods.map(({ key, label }) => ({ key, label })), value: period, defaultValue: "week", onChange: (value) => setPeriod(value as typeof period) },
-    { title: "Heure de livraison", options: slots.map(({ key, label }) => ({ key, label })), value: slot, defaultValue: "all", onChange: (value) => setSlot(value as typeof slot) },
+  const filters: Filter[] = [
+    { kind: "date", title: "Livrées le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: period, onChange: setPeriod },
+    { kind: "choice", title: "Heure", options: slots.map(({ key, label }) => ({ key, label })), value: slot, defaultValue: "all", onChange: (value) => setSlot(value as typeof slot) },
   ];
 
   return <View style={{ flex: 1 }}>
-    <FilterPanel search={search} onSearch={setSearch} placeholder="Client ou ville" groups={groups} />
+    <FilterBar search={search} onSearch={setSearch} placeholder="Client ou ville" filters={filters} />
     {loading ? <Loading /> : <FlatList
     data={visible}
     keyExtractor={(item) => item.id}

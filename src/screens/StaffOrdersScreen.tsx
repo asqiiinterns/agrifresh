@@ -5,42 +5,19 @@ import { formatClientNumber } from "../data/account";
 import { claimReasonLabel, claimStatusStyle, fetchClaims, updateClaim, type Claim, type ClaimStatus } from "../data/claims";
 import { deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/orders";
 import { executionQueue, fetchAllOrders, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
-import { FilterPanel, type FilterGroup } from "../ui/FilterPanel";
-import { PlanningModal } from "./PlanningModal";
+import { FilterBar, type Filter } from "../ui/FilterBar";
+import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
+import { PlanningScreen } from "./PlanningScreen";
 import { useCan, type Feature } from "../data/permissions";
 
 const actionFeature = (status: OrderStatus): Feature =>
   status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
-import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel, toDayKey } from "../ui/components";
+import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { OrderTimeline } from "../ui/OrderTimeline";
 import { colors, ui } from "../ui/theme";
 
 type Section = "decide" | "queue" | "claims" | "done";
-type DayFilter = "all" | "late" | "today" | "tomorrow" | "later" | "none";
-
-const dayOptions: { key: DayFilter; label: string }[] = [
-  { key: "all", label: "Tous" },
-  { key: "late", label: "En retard" },
-  { key: "today", label: "Aujourd’hui" },
-  { key: "tomorrow", label: "Demain" },
-  { key: "later", label: "Après-demain et plus" },
-  { key: "none", label: "Sans date" },
-];
-
-function matchesDay(order: StaffOrder, filter: DayFilter) {
-  if (filter === "all") return true;
-  const day = order.requested_delivery_date;
-  if (filter === "none") return !day;
-  if (!day) return false;
-  const today = new Date();
-  const todayKey = toDayKey(today);
-  const tomorrowKey = toDayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1));
-  if (filter === "late") return day < todayKey;
-  if (filter === "today") return day === todayKey;
-  if (filter === "tomorrow") return day === tomorrowKey;
-  return day > tomorrowKey;
-}
 
 export function StaffOrdersScreen() {
   const [orders, setOrders] = useState<StaffOrder[]>([]);
@@ -50,9 +27,10 @@ export function StaffOrdersScreen() {
   const [error, setError] = useState("");
   const [section, setSection] = useState<Section>("decide");
   const [search, setSearch] = useState("");
-  const [day, setDay] = useState<DayFilter>("all");
+  const [delivery, setDelivery] = useState<DateFilterValue>(null);
+  const [placed, setPlaced] = useState<DateFilterValue>(null);
   const [stage, setStage] = useState<string>("all");
-  const [planning, setPlanning] = useState<{ order: StaffOrder; mode: "accept" | "move" } | null>(null);
+  const [planning, setPlanning] = useState<{ focusId: string | null } | null>(null);
   const can = useCan();
 
   async function reload(mode: "initial" | "refresh" | "silent") {
@@ -91,12 +69,12 @@ export function StaffOrdersScreen() {
     return () => { void realtime.removeChannel(channel); };
   }, []);
 
-  // Search and delivery-day filters apply to every list.
+  // Search and date filters apply to every list.
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
-    return orders.filter((order) => matchesDay(order, day)
+    return orders.filter((order) => matchesDate(order.requested_delivery_date, delivery) && matchesDate(order.created_at, placed)
       && (!term || `${order.clients?.business_name ?? ""} ${order.address_snapshot?.point_label ?? ""} ${order.order_number}`.toLocaleLowerCase("fr").includes(term)));
-  }, [orders, search, day]);
+  }, [orders, search, delivery, placed]);
 
   const queue = useMemo(() => executionQueue(orders), [orders]);
   const positions = useMemo(() => new Map(queue.map((order, index) => [order.id, index + 1])), [queue]);
@@ -123,27 +101,45 @@ export function StaffOrdersScreen() {
     return filtered.filter((order) => (statusGroups.done as readonly string[]).includes(order.status));
   }, [filtered, section, stage, positions]);
 
-  const groups: FilterGroup[] = section === "claims" ? [] : [
-    { title: "Jour de livraison souhaité", options: dayOptions, value: day, defaultValue: "all", onChange: (value) => setDay(value as DayFilter) },
+  const filters: Filter[] = [
+    { kind: "date", title: "Livraison", presets: [presets.late, presets.today, presets.tomorrow, presets.next7, presets.noDate], value: delivery, onChange: setDelivery },
     ...(section === "queue" ? [{
+      kind: "choice" as const,
       title: "Étape",
       options: [{ key: "all", label: "Toutes" }, ...statusGroups.progress.map((status) => ({ key: status, label: statusLabel(status), count: inProgress.filter((order) => order.status === status).length }))],
       value: stage,
       defaultValue: "all",
       onChange: setStage,
     }] : []),
+    ...(section === "done" ? [{ kind: "date" as const, title: "Passée le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: placed, onChange: setPlaced }] : []),
   ];
+
+  // Accepting puts the order at the end of the queue, then opens the queue to place it.
+  async function accept(order: StaffOrder) {
+    try {
+      await updateOrderStatus(order.id, "confirmed");
+      await reload("silent");
+      if (can("orders.plan")) setPlanning({ focusId: order.id });
+      else notify("Commande acceptée", `La commande #${order.order_number} est en fin de file de production.`);
+    } catch (cause) {
+      notify("Mise à jour impossible", errorMessage(cause, "La commande n’a pas pu être acceptée."));
+    }
+  }
 
   const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />;
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow={`${decide.length} À DÉCIDER · ${queue.length} EN FILE · ${openClaims.length} RÉCLAMATION(S)`} title="Commandes" />
+    <ScreenHeader
+      eyebrow={`${decide.length} À DÉCIDER · ${queue.length} EN FILE · ${openClaims.length} RÉCLAMATION(S)`}
+      title="Commandes"
+      right={can("orders.plan") && queue.length ? <Button label="PLANIFIER" variant="secondary" onPress={() => setPlanning({ focusId: null })} /> : undefined}
+    />
     <View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         {sections.map((item) => <Chip key={item.key} label={item.label} selected={section === item.key} onPress={() => setSection(item.key)} />)}
       </ScrollView>
     </View>
-    {section !== "claims" ? <FilterPanel search={search} onSearch={setSearch} placeholder="Client, point de livraison ou n°" groups={groups} /> : null}
+    {section !== "claims" ? <FilterBar search={search} onSearch={setSearch} placeholder="Client, point de livraison ou n°" filters={filters} /> : null}
 
     {loading ? <Loading /> : section === "claims" ? <ClaimsView claims={claims} refreshControl={refresh} onChanged={() => void reload("silent")} />
       : <FlatList
@@ -152,31 +148,24 @@ export function StaffOrdersScreen() {
         contentContainerStyle={ui.content}
         refreshControl={refresh}
         ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
-          : section === "queue" ? <Text style={[ui.small, { marginTop: 8 }]}>Ordre d’exécution de la production. « Déplacer » change la place d’une commande.</Text> : null}
+          : section === "queue" ? <Text style={[ui.small, { marginTop: 8 }]}>Ordre d’exécution de la production. « Planifier » ouvre la file pour monter, descendre ou insérer une commande.</Text> : null}
         ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body="Aucune commande ne correspond à ces filtres." />}
         renderItem={({ item }) => <OrderCard
           order={item}
           position={positions.get(item.id)}
           claims={claims.filter((claim) => claim.order_id === item.id)}
-          onPlan={(mode) => {
-            // Without the planning right, an accepted order simply joins the end of the queue.
-            if (mode === "accept" && !can("orders.plan")) {
-              void updateOrderStatus(item.id, "confirmed").then(() => reload("silent")).catch((cause: unknown) => notify("Mise à jour impossible", errorMessage(cause, "La commande n’a pas pu être acceptée.")));
-              return;
-            }
-            setPlanning({ order: item, mode });
-          }}
+          onPlan={(mode) => { if (mode === "accept") void accept(item); else setPlanning({ focusId: item.id }); }}
           onChanged={() => void reload("silent")}
           onLocalUpdate={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))}
         />}
       />}
 
-    <PlanningModal
-      order={planning?.order ?? null}
+    <PlanningScreen
+      visible={planning !== null}
+      focusId={planning?.focusId ?? null}
       queue={queue}
-      mode={planning?.mode ?? "accept"}
       onClose={() => setPlanning(null)}
-      onDone={() => { setPlanning(null); void reload("silent"); }}
+      onChanged={() => reload("silent")}
     />
   </View>;
 }
@@ -290,7 +279,7 @@ function OrderCard({ order, position, claims, onPlan, onChanged, onLocalUpdate }
 
     <View style={styles.actions}>
       {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
-      {position && can("orders.plan") ? <Button label="DÉPLACER" variant="secondary" onPress={() => onPlan("move")} /> : null}
+      {position && can("orders.plan") ? <Button label="PLANIFIER" variant="secondary" onPress={() => onPlan("move")} /> : null}
       {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => void printDeliveryNote()} /> : null}
     </View>
     {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En attente des scans du livreur (bon de livraison + QR client).</Text> : null}

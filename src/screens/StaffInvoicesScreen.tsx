@@ -8,6 +8,8 @@ import { deliveryNoteNumber, type Order } from "../data/orders";
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDay, formatPrice } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { FilterBar, type Filter } from "../ui/FilterBar";
+import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 
 const statusFilters = [
   { key: "all", label: "Toutes" },
@@ -37,7 +39,8 @@ export function StaffInvoicesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<(typeof statusFilters)[number]["key"]>("all");
+  const [filter, setFilter] = useState<string>("all");
+  const [issued, setIssued] = useState<DateFilterValue>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
 
@@ -60,22 +63,20 @@ export function StaffInvoicesScreen() {
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
     return invoices.filter((invoice) => (filter === "all" || invoice.status === filter)
+      && matchesDate(invoice.issued_at, issued)
       && `${invoice.invoice_number ?? "brouillon"} ${invoice.client_snapshot.business_name}`.toLocaleLowerCase("fr").includes(term));
-  }, [invoices, search, filter]);
+  }, [invoices, search, filter, issued]);
+  const listFilters: Filter[] = [
+    { kind: "choice", title: "Statut", options: statusFilters.map((item) => ({ key: item.key, label: item.label, count: item.key === "all" ? invoices.length : invoices.filter((invoice) => invoice.status === item.key).length })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "date", title: "Émise le", presets: [presets.today, presets.last7, presets.last30], value: issued, onChange: setIssued },
+  ];
   const outstanding = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
   const drafts = invoices.filter((invoice) => invoice.status === "draft").length;
   const opened = invoices.find((invoice) => invoice.id === openId) ?? null;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`À ENCAISSER : ${formatPrice(outstanding)}${drafts ? ` · ${drafts} BROUILLON(S)` : ""}`} title="Factures" right={<Button label="+ FACTURER" onPress={() => setEditor({ mode: "new" })} />} />
-    <View style={{ paddingHorizontal: 18, paddingTop: 12 }}>
-      <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client ou un numéro" placeholderTextColor={colors.muted} style={ui.input} />
-    </View>
-    <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {statusFilters.map((item) => <Chip key={item.key} label={item.label} selected={filter === item.key} onPress={() => setFilter(item.key)} />)}
-      </ScrollView>
-    </View>
+    <FilterBar search={search} onSearch={setSearch} placeholder="Client ou numéro de facture" filters={listFilters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(invoice) => invoice.id}

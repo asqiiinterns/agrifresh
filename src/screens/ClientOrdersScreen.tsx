@@ -7,6 +7,8 @@ import type { ClientSummary } from "../data/account";
 import { deliveryNoteNumber, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type Order } from "../data/orders";
 import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
 import { OrderTimeline } from "../ui/OrderTimeline";
+import { FilterBar, type Filter } from "../ui/FilterBar";
+import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { useCan } from "../data/permissions";
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
@@ -29,7 +31,9 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [sharingId, setSharingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<(typeof filters)[number]["key"]>("all");
+  const [filter, setFilter] = useState<string>("all");
+  const [placed, setPlaced] = useState<DateFilterValue>(null);
+  const [search, setSearch] = useState("");
   const [receptionVisible, setReceptionVisible] = useState(false);
   const statusesRef = useRef<Record<string, string>>({});
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -107,8 +111,15 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
   const counts = useMemo(() => Object.fromEntries(filters.map((item) => [item.key, item.statuses
     ? orders.filter((order) => (item.statuses as readonly string[]).includes(order.status)).length
     : orders.length])), [orders]);
-  const selected = filters.find((item) => item.key === filter)!;
-  const visible = selected.statuses ? orders.filter((order) => (selected.statuses as readonly string[]).includes(order.status)) : orders;
+  const selected = filters.find((item) => item.key === filter) ?? filters[0];
+  const term = search.trim().toLocaleLowerCase("fr");
+  const visible = orders.filter((order) => (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
+    && matchesDate(order.created_at, placed)
+    && (!term || `${order.order_number} ${order.order_items.map((line) => line.product_name_snapshot).join(" ")}`.toLocaleLowerCase("fr").includes(term)));
+  const listFilters: Filter[] = [
+    { kind: "choice", title: "Statut", options: filters.map((item) => ({ key: item.key, label: item.label, count: counts[item.key] ?? 0 })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "date", title: "Passée le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: placed, onChange: setPlaced },
+  ];
   const shippedCount = counts.shipped ?? 0;
 
   return <View style={ui.screen}>
@@ -117,11 +128,7 @@ export function ClientOrdersScreen({ session, client }: { session: Session; clie
       title="Mes commandes"
       right={client.reception_qr && client.reception_token ? <Button label="QR RÉCEPTION" onPress={() => setReceptionVisible(true)} /> : undefined}
     />
-    <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {filters.map((item) => <Chip key={item.key} label={`${item.label} (${counts[item.key] ?? 0})`} selected={filter === item.key} onPress={() => setFilter(item.key)} />)}
-      </ScrollView>
-    </View>
+    <FilterBar search={search} onSearch={setSearch} placeholder="N° de commande ou produit" filters={listFilters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(order) => order.id}

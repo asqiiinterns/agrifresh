@@ -40,6 +40,7 @@ export type Account = {
   full_name: string;
   // Features enabled for this account (see role_permissions); admins get all of them.
   features: string[];
+  disabled?: boolean;
   client: ClientSummary | null;
 };
 

@@ -34,3 +34,9 @@ export const supabase = isSupabaseConfigured
       },
     })
   : null;
+
+// A throwaway client without stored session: lets an admin create someone else's account
+// (sign-up) without replacing the admin's own session.
+export const createIsolatedClient = () => isSupabaseConfigured
+  ? createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "agrifresh-admin-signup" } })
+  : null;

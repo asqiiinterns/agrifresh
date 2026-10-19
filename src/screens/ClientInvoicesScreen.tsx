@@ -6,6 +6,8 @@ import { Button, Chip, EmptyState, Loading, ScreenHeader, formatDay, formatPrice
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { InvoiceBadge } from "./StaffInvoicesScreen";
+import { FilterBar, type Filter } from "../ui/FilterBar";
+import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 
 const filters = [
   { key: "all", label: "Toutes" },
@@ -19,7 +21,8 @@ export function ClientInvoicesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<(typeof filters)[number]["key"]>("all");
+  const [filter, setFilter] = useState<string>("all");
+  const [issued, setIssued] = useState<DateFilterValue>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
   async function reload(refresh = false) {
@@ -48,16 +51,16 @@ export function ClientInvoicesScreen() {
     }
   }
 
-  const visible = filter === "all" ? invoices : invoices.filter((invoice) => invoice.status === filter);
+  const visible = invoices.filter((invoice) => (filter === "all" || invoice.status === filter) && matchesDate(invoice.issued_at, issued));
+  const listFilters: Filter[] = [
+    { kind: "choice", title: "Statut", options: filters.map((item) => ({ key: item.key, label: item.label })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "date", title: "Émise le", presets: [presets.last7, presets.last30], value: issued, onChange: setIssued },
+  ];
   const due = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={due ? `À RÉGLER : ${formatPrice(due)}` : "VOS DOCUMENTS"} title="Mes factures" />
-    <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {filters.map((item) => <Chip key={item.key} label={item.label} selected={filter === item.key} onPress={() => setFilter(item.key)} />)}
-      </ScrollView>
-    </View>
+    <FilterBar filters={listFilters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(invoice) => invoice.id}

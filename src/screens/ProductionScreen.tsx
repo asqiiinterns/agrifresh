@@ -4,40 +4,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { executionQueue, fetchAllOrders, preparationTotals, updateOrderStatus, type StaffOrder } from "../data/staff";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
-import { FilterPanel, type FilterGroup } from "../ui/FilterPanel";
+import { FilterBar, type Filter } from "../ui/FilterBar";
+import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { useCan } from "../data/permissions";
 
 type Tab = "totals" | "queue" | "history";
-
-const deliveryDays = [
-  { key: "all", label: "Tous" },
-  { key: "late-today", label: "Jusqu’à aujourd’hui" },
-  { key: "tomorrow", label: "Demain" },
-  { key: "later", label: "Plus tard" },
-  { key: "none", label: "Sans date" },
-];
-
-const historyPeriods = [
-  { key: "today", label: "Aujourd’hui", days: 0 },
-  { key: "yesterday", label: "Hier", days: 1 },
-  { key: "week", label: "7 jours", days: 7 },
-  { key: "month", label: "30 jours", days: 30 },
-];
-
-function matchesDelivery(order: StaffOrder, filter: string) {
-  if (filter === "all") return true;
-  const day = order.requested_delivery_date;
-  if (filter === "none") return !day;
-  if (!day) return false;
-  const today = new Date();
-  const todayKey = toDayKey(today);
-  const tomorrowKey = toDayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1));
-  if (filter === "late-today") return day <= todayKey;
-  if (filter === "tomorrow") return day === tomorrowKey;
-  return day > tomorrowKey;
-}
 
 // When the order was marked ready ("Préparée"), from its status history.
 const preparedAt = (order: StaffOrder) => [...(order.order_status_history ?? [])]
@@ -51,8 +24,8 @@ export function ProductionScreen() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("totals");
   const [search, setSearch] = useState("");
-  const [delivery, setDelivery] = useState("all");
-  const [period, setPeriod] = useState("today");
+  const [delivery, setDelivery] = useState<DateFilterValue>(null);
+  const [prepared, setPrepared] = useState<DateFilterValue>(() => presets.today.value());
 
   async function reload(mode: "initial" | "refresh" | "silent") {
     if (mode === "initial") setLoading(true);
@@ -83,25 +56,21 @@ export function ProductionScreen() {
   const matchesSearch = (order: StaffOrder) => !term
     || `${order.clients?.business_name ?? ""} ${order.address_snapshot?.point_label ?? ""} ${order.order_number} ${order.order_items.map((line) => line.product_name_snapshot).join(" ")}`.toLocaleLowerCase("fr").includes(term);
 
-  const queue = useMemo(() => executionQueue(orders).filter((order) => matchesDelivery(order, delivery) && matchesSearch(order)), [orders, delivery, term]);
+  const queue = useMemo(() => executionQueue(orders).filter((order) => matchesDate(order.requested_delivery_date, delivery) && matchesSearch(order)), [orders, delivery, term]);
   const toPrepare = queue.filter((order) => order.status === "confirmed" || order.status === "preparing");
   const history = useMemo(() => {
-    const selected = historyPeriods.find((item) => item.key === period)!;
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - selected.days);
-    const end = period === "yesterday" ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : null;
     return orders
       .map((order) => ({ order, at: preparedAt(order) }))
       .filter((entry): entry is { order: StaffOrder; at: string } => entry.at !== null
         && ["ready", "out_for_delivery", "delivered"].includes(entry.order.status)
-        && new Date(entry.at) >= start && (!end || new Date(entry.at) < end)
+        && matchesDate(entry.at, prepared)
         && matchesSearch(entry.order))
       .sort((a, b) => b.at.localeCompare(a.at));
-  }, [orders, period, term]);
+  }, [orders, prepared, term]);
 
-  const groups: FilterGroup[] = tab === "history"
-    ? [{ title: "Préparées", options: historyPeriods, value: period, defaultValue: "today", onChange: setPeriod }]
-    : [{ title: "Livraison souhaitée", options: deliveryDays, value: delivery, defaultValue: "all", onChange: setDelivery }];
+  const filters: Filter[] = tab === "history"
+    ? [{ kind: "date", title: "Préparées le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: prepared, onChange: setPrepared }]
+    : [{ kind: "date", title: "Livraison", presets: [presets.late, presets.today, presets.tomorrow, presets.next7, presets.noDate], value: delivery, onChange: setDelivery }];
 
   const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />;
 
@@ -114,7 +83,7 @@ export function ProductionScreen() {
         <Chip label="Historique" selected={tab === "history"} onPress={() => setTab("history")} />
       </ScrollView>
     </View>
-    <FilterPanel search={search} onSearch={setSearch} placeholder="Produit, client ou n° de commande" groups={groups} />
+    <FilterBar search={search} onSearch={setSearch} placeholder="Produit, client ou n° de commande" filters={filters} />
     {error ? <Text style={[ui.error, { paddingHorizontal: 18, marginTop: 8 }]}>{error}</Text> : null}
 
     {loading ? <Loading /> : tab === "totals" ? <TotalsView orders={toPrepare} refreshControl={refresh} />

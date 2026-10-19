@@ -7,7 +7,6 @@ import { Button, Field, ScreenHeader } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
-import { TeamModal } from "./TeamScreen";
 import { useCan } from "../data/permissions";
 
 export function AccountScreen({ session, account }: { session: Session; account: Account | null }) {
@@ -16,9 +15,8 @@ export function AccountScreen({ session, account }: { session: Session; account:
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [productsVisible, setProductsVisible] = useState(false);
-  const isStaff = useCan()("products.manage");
-  const isAdmin = account?.role === "admin";
-  const [teamVisible, setTeamVisible] = useState(false);
+  // Admins manage products from the Admin tab; other profiles with the right do it here.
+  const isStaff = useCan()("products.manage") && account?.role !== "admin";
 
   async function changePassword() {
     if (!supabase) return;
@@ -62,11 +60,7 @@ export function AccountScreen({ session, account }: { session: Session; account:
         <Button label="GÉRER LES PRODUITS" onPress={() => setProductsVisible(true)} style={{ marginTop: 10 }} />
       </View> : null}
 
-      {isAdmin ? <View style={ui.card}>
-        <Text style={ui.strong}>Équipe</Text>
-        <Text style={ui.small}>Administrateurs, superviseurs, production et livreurs.</Text>
-        <Button label="GÉRER L’ÉQUIPE" onPress={() => setTeamVisible(true)} style={{ marginTop: 10 }} />
-      </View> : null}
+
 
       <View style={ui.card}>
         <Text style={ui.strong}>Changer mon mot de passe</Text>
@@ -81,6 +75,5 @@ export function AccountScreen({ session, account }: { session: Session; account:
       <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 20 }} />
     </ScrollView>
     {isStaff ? <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} /> : null}
-    {isAdmin ? <TeamModal visible={teamVisible} onClose={() => setTeamVisible(false)} /> : null}
   </View>;
 }

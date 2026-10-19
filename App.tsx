@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { PermissionsContext } from "./src/data/permissions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
+import { AdminScreen } from "./src/screens/AdminScreen";
 import { countUnread } from "./src/data/messages";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
@@ -22,7 +23,7 @@ import { Button, EmptyState, Loading } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
 
-type TabKey = "order" | "orders" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "account";
+type TabKey = "order" | "orders" | "production" | "messages" | "clients" | "invoices" | "deliveries" | "admin" | "account";
 type TabDef = { key: TabKey; label: string; icon: string };
 
 const TAB = {
@@ -33,6 +34,7 @@ const TAB = {
   clients: { key: "clients", label: "Clients", icon: "☷" },
   invoices: { key: "invoices", label: "Factures", icon: "€" },
   messages: { key: "messages", label: "Messages", icon: "✉" },
+  admin: { key: "admin", label: "Admin", icon: "⚒" },
   account: { key: "account", label: "Compte", icon: "◉" },
 } satisfies Record<TabKey, TabDef>;
 
@@ -50,6 +52,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   if (has("clients.view")) tabs.push(TAB.clients);
   if (has("invoices.manage")) tabs.push(TAB.invoices);
   if (has("messages.manage")) tabs.push(TAB.messages);
+  if (account.role === "admin") tabs.push(TAB.admin);
   tabs.push(TAB.account);
   return { kind: "team", tabs };
 }
@@ -187,6 +190,13 @@ function Main({ session }: { session: Session }) {
       : <Loading label="Chargement de votre espace…" />;
   }
 
+  if (account.disabled) {
+    return <View style={{ flex: 1 }}>
+      <EmptyState title="Compte désactivé" body="Votre accès a été désactivé par AgriFresh. Contactez l’administrateur pour le réactiver." />
+      <AccountScreen session={session} account={account} />
+    </View>;
+  }
+
   function renderTab() {
     if (!account) return null;
     switch (current) {
@@ -204,6 +214,8 @@ function Main({ session }: { session: Session }) {
         return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
       case "deliveries":
         return <DriverScreen />;
+      case "admin":
+        return <AdminScreen />;
       default:
         return <View style={{ flex: 1 }}>
           {kind === "unlinked" ? <View style={[ui.card, { marginHorizontal: 18, marginTop: 18 }]}>
@@ -218,7 +230,7 @@ function Main({ session }: { session: Session }) {
 
   return <PermissionsContext.Provider value={permissions}>
     <View style={{ flex: 1 }}>{renderTab()}</View>
-    {tabs.length > 1 ? <View style={styles.tabBar}>
+    {tabs.length > 1 ? <ScrollView horizontal={tabs.length > 6} scrollEnabled={tabs.length > 6} showsHorizontalScrollIndicator={false} style={styles.tabBarWrap} contentContainerStyle={[styles.tabBar, tabs.length <= 6 && { flex: 1 }]}>
       {tabs.map((item) => {
         const selected = item.key === current;
         return <Pressable key={item.key} onPress={() => setTab(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }}>
@@ -229,7 +241,7 @@ function Main({ session }: { session: Session }) {
           <Text style={[styles.tabLabel, selected && styles.tabActive]}>{item.label}</Text>
         </Pressable>;
       })}
-    </View> : null}
+    </ScrollView> : null}
   </PermissionsContext.Provider>;
 }
 
@@ -251,8 +263,9 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper, paddingTop: 6, paddingBottom: 4 },
-  tab: { flex: 1, alignItems: "center", gap: 2, paddingVertical: 4 },
+  tabBarWrap: { flexGrow: 0, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
+  tabBar: { flexDirection: "row", paddingTop: 6, paddingBottom: 4 },
+  tab: { flex: 1, minWidth: 64, alignItems: "center", gap: 2, paddingVertical: 4, paddingHorizontal: 4 },
   tabIcon: { color: "#92998f", fontSize: 20, lineHeight: 24, textAlign: "center" },
   tabLabel: { color: "#92998f", fontSize: 10, fontWeight: "600" },
   tabActive: { color: colors.green, fontWeight: "800" },
