@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">AgriFresh</string>
-    <string name="title_activity_main">AgriFresh</string>
-    <string name="package_name">com.agrifresh.app</string>
-    <string name="custom_url_scheme">com.agrifresh.app</string>
-</resources>

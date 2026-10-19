@@ -39,6 +39,11 @@ L'application accède à la base via l'API Supabase et les règles RLS; elle n'o
 
 Le profil `preview` dans `eas.json` produit un `.apk` distribuable directement pour les tests. Le profil `production` produit un Android App Bundle (`.aab`) pour Google Play. Une adhésion Google Play est requise uniquement pour publier sur le store.
 
+## Générer l'APK sur ce PC (sans EAS)
+`npm.cmd run apk` compile l'APK localement (Android Studio installé : son SDK est utilisé, et un Java 17 portable est téléchargé une seule fois). L'APK arrive dans `dist-apk/`.
+
+La signature utilise la clé EAS pour que l'appli se mette à jour par-dessus l'installation existante : récupère-la une fois avec `npx.cmd eas-cli@latest credentials` → Android → preview → « credentials.json » → « Download credentials from EAS to credentials.json ». `credentials.json` et le dossier `credentials/` restent hors de git ; garde-en une copie de sauvegarde. Sans eux, `npm.cmd run apk -- --debug-sign` produit un APK de test (désinstaller l'appli avant de l'installer).
+
 ## Déployer la version web Expo sur Vercel
 1. Dans Vercel, importe le dépôt GitHub et choisis la branche `expo-react-native`. Le fichier `vercel.json` configure `npm ci`, `npm run build:web` et le dossier `dist`.
 2. Dans **Project Settings → Environment Variables**, ajoute `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` pour **Production**, **Preview** et **Development** selon les environnements utilisés. Vercel ne lit pas `.env.local` du poste de développement.
