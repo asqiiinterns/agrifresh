@@ -1,6 +1,10 @@
 -- Photos, videos, voice notes and documents in client and team messages (Supabase Storage).
--- Run in Supabase SQL Editor AFTER 20261031_billing_decisions.sql. Safe to rerun.
+-- Run in Supabase SQL Editor AFTER 20261031_billing_decisions.sql. Safe to rerun (then run 20261102 again).
 -- Files go to the private bucket "attachments": client/<client id>/… or team/<conversation id>/…
+
+-- If 20261102 was already run, remove its newer versions first (20261102 must be run again afterwards).
+drop function if exists public.send_message_v2(uuid, text, jsonb, boolean);
+drop function if exists public.team_send_message_v2(uuid, text, jsonb, boolean);
 
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('attachments', 'attachments', false, 26214400)
