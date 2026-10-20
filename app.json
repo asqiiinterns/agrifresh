@@ -62,6 +62,12 @@
           "cameraPermission": "AgriFresh utilise l’appareil photo pour joindre une photo ou une vidéo à un message.",
           "microphonePermission": "AgriFresh utilise le micro pour enregistrer des vidéos."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AgriFresh partage votre position avec l’administration uniquement si vous l’avez accepté, et seulement quand l’application est ouverte."
+        }
       ]
     ],
     "icon": "./assets/icon.png"

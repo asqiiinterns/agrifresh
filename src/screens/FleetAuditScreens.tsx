@@ -4,6 +4,8 @@ import { Text } from "../ui/Text";
 import { actionLabels, describeChanges, entityLabels, fetchAudit, type AuditEntry } from "../data/audit";
 import { roleLabels, type Role } from "../data/account";
 import { fetchVehicles, saveVehicle, type Vehicle, type VehicleInput } from "../data/fleet";
+import { fetchTeamLocations, type TeamLocation } from "../data/workplace";
+import { Linking } from "react-native";
 import { BackButton, Button, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime, toDayKey } from "../ui/components";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
@@ -82,6 +84,49 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
         />)}
       </ListGroup> : <EmptyState title="Aucun véhicule" body="Ajoutez les véhicules de livraison : le livreur les choisira à l’expédition." />}
     </ScrollView>}
+  </View>;
+}
+
+// Where connected accounts are (last position, only for those who agreed to share it).
+export function LocationPage({ onBack }: { onBack: () => void }) {
+  const [people, setPeople] = useState<TeamLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  async function reload(refresh = false) {
+    if (refresh) setRefreshing(true);
+    try {
+      setPeople(await fetchTeamLocations());
+    } catch (cause) {
+      setError(errorMessage(cause, "Impossible de charger les positions. La migration 20261103 est-elle exécutée ?"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+  useEffect(() => { void reload(); }, []);
+
+  const ago = (iso: string) => {
+    const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    return minutes < 60 ? `il y a ${minutes} min` : minutes < 1440 ? `il y a ${Math.round(minutes / 60)} h` : formatDateTime(iso);
+  };
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="POSITION DES COMPTES" title="Localisation" right={<BackButton label="Admin" onPress={onBack} />} />
+    {loading ? <Loading /> : <FlatList
+      data={people}
+      keyExtractor={(item) => item.user_id}
+      contentContainerStyle={ui.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || "Seuls les comptes dont le profil le permet (Paramétrage → Personnel) et qui ont donné leur accord partagent leur position, quand l’application est ouverte."}</Text>}
+      renderItem={({ item }) => <View style={[ui.card, ui.row]}>
+        <View style={{ flex: 1 }}>
+          <Text style={ui.strong}>{item.name}</Text>
+          <Text style={ui.small}>{roleLabels[item.role as Role] ?? item.role} · {item.latitude !== null && item.updated_at ? `vu ${ago(item.updated_at)}${item.accuracy ? ` · ±${Math.round(item.accuracy)} m` : ""}` : item.consent ? "accord donné, pas encore de position" : "ne partage pas sa position"}</Text>
+        </View>
+        {item.latitude !== null && item.longitude !== null ? <Button label="CARTE" variant="secondary" onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)} /> : null}
+      </View>}
+    />}
   </View>;
 }
 

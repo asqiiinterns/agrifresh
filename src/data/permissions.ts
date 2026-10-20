@@ -6,7 +6,8 @@ export type Feature =
   | "home.view" | "alerts.view" | "orders.view"
   | "orders.decide" | "orders.plan" | "orders.ship" | "orders.create" | "production.view" | "production.update"
   | "clients.view" | "clients.edit" | "clients.create" | "invoices.manage" | "products.manage"
-  | "messages.manage" | "team.messages" | "claims.manage" | "returns.manage" | "client.returns" | "deliveries" | "fleet.manage" | "audit.view"
+  | "messages.manage" | "team.messages" | "claims.manage" | "returns.manage" | "client.returns"
+  | "location.share" | "location.view" | "leave.request" | "leave.manage" | "calendar.view" | "incidents.report" | "incidents.manage" | "stats.view" | "deliveries" | "fleet.manage" | "audit.view"
   | "client.home" | "client.order" | "client.orders" | "client.alerts"
   | "client.invoices" | "client.messages" | "client.claims";
 
@@ -48,6 +49,20 @@ export const featureBlocks: SettingsBlock[] = [
   ] },
   { key: "returns", title: "Retours et avoirs", icon: "return-down-back-outline", audience: "team", items: [
     { key: "returns.manage", label: "Gérer les retours et les avoirs" },
+  ] },
+  { key: "staff", title: "Personnel", icon: "people-circle-outline", audience: "team", items: [
+    { key: "leave.request", label: "Demander des congés" },
+    { key: "leave.manage", label: "Valider les congés" },
+    { key: "calendar.view", label: "Calendrier et rappels" },
+    { key: "location.share", label: "Partager sa position (avec son accord)" },
+    { key: "location.view", label: "Voir la position des comptes" },
+  ] },
+  { key: "incidents", title: "Incidents", icon: "warning-outline", audience: "team", items: [
+    { key: "incidents.report", label: "Signaler un incident (livraison, véhicule)" },
+    { key: "incidents.manage", label: "Traiter les incidents" },
+  ] },
+  { key: "stats", title: "Statistiques", icon: "stats-chart-outline", audience: "team", items: [
+    { key: "stats.view", label: "Consulter les statistiques" },
   ] },
   { key: "audit", title: "Traçabilité", icon: "time-outline", audience: "team", items: [
     { key: "audit.view", label: "Consulter le journal des actions" },

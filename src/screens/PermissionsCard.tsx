@@ -5,9 +5,14 @@ import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import { AudioModule } from "expo-audio";
 import { Camera } from "expo-camera";
+import * as Location from "expo-location";
 import { Text } from "../ui/Text";
 import { Button } from "../ui/components";
 import { registerForPush } from "../notifications";
+import { Switch } from "react-native";
+import { useCan } from "../data/permissions";
+import { fetchMyLocationConsent, setLocationConsent } from "../data/workplace";
+import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
 type State = "granted" | "denied" | "blocked" | "undetermined";
@@ -20,6 +25,8 @@ const accesses: Access[] = [
     get: () => ImagePicker.getMediaLibraryPermissionsAsync(), ask: () => ImagePicker.requestMediaLibraryPermissionsAsync() },
   { key: "micro", label: "Micro", use: "Enregistrer un message vocal.", icon: "mic-outline",
     get: () => AudioModule.getRecordingPermissionsAsync(), ask: () => AudioModule.requestRecordingPermissionsAsync() },
+  { key: "location", label: "Localisation", use: "Seulement si vous acceptez de partager votre position (ci-dessous).", icon: "location-outline",
+    get: () => Location.getForegroundPermissionsAsync(), ask: () => Location.requestForegroundPermissionsAsync() },
   { key: "notifications", label: "Notifications", use: "Recevoir les alertes sur l’écran de verrouillage.", icon: "notifications-outline",
     get: () => Notifications.getPermissionsAsync(), ask: () => registerForPush(true) },
 ];
@@ -34,6 +41,7 @@ const labels: Record<State, { text: string; color: string }> = {
 // Plus → Autorisations: the app works without them; each one is only asked for when needed.
 export function PermissionsCard() {
   const [states, setStates] = useState<Record<string, State>>({});
+  const canShare = useCan()("location.share");
 
   async function refresh() {
     const entries = await Promise.all(accesses.map(async (access) => {
@@ -51,13 +59,13 @@ export function PermissionsCard() {
   useEffect(() => { void refresh(); }, []);
 
   if (Platform.OS === "web") {
-    return <View style={ui.card}>
+    return <View>{canShare ? <LocationConsentCard /> : null}<View style={ui.card}>
       <Text style={ui.strong}>Autorisations</Text>
       <Text style={ui.small}>Sur le web, le navigateur demande l’accès à la caméra ou au micro au moment où vous en avez besoin. Vous pouvez le modifier dans les réglages du site de votre navigateur.</Text>
-    </View>;
+    </View></View>;
   }
 
-  return <View style={ui.card}>
+  return <View>{canShare ? <LocationConsentCard /> : null}<View style={ui.card}>
     <Text style={ui.strong}>Autorisations</Text>
     <Text style={ui.small}>AgriFresh fonctionne sans ces accès. Chacun n’est demandé qu’au moment où vous utilisez la fonction ; vous pouvez les accorder ou les retirer ici.</Text>
     {accesses.map((access) => {
@@ -73,5 +81,32 @@ export function PermissionsCard() {
           : <Button label="AUTORISER" variant="secondary" onPress={() => void access.ask().finally(() => void refresh())} />}
       </View>;
     })}
+  </View></View>;
+}
+
+// Explicit agreement to share one's position with the administration (withdrawing it erases the last position).
+function LocationConsentCard() {
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void fetchMyLocationConsent().then(setConsent).catch(() => {}); }, []);
+  async function toggle(value: boolean) {
+    setBusy(true);
+    try {
+      await setLocationConsent(value);
+      setConsent(value);
+    } catch (cause) {
+      notify("Localisation", errorMessage(cause, "Réglage impossible. La migration 20261103 est-elle exécutée ?"));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <View style={ui.card}>
+    <View style={ui.row}>
+      <View style={{ flex: 1 }}>
+        <Text style={ui.strong}>Partager ma position</Text>
+        <Text style={ui.small}>L’administration voit votre dernière position, uniquement quand l’application est ouverte. Vous pouvez arrêter à tout moment : votre position est alors effacée.</Text>
+      </View>
+      <Switch value={consent} disabled={busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.green, false: colors.line }} />
+    </View>
   </View>;
 }

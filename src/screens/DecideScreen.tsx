@@ -102,6 +102,14 @@ export function DecideScreen({ isAdmin, onCount }: { isAdmin: boolean; onCount: 
         {board.returns.map((item) => <ListRow key={item.id} icon="return-down-back-outline" title={item.clients?.business_name ?? "Client"} detail={`${item.return_number} · ${returnReasonLabel(item.reason)}`} onPress={() => navigate("returns", { back: "decide" })} />)}
       </ListGroup> : null}
 
+      {board.incidents.length ? <ListGroup title={`Incidents ouverts (${board.incidents.length})`}>
+        {board.incidents.map((item) => <ListRow key={item.id} icon="warning-outline" title={`${item.kind === "vehicle" ? "Véhicule" : "Livraison"} · ${item.category}`} detail={`${item.reporter?.full_name ?? ""} · ${item.description}`} onPress={() => navigate("incidents", { back: "decide" })} />)}
+      </ListGroup> : null}
+
+      {board.leaves.length ? <ListGroup title={`Congés à valider (${board.leaves.length})`}>
+        {board.leaves.map((item) => <ListRow key={item.id} icon="airplane-outline" title={item.name} detail={`Du ${formatDay(item.start_date)} au ${formatDay(item.end_date)}`} onPress={() => navigate("leaves", { back: "decide" })} />)}
+      </ListGroup> : null}
+
       {board.accounts ? <ListGroup title="Comptes">
         <ListRow icon="person-add-outline" title={`${board.accounts} compte(s) à valider`} onPress={() => navigate("admin", { page: "accounts", back: "decide" })} />
       </ListGroup> : null}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Modal, Pressable, RefreshControl, ScrollView, SectionList, StyleSheet, View } from "react-native";
+import { FlatList, Linking, Modal, Pressable, RefreshControl, ScrollView, SectionList, StyleSheet, View } from "react-native";
+import { useNav } from "../ui/navigation";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,7 +19,9 @@ import { colors, ui } from "../ui/theme";
 type Tab = "pickup" | "todo" | "history";
 
 export function DriverScreen() {
-  const canShip = useCan()("orders.ship");
+  const can = useCan();
+  const canShip = can("orders.ship");
+  const { navigate } = useNav();
   const [tab, setTab] = useState<Tab>(canShip ? "pickup" : "todo");
   // Hand-overs to do, one group per client, done one after the other.
   const [handover, setHandover] = useState<Shipment[][] | null>(null);
@@ -35,7 +38,10 @@ export function DriverScreen() {
     <ScreenHeader
       eyebrow="ESPACE LIVREUR"
       title="Livraisons"
-      right={tab === "todo" ? <Button label="SCANNER" onPress={() => setHandover([[]])} /> : undefined}
+      right={<View style={[ui.row, { gap: 6 }]}>
+        {can("incidents.report") ? <Button label="INCIDENT" variant="secondary" onPress={() => navigate("incidents", { back: "deliveries" })} /> : null}
+        {tab === "todo" ? <Button label="SCANNER" onPress={() => setHandover([[]])} /> : null}
+      </View>}
     />
     <Sheets items={tabs} value={tab} onChange={setTab} />
     {tab === "pickup" ? <PickupList key={`pickup-${refreshKey}`} onShipped={bump} />
@@ -411,7 +417,9 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
       {!permission ? <Loading /> : !permission.granted ? <EmptyState
         title="Accès à la caméra"
         body="La caméra sert uniquement à lire les QR codes des bons de livraison et des clients."
-        action={<Button label="AUTORISER LA CAMÉRA" onPress={() => void requestPermission()} />}
+        action={permission.canAskAgain
+          ? <Button label="AUTORISER LA CAMÉRA" onPress={() => void requestPermission()} />
+          : <Button label="OUVRIR LES RÉGLAGES DU TÉLÉPHONE" onPress={() => void Linking.openSettings()} />}
       /> : <View style={{ flex: 1 }}>
         <View style={styles.cameraFrame}>
           <CameraView

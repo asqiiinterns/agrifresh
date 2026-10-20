@@ -5,6 +5,7 @@ import { fetchBillingBoard, type BillingBoard } from "./invoices";
 import type { Feature } from "./permissions";
 import { fetchReturns, type ProductReturn } from "./returns";
 import { fetchAllOrders, type StaffOrder } from "./staff";
+import { fetchIncidents, fetchLeaves, type Incident, type Leave } from "./workplace";
 
 export type WaitingMessages = {
   clients: { client_id: string; business_name: string; count: number; since: string; last_body: string }[];
@@ -21,10 +22,12 @@ export type DecisionBoard = {
   billing: BillingBoard;
   returns: ProductReturn[];
   accounts: number;
+  leaves: Leave[];
+  incidents: Incident[];
 };
 
 export const decisionCount = (board: DecisionBoard) => board.toDecide.length + board.special.length + board.reschedule.length + board.claims.length
-  + board.messages.clients.length + board.messages.team.length + board.billing.due.length + board.billing.overdue.length + board.returns.length + board.accounts;
+  + board.messages.clients.length + board.messages.team.length + board.billing.due.length + board.billing.overdue.length + board.returns.length + board.accounts + board.leaves.length + board.incidents.length;
 
 async function fetchWaitingMessages(): Promise<WaitingMessages> {
   if (!supabase) return { clients: [], team: [] };
@@ -43,6 +46,11 @@ export async function fetchDecisionBoard(can: (feature: Feature) => boolean, isA
     can("returns.manage") ? fetchReturns().catch(() => [] as ProductReturn[]) : Promise.resolve([] as ProductReturn[]),
     isAdmin ? fetchAccounts().catch(() => []) : Promise.resolve([]),
   ]);
+  const today = new Date().toISOString().slice(0, 10);
+  const [leaves, incidents] = await Promise.all([
+    can("leave.manage") || isAdmin ? fetchLeaves(today, "2100-01-01").catch(() => [] as Leave[]) : Promise.resolve([] as Leave[]),
+    can("incidents.manage") ? fetchIncidents().catch(() => [] as Incident[]) : Promise.resolve([] as Incident[]),
+  ]);
   return {
     toDecide: can("orders.decide") ? orders.filter((order) => ["pending", "on_hold", "awaiting_client"].includes(order.status)) : [],
     special: orders.filter((order) => order.special_follow),
@@ -52,5 +60,7 @@ export async function fetchDecisionBoard(can: (feature: Feature) => boolean, isA
     billing,
     returns: returns.filter((item) => ["requested", "approved", "received"].includes(item.status)),
     accounts: accounts.filter((account) => account.status === "pending").length,
+    leaves: leaves.filter((leave) => leave.status === "pending" && !leave.mine),
+    incidents: incidents.filter((incident) => incident.status === "open"),
   };
 }

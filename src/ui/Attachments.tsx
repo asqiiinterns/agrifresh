@@ -24,7 +24,10 @@ export function AttachmentPicker({ value, onChange, disabled, extra }: { value: 
       const file = await task();
       if (file) onChange(file);
     } catch (cause) {
-      notify("Pièce jointe", errorMessage(cause, "Le fichier n’a pas pu être ajouté."));
+      notify("Pièce jointe", errorMessage(cause, "Le fichier n’a pas pu être ajouté."), [
+        { text: "Fermer", style: "cancel" },
+        { text: "Ouvrir les réglages", onPress: () => void Linking.openSettings() },
+      ]);
     }
   }
 
@@ -45,7 +48,10 @@ export function AttachmentPicker({ value, onChange, disabled, extra }: { value: 
       setRecording(true);
     } catch (cause) {
       setRecording(false);
-      notify("Message vocal", errorMessage(cause, "L’enregistrement n’a pas pu démarrer."));
+      notify("Message vocal", errorMessage(cause, "L’enregistrement n’a pas pu démarrer."), [
+        { text: "Fermer", style: "cancel" },
+        { text: "Ouvrir les réglages", onPress: () => void Linking.openSettings() },
+      ]);
     }
   }
 

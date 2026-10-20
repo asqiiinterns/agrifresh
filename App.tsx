@@ -31,6 +31,11 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { PlanningTab } from "./src/screens/PlanningScreen";
 import { ProductionHub, type HubSheet } from "./src/screens/ProductionHub";
 import { ReturnsScreen } from "./src/screens/ReturnsScreen";
+import { CalendarScreen } from "./src/screens/CalendarScreen";
+import { IncidentsScreen, LeavesScreen } from "./src/screens/StaffLifeScreens";
+import { StatsScreen } from "./src/screens/StatsScreen";
+import { sendMyLocation } from "./src/data/workplace";
+import { AppState } from "react-native";
 import { MoreScreen } from "./src/screens/MoreScreen";
 import { StaffOrderEntryScreen } from "./src/screens/StaffOrderEntryScreen";
 import { Ionicons } from "@expo/vector-icons";
@@ -52,6 +57,10 @@ const TAB = {
   clients: { key: "clients", label: "Clients", icon: "people-outline", description: "Fiches, points de livraison, QR codes." },
   invoices: { key: "invoices", label: "Factures", icon: "document-text-outline", description: "Factures et bons de livraison." },
   messages: { key: "messages", label: "Messages", icon: "chatbubbles-outline", description: "Échanges avec les clients et entre collègues." },
+  calendar: { key: "calendar", label: "Calendrier", icon: "calendar-outline", description: "Livraisons, échéances, absences et rappels." },
+  leaves: { key: "leaves", label: "Congés", icon: "airplane-outline", description: "Demandes, validation, absences à venir." },
+  incidents: { key: "incidents", label: "Incidents", icon: "warning-outline", description: "Signaler un problème de livraison ou de véhicule." },
+  stats: { key: "stats", label: "Statistiques", icon: "stats-chart-outline", description: "Produits, clients, créneaux, temps de préparation." },
   returns: { key: "returns", label: "Retours et avoirs", icon: "return-down-back-outline", description: "Demandes de retour, réception, avoirs." },
   admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
   account: { key: "account", label: "Plus", icon: "grid-outline", description: "Rubriques, personnaliser, compte, autorisations." },
@@ -84,12 +93,16 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   // Main menu: Accueil, Production (Commandes · Production · Planning), Facturation, Livraisons; the rest in "Plus".
   const tabs: TabDef[] = [];
   add(tabs, TAB.home, has("home.view"));
-  add(tabs, TAB.decide, account.role === "admin" || ["orders.decide", "orders.plan", "claims.manage", "messages.manage", "team.messages", "invoices.manage", "returns.manage"].some(has));
+  add(tabs, TAB.decide, account.role === "admin" || ["orders.decide", "orders.plan", "claims.manage", "messages.manage", "team.messages", "invoices.manage", "returns.manage", "leave.manage", "incidents.manage"].some(has));
   add(tabs, TAB.production, has("orders.view") || has("production.view") || has("orders.plan"));
   add(tabs, { ...TAB.invoices, label: "Facturation" }, has("invoices.manage"));
   add(tabs, TAB.deliveries, has("deliveries"));
   add(tabs, TAB.staffOrder, has("orders.create"));
   add(tabs, TAB.returns, has("returns.manage"));
+  add(tabs, TAB.calendar, has("calendar.view"));
+  add(tabs, TAB.leaves, has("leave.request") || has("leave.manage"));
+  add(tabs, TAB.incidents, has("incidents.report") || has("incidents.manage"));
+  add(tabs, TAB.stats, has("stats.view"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
   tabs.push(TAB.account);
@@ -281,6 +294,15 @@ function Main({ session }: { session: Session }) {
     team: kind === "team" && !!account?.features.includes("team.messages"),
   });
   const isActive = !!account && (account.status ?? "active") === "active";
+  // Position shared only by accounts that agreed (Plus → Autorisations), only while the app is open.
+  useEffect(() => {
+    if (!isActive || !account?.features.includes("location.share")) return;
+    void sendMyLocation();
+    const timer = setInterval(() => { if (AppState.currentState === "active") void sendMyLocation(); }, 5 * 60 * 1000);
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void sendMyLocation(); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, [isActive, account?.features.join(",")]);
+
   // Badge of « À décider », refreshed every two minutes (and live while the screen is open).
   const [decideCount, setDecideCount] = useState(0);
   const hasDecide = tabs.some((item) => item.key === "decide");
@@ -348,6 +370,14 @@ function Main({ session }: { session: Session }) {
         return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen initialSheet={nav.params?.section} />;
       case "decide":
         return <DecideScreen isAdmin={account.role === "admin"} onCount={setDecideCount} />;
+      case "calendar":
+        return <CalendarScreen />;
+      case "leaves":
+        return <LeavesScreen isAdmin={account.role === "admin"} />;
+      case "incidents":
+        return <IncidentsScreen />;
+      case "stats":
+        return <StatsScreen />;
       case "returns":
         return <ReturnsScreen initialSheet={nav.params?.section} />;
       case "deliveries":

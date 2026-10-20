@@ -45,6 +45,7 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
    - `20261031_billing_decisions.sql` : règlements partiels et multi-moyens, relances de paiement (activables par client, désactivables par le client si autorisé), fréquence de facturation par client, pastilles « suivi spécial » et « à reprogrammer », messages à répondre ;
    - `20261101_message_attachments.sql` : photos, vidéos, messages vocaux et documents dans les messages (stockage Supabase, dossier privé « attachments ») ;
    - `20261102_needs_reply.sql` : « nécessite une réponse » sur tous les messages, ajout de participants à une discussion d'équipe.
+   - `20261103_location_reminders_leaves.sql` : localisation des comptes (avec l'accord de chacun, seulement application ouverte), rappels et alarmes, calendrier, congés (validation activable par l'admin), incidents de livraison et de véhicule, droit « Statistiques ».
 8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). La validation par l'administrateur (Admin → Comptes) empêche quelqu'un d'utiliser l'accès d'un client avec son e-mail.
 9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
 10. Redémarre Expo après une modification de `.env.local`.

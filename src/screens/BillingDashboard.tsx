@@ -60,26 +60,26 @@ export function BillingDashboard({ invoices, credits }: { invoices: InvoiceWithO
   </ScrollView>;
 }
 
-function Tile({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+export function Tile({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return <View style={[styles.tile, warn && styles.tileWarn]}>
     <Text style={styles.tileValue} numberOfLines={1}>{value}</Text>
     <Text style={styles.tileLabel}>{label}</Text>
   </View>;
 }
 
-type Point = { key: string; label: string; value: number };
+export type Point = { key: string; label: string; value: number };
 
 // Vertical bars over the last months; tap a bar to read its exact value.
-function ColumnChart({ title, points }: { title: string; points: Point[] }) {
+export function ColumnChart({ title, points, format = formatPrice }: { title: string; points: Point[]; format?: (value: number) => string }) {
   const [selected, setSelected] = useState<string | null>(null);
   const max = Math.max(1, ...points.map((point) => point.value));
   const chosen = points.find((point) => point.key === selected) ?? points.at(-1);
   return <View style={ui.card}>
     <View style={ui.row}>
       <Text style={ui.strong}>{title}</Text>
-      {chosen ? <Text style={ui.small}>{chosen.label} : <Text style={{ fontWeight: "800", color: colors.text }}>{formatPrice(chosen.value)}</Text></Text> : null}
+      {chosen ? <Text style={ui.small}>{chosen.label} : <Text style={{ fontWeight: "800", color: colors.text }}>{format(chosen.value)}</Text></Text> : null}
     </View>
-    <View style={styles.columns} accessibilityLabel={`${title} : ${points.map((point) => `${point.label} ${formatPrice(point.value)}`).join(", ")}`}>
+    <View style={styles.columns} accessibilityLabel={`${title} : ${points.map((point) => `${point.label} ${format(point.value)}`).join(", ")}`}>
       {points.map((point) => {
         const active = point.key === (chosen?.key ?? "");
         return <Pressable key={point.key} onPress={() => setSelected(point.key)} style={styles.columnSlot} hitSlop={4}>
@@ -95,14 +95,14 @@ function ColumnChart({ title, points }: { title: string; points: Point[] }) {
 }
 
 // Horizontal bars, each labelled with its name and value.
-function BarList({ title, points, empty }: { title: string; points: Point[]; empty: string }) {
+export function BarList({ title, points, empty, format = formatPrice }: { title: string; points: Point[]; empty: string; format?: (value: number) => string }) {
   const max = Math.max(1, ...points.map((point) => point.value));
   return <View style={ui.card}>
     <Text style={ui.strong}>{title}</Text>
     {points.length === 0 ? <Text style={[ui.small, { marginTop: 6 }]}>{empty}</Text> : points.map((point) => <View key={point.key} style={{ marginTop: 8 }}>
       <View style={ui.row}>
         <Text style={[ui.body, { flex: 1 }]} numberOfLines={1}>{point.label}</Text>
-        <Text style={[ui.body, { fontWeight: "800" }]}>{formatPrice(point.value)}</Text>
+        <Text style={[ui.body, { fontWeight: "800" }]}>{format(point.value)}</Text>
       </View>
       <View style={styles.barTrack}><View style={[styles.bar, { width: `${(point.value / max) * 100}%` }]} /></View>
     </View>)}

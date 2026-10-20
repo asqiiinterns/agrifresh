@@ -9,15 +9,15 @@ import { assignableRoles } from "../data/team";
 import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime } from "../ui/components";
 import { useCan } from "../data/permissions";
 import { SettingsScreen } from "./SettingsScreen";
-import { AuditPage, FleetPage } from "./FleetAuditScreens";
+import { AuditPage, FleetPage, LocationPage } from "./FleetAuditScreens";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import { StaffProductsModal } from "./StaffProductsScreen";
 
-type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit";
-const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit"];
+type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "location";
+const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location"];
 
 // Administration home: each button opens its own page.
 export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean; initialPage?: string } = {}) {
@@ -33,6 +33,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
   if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} />;
   if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
   if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
+  if (page === "location") return <LocationPage onBack={() => setPage("menu")} />;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Admin" />
@@ -46,6 +47,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
         {can("products.manage") ? <ListRow icon="leaf-outline" title="Produits" detail="Catalogue, prix, TVA, stock, nouveautés et origine." onPress={() => setProductsVisible(true)} /> : null}
         {can("fleet.manage") ? <ListRow icon="car-outline" title="Flotte" detail="Véhicules proposés au livreur à l’expédition." onPress={() => setPage("fleet")} /> : null}
         {can("audit.view") ? <ListRow icon="time-outline" title="Journal des actions" detail="Qui a fait quoi et quand, sur tout le système." onPress={() => setPage("audit")} /> : null}
+        {can("location.view") ? <ListRow icon="location-outline" title="Localisation" detail="Dernière position des comptes qui la partagent." onPress={() => setPage("location")} /> : null}
       </ListGroup>
     </ScrollView>
     <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} />
