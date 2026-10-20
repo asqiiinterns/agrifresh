@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
 
-export type Role = "customer" | "staff" | "admin" | "supervisor" | "production" | "driver";
+export type Role = "customer" | "staff" | "admin" | "supervisor" | "production" | "driver" | "platform";
 
 export const roleLabels: Record<Role, string> = {
   customer: "Client",
@@ -9,6 +9,7 @@ export const roleLabels: Record<Role, string> = {
   admin: "Administrateur",
   production: "Production",
   driver: "Livreur",
+  platform: "Équipe Appro+",
 };
 
 export const isManager = (role: Role | undefined) => role === "admin" || role === "supervisor" || role === "staff";

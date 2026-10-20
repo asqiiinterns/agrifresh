@@ -17,6 +17,7 @@ import { DecideScreen } from "./src/screens/DecideScreen";
 import { decisionCount, fetchDecisionBoard } from "./src/data/decisions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
+import { PlatformTeamScreen, ProsScreen } from "./src/screens/PlatformScreens";
 import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -71,6 +72,8 @@ const TAB = {
   admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
   account: { key: "account", label: "Plus", icon: "grid-outline", description: "Rubriques, personnaliser, compte, autorisations." },
   more: { key: "more", label: "Plus", icon: "grid-outline" },
+  pros: { key: "pros", label: "Pros", icon: "business-outline", description: "Valider, suspendre ou réactiver les Pros." },
+  platformTeam: { key: "platformTeam", label: "Équipe Appro+", icon: "people-circle-outline", description: "Les comptes de la plateforme et leurs rôles." },
 } satisfies Record<TabKey, TabDef>;
 
 // Bottom bar: at most five entries, the rest goes into "Plus".
@@ -81,10 +84,12 @@ const TOP_KEYS: TabKey[] = ["messages", "alerts"];
 const HUB_KEYS: TabKey[] = ["orders", "planning", "production"];
 
 // Tabs follow the features the admin enabled for the account's role, most used first.
-function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
+function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" | "unlinked" | "team" | "platform"; tabs: TabDef[] } {
   const on = (key: ModuleKey) => isModuleOn(modules, key);
   const has = (feature: string) => account.features.includes(feature);
   const add = (tabs: TabDef[], tab: TabDef, allowed: boolean) => { if (allowed && !tabs.includes(tab)) tabs.push(tab); };
+  // The Appro+ team: its own console, separate from every Pro.
+  if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformTeam, TAB.account] };
   if (account.role === "customer") {
     if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
     const tabs: TabDef[] = [];
@@ -417,6 +422,10 @@ function Main({ session }: { session: Session }) {
         return <DriverScreen />;
       case "alerts":
         return <AlertsScreen userId={session.user.id} team={kind === "team"} onRead={alerts.refresh} />;
+      case "pros":
+        return <ProsScreen />;
+      case "platformTeam":
+        return <PlatformTeamScreen />;
       case "admin":
         return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
       default:

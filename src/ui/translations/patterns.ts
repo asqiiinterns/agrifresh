@@ -1,6 +1,14 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["{0} Pro(s) sur la plateforme", "{0} Pro(s) on the platform", "{0} محترف(ين) على المنصة"],
+  ["{0} Pro(s) à valider", "{0} Pro(s) to validate", "{0} محترف(ين) للمصادقة"],
+  ["{0} n’aura plus accès à la console Appro+.", "{0} will no longer have access to the Appro+ console.", "لن يكون لـ {0} وصول إلى لوحة Appro+."],
+  ["Valider {0}", "Validate {0}", "المصادقة على {0}"],
+  ["Réactiver {0}", "Reactivate {0}", "إعادة تفعيل {0}"],
+  ["Suspendre {0}", "Suspend {0}", "تعليق {0}"],
+  ["Refuser {0}", "Refuse {0}", "رفض {0}"],
+  ["Remettre en attente {0}", "Put {0} back on hold", "إعادة {0} إلى الانتظار"],
   ["{0} module(s) masqué(s)", "{0} module(s) hidden", "{0} وحدة مخفية"],
   [", {0} réponse(s) attendue(s)", ", {0} reply(ies) expected", "، {0} رد(ود) منتظرة"],
   ["\n\nEnsuite, scans pour : {0}.", "\n\nThen, scans for: {0}.", "\n\nبعد ذلك، المسح لـ: {0}."],
