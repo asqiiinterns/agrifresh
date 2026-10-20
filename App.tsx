@@ -307,6 +307,8 @@ function Main({ session }: { session: Session }) {
   const hubSheet: HubSheet | undefined = tab === "orders" ? "orders" : tab === "planning" ? "planning"
     : nav.params?.section === "prepare" || nav.params?.section === "planning" || nav.params?.section === "orders" ? nav.params.section as HubSheet : undefined;
   const current = requested && tabs.some((item) => item.key === requested) ? requested : bar[0]?.key ?? tabs[0]?.key;
+  // A shortcut or alert pointing to a section this account cannot open says so instead of silently showing the home screen.
+  const unavailable = !!account && !!requested && requested !== current;
   const barCurrent = overflow.some((item) => item.key === current) ? "account" : current;
   const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
   const { unread, needsReply, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team", {
@@ -449,6 +451,11 @@ function Main({ session }: { session: Session }) {
       <Ionicons name="chevron-back" size={16} color={colors.primary} />
       <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
     </Pressable> : null}
+    {unavailable ? <Pressable onPress={() => setTab(null)} style={styles.unavailable}>
+      <Ionicons name="information-circle-outline" size={16} color={colors.amber} />
+      <Text style={styles.unavailableText}>Cette rubrique n’est pas disponible pour votre compte (droit ou module désactivé).</Text>
+      <Ionicons name="close" size={16} color={colors.muted} />
+    </Pressable> : null}
     <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}>{renderTab()}</View>
     {bar.length > 1 ? <View style={styles.tabBar}>
       {bar.map((item) => {
@@ -523,6 +530,8 @@ function MessagesButton({ selected, unread, needsReply, onPress }: { selected: b
 }
 
 const styles = StyleSheet.create({
+  unavailable: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#fffbef", borderBottomWidth: 1, borderBottomColor: "#e3c46f" },
+  unavailableText: { flex: 1, color: colors.text, fontSize: 12 },
   messagesButton: { width: 52, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   messagesGlow: { borderRadius: 20, backgroundColor: colors.orange },
   messagesWaiting: { borderWidth: 2, borderColor: colors.danger },

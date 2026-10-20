@@ -36,6 +36,15 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   const { navigate } = useNav();
   const active = !!account && (account.status ?? "active") === "active";
   const hasHome = active && (account?.role === "customer" ? can("client.home") : can("home.view"));
+  const isAdmin = account?.role === "admin";
+  const adminPages = !sections.some((item) => item.key === "admin") ? [] : [
+    { page: "accounts", icon: "person-outline", title: "Comptes", detail: "Validation des inscriptions, suspension, rôle, ajout d’un compte.", allowed: isAdmin },
+    { page: "settings", icon: "options-outline", title: "Paramétrage", detail: "Modules, droits par profil, options des clients, entreprise, numérotation, accueil.", allowed: isAdmin },
+    { page: "alerts", icon: "notifications-outline", title: "Alertes et e-mails", detail: "Événements notifiés et service d’envoi.", allowed: isAdmin },
+    { page: "fleet", icon: "car-outline", title: "Flotte", detail: "Véhicules proposés au livreur à l’expédition.", allowed: can("fleet.manage") },
+    { page: "audit", icon: "time-outline", title: "Journal des actions", detail: "Qui a fait quoi et quand, sur tout le système.", allowed: can("audit.view") },
+    { page: "location", icon: "location-outline", title: "Localisation", detail: "Dernière position des comptes qui la partagent.", allowed: can("location.view") },
+  ].filter((page) => page.allowed) as { page: string; icon: TabDef["icon"]; title: string; detail: string }[];
   const sheets: { key: AccountSheet; label: string }[] = [
     ...(sections.length ? [{ key: "sections" as const, label: "Rubriques" }] : []),
     ...(hasHome && mod("home_custom") ? [{ key: "home" as const, label: "Personnaliser" }] : []),
@@ -52,9 +61,15 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
     <ScreenHeader eyebrow={session.user.email?.toLocaleUpperCase("fr") ?? "VOTRE ESPACE"} title="Plus" />
     <Sheets items={sheets} value={sheet} onChange={setSheet} />
     {sheet === "clients" ? <StaffClientsScreen embedded /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
-      {sheet === "sections" ? <ListGroup>
-        {sections.map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} detail={item.description} onPress={() => navigate(item.key)} />)}
-      </ListGroup> : null}
+      {sheet === "sections" ? <>
+        {sections.some((item) => item.key !== "admin") ? <ListGroup title="Rubriques">
+          {sections.filter((item) => item.key !== "admin").map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} detail={item.description} onPress={() => navigate(item.key)} />)}
+        </ListGroup> : null}
+        {/* Admin pages listed one by one, so none is reachable only through a home shortcut. */}
+        {adminPages.length ? <ListGroup title="Administration">
+          {adminPages.map((page) => <ListRow key={page.page} icon={page.icon} title={page.title} detail={page.detail} onPress={() => navigate("admin", { page: page.page })} />)}
+        </ListGroup> : null}
+      </> : null}
       {sheet === "profile" ? <><ProfileCard session={session} account={account} /><PasswordCard /></> : null}
       {sheet === "permissions" ? <PermissionsCard /> : null}
       {sheet === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
