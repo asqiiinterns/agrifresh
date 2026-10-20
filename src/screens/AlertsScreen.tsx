@@ -119,7 +119,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       data={visible}
       keyExtractor={(alert) => alert.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune alerte" body="Les nouvelles commandes, changements de statut, messages et factures apparaîtront ici." />}
       renderItem={({ item }) => <Pressable onPress={() => {
@@ -148,11 +148,11 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
         <View style={[ui.row, { marginTop: 4 }]}>
           <Text style={[ui.small, { flex: 1 }]}>{formatDateTime(item.created_at)}</Text>
           <Pressable onPress={() => void toggleRead(item)} hitSlop={8} style={styles.action} accessibilityLabel={item.read_at ? "Marquer non lue" : "Marquer lue"}>
-            <Ionicons name={item.read_at ? "mail-unread-outline" : "mail-open-outline"} size={16} color={colors.green} />
+            <Ionicons name={item.read_at ? "mail-unread-outline" : "mail-open-outline"} size={16} color={colors.primary} />
             <Text style={styles.actionText}>{item.read_at ? "Non lu" : "Lu"}</Text>
           </Pressable>
           <Pressable onPress={() => { setEditingNote(item.id); setNoteDraft(item.note ?? ""); }} hitSlop={8} style={styles.action} accessibilityLabel="Ajouter une note">
-            <Ionicons name="create-outline" size={16} color={colors.green} />
+            <Ionicons name="create-outline" size={16} color={colors.primary} />
             <Text style={styles.actionText}>Note</Text>
           </Pressable>
           <Ionicons name="chevron-forward" size={14} color={colors.muted} />
@@ -163,10 +163,10 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
 }
 
 const styles = StyleSheet.create({
-  unread: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  unread: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   important: { borderColor: "#e3c46f", borderLeftWidth: 4 },
   note: { marginTop: 6, padding: 8, borderRadius: 8, backgroundColor: "#fffbef", color: colors.text, fontSize: 12 },
   action: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6 },
-  actionText: { color: colors.green, fontSize: 11, fontWeight: "800" },
+  actionText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.orange },
 });

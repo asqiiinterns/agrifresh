@@ -12,13 +12,13 @@ export function OrderTimeline({ order, viewer }: { order: Order; viewer: "client
   if (events.length === 0) return null;
   return <View style={{ marginTop: 8 }}>
     <Pressable onPress={() => setOpen((value) => !value)} hitSlop={8}>
-      <Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>{open ? "▾" : "▸"} HISTORIQUE ({events.length})</Text>
+      <Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>{open ? "▾" : "▸"} HISTORIQUE ({events.length})</Text>
     </Pressable>
     {open ? <View style={styles.list}>
       {events.map((event, index) => {
-        const actor = event.byClient ? (viewer === "client" ? "Vous" : event.changed_by_name ?? "Client") : (viewer === "client" ? "AgriFresh" : event.changed_by_name ?? "Personnel");
+        const actor = event.byClient ? (viewer === "client" ? "Vous" : event.changed_by_name ?? "Client") : (viewer === "client" ? "Fournisseur" : event.changed_by_name ?? "Personnel");
         return <View key={`${event.created_at}-${index}`} style={styles.item}>
-          <View style={[styles.dot, { backgroundColor: statusStyles[event.status]?.color ?? colors.green }]} />
+          <View style={[styles.dot, { backgroundColor: statusStyles[event.status]?.color ?? colors.primary }]} />
           <View style={{ flex: 1 }}>
             <Text style={ui.body}><Text style={{ fontWeight: "800", color: statusStyles[event.status]?.color ?? colors.text }}>{statusLabel(event.status)}</Text> · {actor}</Text>
             <Text style={ui.small}>{formatDateTime(event.created_at)}</Text>
@@ -33,6 +33,6 @@ export function OrderTimeline({ order, viewer }: { order: Order; viewer: "client
 const styles = StyleSheet.create({
   list: { marginTop: 6, borderLeftWidth: 2, borderLeftColor: colors.line, marginLeft: 4, paddingLeft: 12, gap: 8 },
   item: { flexDirection: "row", gap: 8 },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.green, marginLeft: -18, marginTop: 4 },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginLeft: -18, marginTop: 4 },
   dotClient: { backgroundColor: colors.orange },
 });

@@ -67,7 +67,7 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
         <Field label="Notes (capacité, chauffeur habituel…)" value={form.values.notes} onChangeText={set("notes")} />
         <View style={[ui.row, { marginTop: 10 }]}>
           <Text style={ui.body}>En service</Text>
-          <Switch value={form.values.active} onValueChange={set("active")} trackColor={{ true: colors.green, false: colors.line }} />
+          <Switch value={form.values.active} onValueChange={set("active")} trackColor={{ true: colors.primary, false: colors.line }} />
         </View>
         <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label="ENREGISTRER" onPress={() => save()} busy={busy} />
@@ -117,7 +117,7 @@ export function LocationPage({ onBack }: { onBack: () => void }) {
       data={people}
       keyExtractor={(item) => item.user_id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || "Seuls les comptes dont le profil le permet (Paramétrage → Personnel) et qui ont donné leur accord partagent leur position, quand l’application est ouverte."}</Text>}
       renderItem={({ item }) => <View style={[ui.card, ui.row]}>
         <View style={{ flex: 1 }}>
@@ -186,7 +186,7 @@ export function AuditPage({ onBack }: { onBack: () => void }) {
       data={visible}
       keyExtractor={(entry) => String(entry.id)}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || `${visible.length} action(s)`}</Text>}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune action" body="Rien ne correspond à ces filtres." />}
       renderItem={({ item }) => {
@@ -202,7 +202,7 @@ export function AuditPage({ onBack }: { onBack: () => void }) {
             {item.actor_role ? ` (${roleLabels[item.actor_role as Role] ?? item.actor_role})` : ""} · {actionLabels[item.action]} · {entityLabels[item.entity] ?? item.entity}
           </Text>
           {(open ? lines : lines.slice(0, 2)).map((line, index) => <Text key={index} style={[ui.small, { color: colors.text }]}>{line}</Text>)}
-          {!open && lines.length > 2 ? <Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>+ {lines.length - 2} détail(s)</Text> : null}
+          {!open && lines.length > 2 ? <Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>+ {lines.length - 2} détail(s)</Text> : null}
         </Pressable>;
       }}
     />}

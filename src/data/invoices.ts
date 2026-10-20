@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase";
 import { company } from "../config/company";
 import { formatClientNumber } from "./account";
 import { ORDER_FIELDS, deliveryNoteNumber, type Order } from "./orders";
-import { documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity, sellerBlock } from "./pdf";
+import { brandColor, documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity, sellerBlock } from "./pdf";
 
 export type Invoice = {
   id: string;
@@ -163,8 +163,8 @@ export async function shareInvoice(invoice: InvoiceWithOrders): Promise<void> {
 
   const vatRows = invoice.vat_breakdown.map((item) => `<div class="row"><span>TVA ${Number(item.rate)} % sur ${pdfAmount(item.base)}</span><span>${pdfAmount(item.vat)}</span></div>`).join("");
 
-  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles}
-    tr.bl td{background:#fbfaf6;color:#24543b;font-size:11px;padding-top:12px}
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles()}
+    tr.bl td{background:#f6f7f9;color:${brandColor()};font-size:11px;padding-top:12px}
     .stamp{position:fixed;top:50%;left:50%;font-size:72px;color:rgba(166,61,47,.18);transform:translate(-50%,-50%) rotate(-24deg);font-weight:bold;white-space:nowrap;pointer-events:none;z-index:0}
   </style></head><body>
     ${invoice.status === "cancelled" ? `<div class="stamp">ANNULÉE</div>` : invoice.status === "draft" ? `<div class="stamp">BROUILLON</div>` : ""}

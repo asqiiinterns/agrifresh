@@ -57,7 +57,7 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
       data={visible}
       keyExtractor={(item) => item.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucun client" body="Créez la fiche de vos clients pour qu’ils puissent commander." />}
       renderItem={({ item }) => {
@@ -65,7 +65,7 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
         return <Pressable style={[ui.card, !item.active && ui.disabled]} onPress={() => setEditing(item)}>
           <View style={ui.row}>
             <Text style={[ui.strong, { flex: 1 }]}>{item.business_name}</Text>
-            <Text style={[ui.small, { color: item.has_account ? colors.green : colors.amber, fontWeight: "800" }]}>{item.has_account ? "ACCÈS ACTIVÉ" : "NON ACTIVÉ"}</Text>
+            <Text style={[ui.small, { color: item.has_account ? colors.primary : colors.amber, fontWeight: "800" }]}>{item.has_account ? "ACCÈS ACTIVÉ" : "NON ACTIVÉ"}</Text>
           </View>
           <Text style={ui.small}>{formatClientNumber(item.client_number)}{item.contact_name ? ` · ${item.contact_name}` : ""}{item.phone ? ` · ${item.phone}` : ""}</Text>
           <Text style={[ui.small, { marginTop: 4 }]}>{points.length} point{points.length > 1 ? "s" : ""} de livraison{!item.active ? " · fiche désactivée" : ""}</Text>
@@ -230,9 +230,9 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
             }))} />
             {record ? <View style={[ui.row, { marginTop: 12 }]}>
               <Text style={ui.body}>Fiche active (peut commander)</Text>
-              <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.green, false: colors.line }} />
+              <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.primary, false: colors.line }} />
             </View> : null}
-            {record ? <Text style={[ui.small, { marginTop: 10, color: record.has_account ? colors.green : colors.amber }]}>
+            {record ? <Text style={[ui.small, { marginTop: 10, color: record.has_account ? colors.primary : colors.amber }]}>
               {record.has_account ? "Le client a activé son accès." : "Le client n’a pas encore activé son accès avec cet e-mail."}
             </Text> : null}
           </View>
@@ -267,7 +267,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
           {record ? <View style={ui.card}>
             <View style={ui.row}>
               <Text style={ui.strong}>Points de livraison</Text>
-              {activePoints.length > 1 ? <Pressable onPress={() => print(activePoints)}><Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>IMPRIMER TOUS LES QR</Text></Pressable> : null}
+              {activePoints.length > 1 ? <Pressable onPress={() => print(activePoints)}><Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>IMPRIMER TOUS LES QR</Text></Pressable> : null}
             </View>
             <Text style={[ui.small, { marginTop: 4 }]}>Chaque point a son QR code, à coller sur place. Avec plusieurs points actifs, le client choisit le point à chaque commande.</Text>
             {record.client_delivery_points.map((point) => <View key={point.id} style={[ui.divider, !point.active && ui.disabled]}>

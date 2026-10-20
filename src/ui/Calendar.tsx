@@ -64,12 +64,12 @@ export function Calendar({ from, to, onChange }: { from?: string; to?: string; o
 
 const styles = StyleSheet.create({
   nav: { width: 40, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: colors.line },
-  navText: { color: colors.green, fontSize: 22, lineHeight: 24 },
+  navText: { color: colors.primary, fontSize: 22, lineHeight: 24 },
   week: { flexDirection: "row" },
   weekday: { flex: 1, textAlign: "center", color: colors.muted, fontSize: 11, fontWeight: "700", paddingVertical: 4 },
   cell: { flex: 1, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 8 },
-  inside: { backgroundColor: "#e6efe4", borderRadius: 0 },
-  edge: { backgroundColor: colors.green },
+  inside: { backgroundColor: colors.primarySoft, borderRadius: 0 },
+  edge: { backgroundColor: colors.primary },
   dayText: { color: colors.text, fontSize: 14 },
   today: { fontWeight: "800", textDecorationLine: "underline" },
   edgeText: { color: colors.white, fontWeight: "800" },

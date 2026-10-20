@@ -78,6 +78,6 @@ export function SignatureModal({ visible, title, required, onClose, onSigned }: 
 }
 
 const styles = StyleSheet.create({
-  pad: { width: WIDTH, height: HEIGHT, marginTop: 10, borderRadius: 12, borderWidth: 2, borderColor: colors.green, borderStyle: "dashed", backgroundColor: colors.white, overflow: "hidden" },
+  pad: { width: WIDTH, height: HEIGHT, marginTop: 10, borderRadius: 12, borderWidth: 2, borderColor: colors.primary, borderStyle: "dashed", backgroundColor: colors.white, overflow: "hidden" },
   placeholder: { position: "absolute", top: HEIGHT / 2 - 10, width: WIDTH, textAlign: "center", color: colors.line, fontSize: 18, fontWeight: "800" },
 });

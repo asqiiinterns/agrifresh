@@ -57,7 +57,7 @@ export function AttachmentPicker({ value, onChange, disabled, extra }: { value: 
 
   if (value) {
     return <View style={styles.pending}>
-      <Ionicons name={value.kind === "image" ? "image-outline" : value.kind === "video" ? "videocam-outline" : value.kind === "audio" ? "mic-outline" : "document-outline"} size={18} color={colors.green} />
+      <Ionicons name={value.kind === "image" ? "image-outline" : value.kind === "video" ? "videocam-outline" : value.kind === "audio" ? "mic-outline" : "document-outline"} size={18} color={colors.primary} />
       <Text style={styles.pendingText} numberOfLines={1}>{value.name}{value.size ? ` · ${formatSize(value.size)}` : ""}</Text>
       <Pressable onPress={() => onChange(null)} hitSlop={8} accessibilityLabel="Retirer la pièce jointe"><Ionicons name="close-circle" size={20} color={colors.muted} /></Pressable>
       {extra}
@@ -95,7 +95,7 @@ export function NeedsReplyToggle({ value, onChange }: { value: boolean; onChange
 
 function Tool({ icon, label, onPress, disabled }: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; onPress: () => void; disabled?: boolean }) {
   return <Pressable onPress={onPress} disabled={disabled} style={styles.tool} accessibilityLabel={label}>
-    <Ionicons name={icon} size={18} color={colors.green} />
+    <Ionicons name={icon} size={18} color={colors.primary} />
     <Text style={styles.toolText}>{label}</Text>
   </Pressable>;
 }
@@ -110,7 +110,7 @@ export function AttachmentView({ attachment, mine }: { attachment: Attachment; m
     return () => { active = false; };
   }, [attachment.path]);
 
-  const tint = mine ? colors.white : colors.green;
+  const tint = mine ? colors.white : colors.primary;
   if (error) return <Text style={[styles.fileText, { color: tint }]}>Fichier indisponible</Text>;
   if (!url) return <ActivityIndicator color={tint} style={{ marginVertical: 6 }} />;
   if (attachment.kind === "image") {
@@ -121,7 +121,7 @@ export function AttachmentView({ attachment, mine }: { attachment: Attachment; m
     <Ionicons name={attachment.kind === "video" ? "play-circle-outline" : "document-outline"} size={22} color={tint} />
     <View style={{ flexShrink: 1 }}>
       <Text style={[styles.fileText, { color: tint }]} numberOfLines={1}>{attachment.kind === "video" ? "Vidéo" : attachment.name}</Text>
-      <Text style={[styles.fileSize, mine && { color: "#d4e3d6" }]}>{attachment.size ? formatSize(attachment.size) : ""} · Ouvrir</Text>
+      <Text style={[styles.fileSize, mine && { color: colors.onPrimaryMuted }]}>{attachment.size ? formatSize(attachment.size) : ""} · Ouvrir</Text>
     </View>
   </Pressable>;
 }
@@ -129,7 +129,7 @@ export function AttachmentView({ attachment, mine }: { attachment: Attachment; m
 function VoiceNote({ url, mine }: { url: string; mine: boolean }) {
   const player = useAudioPlayer(url);
   const status = useAudioPlayerStatus(player);
-  const tint = mine ? colors.white : colors.green;
+  const tint = mine ? colors.white : colors.primary;
   const total = Math.round(status.duration || 0);
   const current = Math.round(status.currentTime || 0);
   function toggle() {
@@ -150,10 +150,10 @@ const styles = StyleSheet.create({
   needsTagText: { color: colors.danger, fontSize: 10, fontWeight: "800" },
   tools: { flexDirection: "row", gap: 6, paddingHorizontal: 10, paddingTop: 6 },
   tool: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
-  toolText: { color: colors.green, fontSize: 11, fontWeight: "700" },
+  toolText: { color: colors.primary, fontSize: 11, fontWeight: "700" },
   recording: { backgroundColor: colors.danger, borderColor: colors.danger },
   recordingText: { color: colors.white, fontSize: 11, fontWeight: "800" },
-  pending: { flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: 10, marginTop: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
+  pending: { flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: 10, marginTop: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   pendingText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
   image: { width: 200, height: 150, borderRadius: 8, marginTop: 2, backgroundColor: colors.cream },
   file: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },

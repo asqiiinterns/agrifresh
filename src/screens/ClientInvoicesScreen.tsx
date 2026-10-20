@@ -70,9 +70,9 @@ function InvoiceList() {
       data={visible}
       keyExtractor={(invoice) => invoice.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-      ListEmptyComponent={error ? null : <EmptyState title="Aucune facture" body="Vos factures AgriFresh apparaîtront ici." />}
+      ListEmptyComponent={error ? null : <EmptyState title="Aucune facture" body="Vos factures apparaîtront ici." />}
       renderItem={({ item }) => <View style={ui.card}>
         <View style={ui.row}>
           <Text style={[ui.strong, { flex: 1 }]}>{invoiceLabel(item)}</Text>
@@ -110,7 +110,7 @@ export function ClientInvoicesScreen({ initialSheet }: { initialSheet?: string }
     }
   }
   useEffect(() => { void reloadDocuments(); }, []);
-  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reloadDocuments(true)} tintColor={colors.green} />;
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reloadDocuments(true)} tintColor={colors.primary} />;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="VOS DOCUMENTS" title="Mes factures" />

@@ -149,7 +149,7 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
     }
   }
 
-  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />;
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />;
 
   return <View style={ui.screen}>
     <ScreenHeader
@@ -307,8 +307,8 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
       <Text style={ui.small}>{address.address_line}, {address.city}{address.phone ? ` · ${address.phone}` : ""}</Text>
       {order.customer_note ? <Text style={[ui.body, { color: colors.orange, fontStyle: "italic", marginTop: 4 }]}>« {order.customer_note} »</Text> : null}
       {order.status_note ? <Text style={[ui.small, { color: colors.amber }]}>Motif : {order.status_note}</Text> : null}
-      {order.client_invoices && order.client_invoices.status !== "cancelled" ? <Text style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Facture {order.client_invoices.invoice_number ?? "en brouillon"}{order.client_invoices.status === "paid" ? " · payée" : ""}</Text> : null}
-      {order.delivered_at ? <Text style={[ui.small, { color: colors.green }]}>Livrée le {formatDateTime(order.delivered_at)}{order.delivered_by_profile?.full_name ? ` par ${order.delivered_by_profile.full_name}` : ""}</Text> : null}
+      {order.client_invoices && order.client_invoices.status !== "cancelled" ? <Text style={[ui.small, { color: colors.primary, fontWeight: "700" }]}>Facture {order.client_invoices.invoice_number ?? "en brouillon"}{order.client_invoices.status === "paid" ? " · payée" : ""}</Text> : null}
+      {order.delivered_at ? <Text style={[ui.small, { color: colors.primary }]}>Livrée le {formatDateTime(order.delivered_at)}{order.delivered_by_profile?.full_name ? ` par ${order.delivered_by_profile.full_name}` : ""}</Text> : null}
 
       <View style={ui.divider}>
         {order.order_items.map((line, index) => <View key={`${order.id}-${index}`} style={ui.row}>
@@ -389,7 +389,7 @@ function ClaimsView({ claims, refreshControl, onChanged }: { claims: Claim[]; re
         </View>
         <Text style={ui.small}>Commande #{item.orders?.order_number ?? "?"} · {claimReasonLabel(item.reason)} · {formatDateTime(item.created_at)}</Text>
         <Text style={[ui.body, { marginTop: 6 }]}>{item.description}</Text>
-        {item.staff_response ? <Text style={[ui.small, { marginTop: 6, color: colors.green }]}>Réponse : {item.staff_response}</Text> : null}
+        {item.staff_response ? <Text style={[ui.small, { marginTop: 6, color: colors.primary }]}>Réponse : {item.staff_response}</Text> : null}
         {!closed ? <>
           <TextInput
             value={responses[item.id] ?? ""}
@@ -411,11 +411,11 @@ function ClaimsView({ claims, refreshControl, onChanged }: { claims: Claim[]; re
 }
 
 const styles = StyleSheet.create({
-  focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
+  focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  origin: { color: colors.green, fontSize: 10 },
+  origin: { color: colors.primary, fontSize: 10 },
   clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   claimLine: { marginTop: 6, color: colors.amber, fontWeight: "700" },
-  position: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.green, color: colors.white, textAlign: "center", lineHeight: 24, fontWeight: "800", fontSize: 12, paddingHorizontal: 4 },
+  position: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, color: colors.white, textAlign: "center", lineHeight: 24, fontWeight: "800", fontSize: 12, paddingHorizontal: 4 },
 });

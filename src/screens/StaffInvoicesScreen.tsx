@@ -26,9 +26,9 @@ const statusFilters = [
 ] as const;
 
 export const invoiceStatusStyle = {
-  draft: { label: "Brouillon", color: "#5f685d", background: "#ecebe5" },
+  draft: { label: "Brouillon", color: colors.textSoft, background: colors.cream },
   issued: { label: "À encaisser", color: colors.amber, background: "#fdf3e1" },
-  paid: { label: "Payée", color: colors.green, background: "#dcebd7" },
+  paid: { label: "Payée", color: colors.primary, background: colors.primarySoft },
   cancelled: { label: "Annulée", color: colors.danger, background: "#f8e5e1" },
 };
 
@@ -123,7 +123,7 @@ export function StaffInvoicesScreen() {
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`À ENCAISSER : ${formatPrice(outstanding)}${drafts ? ` · ${drafts} BROUILLON(S)` : ""}`} title="Facturation" right={sheet === "invoices" ? <Button label="+ FACTURER" onPress={() => setEditor({ mode: "new" })} /> : undefined} />
     <Sheets items={[{ key: "invoices", label: "Factures", count: overdueCount || undefined }, { key: "credits", label: "Avoirs" }, { key: "dashboard", label: "Tableau de bord" }]} value={sheet} onChange={setSheet} />
-    {sheet === "credits" ? <CreditsList credits={credits} manage refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />} onChanged={() => void reload("silent")} />
+    {sheet === "credits" ? <CreditsList credits={credits} manage refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />} onChanged={() => void reload("silent")} />
       : sheet === "dashboard" ? (loading ? <Loading /> : <BillingDashboard invoices={invoices} credits={credits} />)
       : <>
     <FilterBar search={search} onSearch={setSearch} placeholder="Client ou numéro de facture" filters={listFilters} />
@@ -135,7 +135,7 @@ export function StaffInvoicesScreen() {
       data={visible}
       keyExtractor={(invoice) => invoice.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune facture" body="Touchez « + FACTURER » pour regrouper des bons de livraison sur une facture." />}
       renderItem={({ item }) => <Pressable style={ui.card} onPress={() => setOpenId(item.id)}>
@@ -370,7 +370,7 @@ function InvoiceEditor({ editor, onClose, onSaved }: { editor: Editor | null; on
           </Pressable>}
         />}
       </> : loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content}>
-        {!draft ? <Pressable onPress={() => setClient(null)} style={{ paddingTop: 12 }}><Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>‹ CHANGER DE CLIENT</Text></Pressable> : null}
+        {!draft ? <Pressable onPress={() => setClient(null)} style={{ paddingTop: 12 }}><Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>‹ CHANGER DE CLIENT</Text></Pressable> : null}
         {orders.length === 0 ? <EmptyState title="Rien à facturer" body="Tous les bons acceptés de ce client sont déjà facturés." /> : <>
           <Text style={[ui.subtitle, { marginTop: 8 }]}>Cochez les bons de livraison à regrouper sur la facture.</Text>
           {orders.map((order) => {
@@ -459,7 +459,7 @@ function PaymentsCard({ invoice, onChanged }: { invoice: InvoiceWithOrders; onCh
   return <View style={ui.card}>
     <View style={ui.row}>
       <Text style={ui.strong}>Règlements</Text>
-      <Text style={ui.small}>Payé {formatPrice(invoice.amount_paid ?? 0)} · reste <Text style={{ fontWeight: "800", color: balance > 0 ? colors.danger : colors.green }}>{formatPrice(balance)}</Text></Text>
+      <Text style={ui.small}>Payé {formatPrice(invoice.amount_paid ?? 0)} · reste <Text style={{ fontWeight: "800", color: balance > 0 ? colors.danger : colors.primary }}>{formatPrice(balance)}</Text></Text>
     </View>
     {invoice.due_date ? <Text style={ui.small}>Échéance : {formatDay(invoice.due_date, { day: "numeric", month: "long", year: "numeric" })}{invoice.reminder_count ? ` · ${invoice.reminder_count} relance(s)` : ""}</Text> : null}
     {payments.map((payment) => <View key={payment.id} style={[ui.row, ui.divider]}>
@@ -497,9 +497,9 @@ function PaymentsCard({ invoice, onChanged }: { invoice: InvoiceWithOrders; onCh
 
 const styles = StyleSheet.create({
   filters: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
-  selectedCard: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  selectedCard: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
-  checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkmark: { color: colors.white, fontWeight: "800" },
-  draftBanner: { marginTop: 12, padding: 12, borderRadius: 8, backgroundColor: "#ecebe5" },
+  draftBanner: { marginTop: 12, padding: 12, borderRadius: 8, backgroundColor: colors.cream },
 });

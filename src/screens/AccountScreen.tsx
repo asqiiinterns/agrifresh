@@ -85,7 +85,7 @@ function ProfileCard({ session, account }: { session: Session; account: Account 
         <Text style={ui.strong}>{client.business_name}</Text>
         <Text style={ui.small}>{formatClientNumber(client.client_number)}{client.contact_name ? ` · ${client.contact_name}` : ""}{client.phone ? ` · ${client.phone}` : ""}</Text>
         {client.delivery_points.map((point) => <Text key={point.id} style={[ui.body, { marginTop: 4 }]}>• {point.label} — {point.address_line}, {point.city}</Text>)}
-        <Text style={[ui.small, { marginTop: 6 }]}>Pour modifier ces informations ou ajouter un point de livraison, contactez AgriFresh.</Text>
+        <Text style={[ui.small, { marginTop: 6 }]}>Pour modifier ces informations ou ajouter un point de livraison, contactez votre fournisseur.</Text>
       </View> : null}
     </View>
     {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
@@ -93,7 +93,7 @@ function ProfileCard({ session, account }: { session: Session; account: Account 
   </>;
 }
 
-// Payment reminders: the client may turn them off only if AgriFresh allows it (otherwise greyed out).
+// Payment reminders: the client may turn them off only if the supplier allows it (otherwise greyed out).
 function ReminderChoiceCard({ account, onChanged }: { account: Account; onChanged: () => void }) {
   const client = account.client as (Account["client"] & { payment_reminders?: boolean; reminder_opt_out_allowed?: boolean; reminder_opt_out?: boolean }) | null;
   const [busy, setBusy] = useState(false);
@@ -113,9 +113,9 @@ function ReminderChoiceCard({ account, onChanged }: { account: Account; onChange
     <View style={ui.row}>
       <View style={{ flex: 1 }}>
         <Text style={ui.strong}>Rappels de factures à régler</Text>
-        <Text style={ui.small}>{allowed ? "Recevoir un rappel quand une facture arrive à échéance." : "Activés par AgriFresh pour votre compte : ce réglage ne peut pas être modifié."}</Text>
+        <Text style={ui.small}>{allowed ? "Recevoir un rappel quand une facture arrive à échéance." : "Activés par votre fournisseur pour votre compte : ce réglage ne peut pas être modifié."}</Text>
       </View>
-      <Switch value={!client.reminder_opt_out || !allowed} disabled={!allowed || busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.green, false: colors.line }} />
+      <Switch value={!client.reminder_opt_out || !allowed} disabled={!allowed || busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
     </View>
     {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
   </View>;

@@ -161,7 +161,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
             {item.isNew && item.description ? <Text style={ui.small} numberOfLines={2}>{item.description}</Text> : null}
             {client.show_origin && item.origin ? <Text style={styles.origin} numberOfLines={2}>Origine : {[formatOrigin(item.origin), item.origin.label].filter(Boolean).join(" · ")}{item.origin.note ? ` — ${item.origin.note}` : ""}</Text> : null}
             <Text style={ui.small}>{client.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
-            {client.show_stock && item.stock !== undefined ? <Text style={[ui.small, { color: item.stock > 0 ? colors.green : colors.danger, fontWeight: "700" }]}>{item.stock > 0 ? `Stock : ${formatQuantity(item.stock)} ${item.unit}` : "Rupture de stock"}</Text> : null}
+            {client.show_stock && item.stock !== undefined ? <Text style={[ui.small, { color: item.stock > 0 ? colors.primary : colors.danger, fontWeight: "700" }]}>{item.stock > 0 ? `Stock : ${formatQuantity(item.stock)} ${item.unit}` : "Rupture de stock"}</Text> : null}
           </View>
           <View style={styles.stepper}>
             <Pressable onPress={() => step(item.id, -1)} style={styles.stepButton} accessibilityLabel={`Retirer une unité de ${item.name}`}><Text style={styles.stepText}>−</Text></Pressable>
@@ -263,7 +263,7 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
       setDay(null);
       notify("Commande envoyée", staff
         ? `Commande #${order.order_number} enregistrée pour ${client.business_name} (${formatPrice(order.total)} HT). Elle attend la décision dans Commandes.`
-        : `Commande #${order.order_number} transmise à AgriFresh${client.show_prices ? ` (${formatPrice(order.total)} HT)` : ""}. Vous serez informé de son acceptation.`);
+        : `Commande #${order.order_number} transmise à votre fournisseur${client.show_prices ? ` (${formatPrice(order.total)} HT)` : ""}. Vous serez informé de son acceptation.`);
       onPlaced();
     } catch (cause) {
       setError(errorMessage(cause, "La commande n’a pas pu être envoyée."));
@@ -284,14 +284,14 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
               {client.show_prices ? <Text style={ui.body}>{formatPrice(line.product.price * line.quantity)}</Text> : null}
             </View>)}
             {client.show_prices ? <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Total estimé HT</Text><Text style={ui.amount}>{formatPrice(total)}</Text></View> : null}
-            <Text style={[ui.small, { marginTop: 6 }]}>{client.show_prices ? "Les prix et le stock sont confirmés par AgriFresh à la réception." : "Le stock est confirmé par AgriFresh à la réception."}</Text>
+            <Text style={[ui.small, { marginTop: 6 }]}>{client.show_prices ? "Les prix et le stock sont confirmés par votre fournisseur à la réception." : "Le stock est confirmé par votre fournisseur à la réception."}</Text>
           </View>
 
           {points.length > 1 ? <View style={ui.card}>
             <Text style={ui.strong}>Point de livraison</Text>
             <View style={{ gap: 8, marginTop: 10 }}>
               {points.map((point) => <Pressable key={point.id} onPress={() => setPointId(point.id)} style={[styles.pointOption, pointId === point.id && styles.pointOptionSelected]}>
-                <Text style={[ui.strong, pointId === point.id && { color: colors.green }]}>{point.label}</Text>
+                <Text style={[ui.strong, pointId === point.id && { color: colors.primary }]}>{point.label}</Text>
                 <Text style={ui.small}>{point.address_line}, {point.city}</Text>
               </Pressable>)}
             </View>
@@ -362,21 +362,21 @@ function RepeatModal({ visible, showPrices, loadHistory, onClose, onFill }: { vi
 
 const styles = StyleSheet.create({
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
-  checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkmark: { color: colors.white, fontWeight: "800" },
   toolbar: { flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingTop: 12, alignItems: "center" },
   categories: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
   productRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginTop: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
-  productRowSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  productRowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   productImage: { width: 54, height: 54, borderRadius: 8 },
   productRowCompact: { paddingVertical: 6, marginTop: 4 },
-  origin: { color: colors.green, fontSize: 10, marginTop: 1 },
+  origin: { color: colors.primary, fontSize: 10, marginTop: 1 },
   newBadge: { color: colors.orange, fontSize: 9, fontWeight: "800", letterSpacing: 0.8, marginBottom: 2 },
   stepper: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.white },
   stepButton: { width: 34, height: 40, alignItems: "center", justifyContent: "center" },
-  stepText: { color: colors.green, fontSize: 20, fontWeight: "700" },
+  stepText: { color: colors.primary, fontSize: 20, fontWeight: "700" },
   quantityInput: { width: 54, height: 40, textAlign: "center", color: colors.text, fontSize: 14, fontWeight: "700", borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.line, paddingVertical: 0 },
   footer: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
   pointOption: { padding: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 8 },
-  pointOptionSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  pointOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
 });

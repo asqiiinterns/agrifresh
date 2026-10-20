@@ -78,9 +78,9 @@ function Section({ title, items, selected, onChange }: { title: string; items: I
         const index = selected.indexOf(item.key);
         return <View key={item.key} style={styles.row}>
           <Pressable onPress={() => onChange(on ? selected.filter((key) => key !== item.key) : [...selected, item.key])} style={styles.check} hitSlop={6}>
-            <Ionicons name={on ? "checkbox" : "square-outline"} size={22} color={on ? colors.green : colors.muted} />
+            <Ionicons name={on ? "checkbox" : "square-outline"} size={22} color={on ? colors.primary : colors.muted} />
           </Pressable>
-          <Ionicons name={item.icon} size={16} color={on ? colors.green : colors.muted} />
+          <Ionicons name={item.icon} size={16} color={on ? colors.primary : colors.muted} />
           <Text style={[ui.body, { flex: 1 }, !on && { color: colors.muted }]}>{item.label}</Text>
           {on ? <>
             <Pressable onPress={() => move(item.key, -1)} disabled={index === 0} style={[styles.arrow, index === 0 && ui.disabled]}><Text style={styles.arrowText}>▲</Text></Pressable>
@@ -93,10 +93,10 @@ function Section({ title, items, selected, onChange }: { title: string; items: I
 }
 
 const styles = StyleSheet.create({
-  title: { color: "#6f7a6b", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 5 },
+  title: { color: colors.textSoft, fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 5 },
   group: { backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.line },
   check: { padding: 2 },
   arrow: { width: 32, height: 28, borderRadius: 6, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
-  arrowText: { color: colors.green, fontSize: 11 },
+  arrowText: { color: colors.primary, fontSize: 11 },
 });

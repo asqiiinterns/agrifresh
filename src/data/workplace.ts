@@ -95,7 +95,7 @@ async function scheduleAlarm(title: string, body: string, date: Date) {
     const granted = permission.granted || (permission.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);
     if (!granted) return;
     await Notifications.scheduleNotificationAsync({
-      content: { title: `⏰ ${title}`, body: body || "Rappel AgriFresh", sound: "default" },
+      content: { title: `⏰ ${title}`, body: body || "Rappel Appro+", sound: "default" },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId: "alerts" },
     });
   } catch {

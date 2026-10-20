@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
+import { loadCompanyProfile } from "./src/data/company";
 import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
@@ -275,6 +276,7 @@ function Main({ session }: { session: Session }) {
     setAccountError("");
     try {
       setAccount(await fetchMyAccount());
+      void loadCompanyProfile().catch(() => undefined);
     } catch (cause) {
       setAccountError(errorMessage(cause, "Impossible de charger votre profil."));
     }
@@ -353,9 +355,9 @@ function Main({ session }: { session: Session }) {
   const status = account.status ?? (account.disabled ? "suspended" : "active");
   if (status !== "active") {
     const message = {
-      pending: { title: "Compte en attente de validation", body: "Votre compte est créé. AgriFresh doit le valider avant que vous puissiez l’utiliser ; touchez « Actualiser » une fois prévenu." },
-      refused: { title: "Demande refusée", body: "AgriFresh n’a pas validé ce compte. Contactez-nous si vous pensez qu’il s’agit d’une erreur." },
-      suspended: { title: "Compte suspendu", body: "Votre accès est suspendu par AgriFresh. Contactez l’administrateur pour le réactiver." },
+      pending: { title: "Compte en attente de validation", body: "Votre compte est créé. L’administrateur doit le valider avant que vous puissiez l’utiliser ; touchez « Actualiser » une fois prévenu." },
+      refused: { title: "Demande refusée", body: "L’administrateur n’a pas validé ce compte. Contactez-le si vous pensez qu’il s’agit d’une erreur." },
+      suspended: { title: "Compte suspendu", body: "Votre accès est suspendu. Contactez l’administrateur pour le réactiver." },
     }[status];
     return <View style={{ flex: 1 }}>
       <EmptyState title={message.title} body={message.body} action={<Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} />} />
@@ -406,7 +408,7 @@ function Main({ session }: { session: Session }) {
         return <View style={{ flex: 1 }}>
           {kind === "unlinked" ? <View style={[ui.card, { marginHorizontal: 18, marginTop: 18 }]}>
             <Text style={ui.strong}>Compte non rattaché</Text>
-            <Text style={[ui.body, { marginTop: 6 }]}>Aucune fiche client active ne correspond à {session.user.email}. Demandez à AgriFresh de créer ou d’activer votre fiche avec cette adresse, puis touchez « Actualiser ».</Text>
+            <Text style={[ui.body, { marginTop: 6 }]}>Aucune fiche client active ne correspond à {session.user.email}. Demandez à votre fournisseur de créer ou d’activer votre fiche avec cette adresse, puis touchez « Actualiser ».</Text>
             <Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} style={{ marginTop: 12 }} />
           </View> : null}
           <AccountScreen session={session} account={account} sections={overflow} initialSheet={accountSheet} onLayoutChanged={() => void loadAccount()} />
@@ -419,14 +421,14 @@ function Main({ session }: { session: Session }) {
 
   return <PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
     <View style={styles.topBar}>
-      <Text style={styles.brand}>AgriFresh</Text>
+      <Text style={styles.brand}>Appro<Text style={styles.brandPlus}>+</Text></Text>
       <View style={{ flex: 1 }} />
       {topTabs.map((item) => {
         const selected = item.key === current;
         const badge = badgeFor(item.key);
         if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={needsReply} onPress={() => setTab(item.key)} />;
         return <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
-          <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.green : colors.text} />
+          <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.text} />
           {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
         </Pressable>;
       })}
@@ -435,7 +437,7 @@ function Main({ session }: { session: Session }) {
       </Pressable>
     </View>
     {nav.params?.back && nav.params.back !== current ? <Pressable onPress={() => setTab(nav.params!.back!)} style={styles.backBar}>
-      <Ionicons name="chevron-back" size={16} color={colors.green} />
+      <Ionicons name="chevron-back" size={16} color={colors.primary} />
       <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
     </Pressable> : null}
     <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}>{renderTab()}</View>
@@ -445,7 +447,7 @@ function Main({ session }: { session: Session }) {
         const badge = badgeFor(item.key);
         return <Pressable key={item.key} onPress={() => setTab(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}>
           <View style={[styles.tabPill, selected && styles.tabPillActive]}>
-            <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.green : "#8a9187"} />
+            <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.muted} />
             {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
           </View>
           <Text style={[styles.tabLabel, selected && styles.tabActive]} numberOfLines={1}>{item.label}</Text>
@@ -475,7 +477,7 @@ export default function App() {
 
 // Sign out from anywhere (top bar), after a confirmation.
 function confirmSignOut() {
-  notify("Se déconnecter", "Voulez-vous vous déconnecter de AgriFresh ?", [
+  notify("Se déconnecter", "Voulez-vous vous déconnecter d’Appro+ ?", [
     { text: "Annuler", style: "cancel" },
     { text: "Se déconnecter", style: "destructive", onPress: () => {
       void (async () => {
@@ -504,7 +506,7 @@ function MessagesButton({ selected, unread, needsReply, onPress }: { selected: b
   return <Pressable onPress={onPress} style={[styles.messagesButton, selected && styles.tabPillActive, needsReply > 0 && styles.messagesWaiting]} accessibilityLabel={`Messages${unread ? `, ${unread} non lu(s)` : ""}${needsReply ? `, ${needsReply} réponse(s) attendue(s)` : ""}`} hitSlop={6}>
     {unread ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.messagesGlow, { opacity: glow }]} /> : null}
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Ionicons name={selected || unread || needsReply ? "chatbubbles" : "chatbubbles-outline"} size={28} color={unread ? colors.white : needsReply ? colors.danger : selected ? colors.green : colors.text} />
+      <Ionicons name={selected || unread || needsReply ? "chatbubbles" : "chatbubbles-outline"} size={28} color={unread ? colors.white : needsReply ? colors.danger : selected ? colors.primary : colors.text} />
     </Animated.View>
     {needsReply > 0 ? <View style={styles.replyMark}><Text style={styles.replyMarkText}>!</Text></View> : null}
     {unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
@@ -517,17 +519,18 @@ const styles = StyleSheet.create({
   messagesWaiting: { borderWidth: 2, borderColor: colors.danger },
   replyMark: { position: "absolute", top: -4, left: -2, width: 17, height: 17, borderRadius: 9, backgroundColor: colors.danger, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.white },
   replyMarkText: { color: colors.white, fontSize: 11, fontWeight: "900", lineHeight: 13 },
-  backBar: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#f3f8f1", borderBottomWidth: 1, borderBottomColor: colors.line },
-  backText: { color: colors.green, fontSize: 12, fontWeight: "800" },
+  backBar: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: colors.primarySoft, borderBottomWidth: 1, borderBottomColor: colors.line },
+  backText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   topBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },
-  brand: { color: colors.green, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  brand: { color: colors.primary, fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
+  brandPlus: { color: colors.accent, fontWeight: "900" },
   topIcon: { width: 40, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   tabBar: { flexDirection: "row", paddingTop: 6, paddingBottom: 6, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.white },
   tab: { flex: 1, alignItems: "center", gap: 3, paddingHorizontal: 2 },
   tabPill: { width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  tabPillActive: { backgroundColor: "#e3eee0" },
-  tabLabel: { color: "#8a9187", fontSize: 11, fontWeight: "600" },
-  tabActive: { color: colors.green, fontWeight: "800" },
+  tabPillActive: { backgroundColor: colors.primarySoft },
+  tabLabel: { color: colors.muted, fontSize: 11, fontWeight: "600" },
+  tabActive: { color: colors.primary, fontWeight: "800" },
   badge: { position: "absolute", top: -3, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   badgeText: { color: colors.white, fontSize: 9, fontWeight: "800" },
 });

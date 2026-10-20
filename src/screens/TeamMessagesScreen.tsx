@@ -61,11 +61,11 @@ export function TeamMessagesList({ onRead, initialConversationId, moderator }: {
       data={conversations}
       keyExtractor={(item) => item.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune conversation" body="Touchez « Nouveau message » pour écrire à un collègue, à plusieurs, à un profil ou à toute l’équipe." />}
       renderItem={({ item }) => <Pressable onPress={() => setOpenId(item.id)} style={[ui.card, styles.conversation, item.unread > 0 && styles.unreadCard]}>
-        <View style={styles.avatar}><Ionicons name={kindIcon[item.kind]} size={18} color={colors.green} /></View>
+        <View style={styles.avatar}><Ionicons name={kindIcon[item.kind]} size={18} color={colors.primary} /></View>
         <View style={{ flex: 1 }}>
           <View style={ui.row}>
             <Text style={[ui.strong, { flex: 1 }]} numberOfLines={1}>{item.title}</Text>
@@ -160,7 +160,7 @@ function RecipientsModal({ visible, mode, onClose, onDone }: {
             const viaRole = roles.includes(person.role);
             const on = selected.includes(person.id) || viaRole;
             return <Pressable key={person.id} onPress={() => toggle(person.id)} disabled={viaRole} style={[styles.person, on && styles.selected]}>
-              <Ionicons name={on ? "checkbox" : "square-outline"} size={20} color={on ? colors.green : colors.muted} />
+              <Ionicons name={on ? "checkbox" : "square-outline"} size={20} color={on ? colors.primary : colors.muted} />
               <Text style={[ui.body, { flex: 1, fontWeight: "700" }]}>{person.name}</Text>
               <Text style={ui.small}>{roleLabels[person.role] ?? person.role}</Text>
             </Pressable>;
@@ -281,7 +281,7 @@ function TeamThread({ conversationId, onClose, onRead, moderator }: { conversati
 
   return <>
     <ScreenHeader eyebrow={`${members.length} PARTICIPANT(S)`} title={title || "Conversation"} subtitle={members.length > 1 && members.length <= 8 ? members.join(", ") : undefined} right={<View style={[ui.row, { gap: 6 }]}>
-      <Pressable onPress={() => setAdding(true)} style={styles.addButton} accessibilityLabel="Ajouter des participants"><Ionicons name="person-add-outline" size={18} color={colors.green} /></Pressable>
+      <Pressable onPress={() => setAdding(true)} style={styles.addButton} accessibilityLabel="Ajouter des participants"><Ionicons name="person-add-outline" size={18} color={colors.primary} /></Pressable>
       <CloseButton onPress={onClose} />
     </View>} />
     <RecipientsModal visible={adding} mode="add" onClose={() => setAdding(false)} onDone={async (choice) => { await addTeamMembers(conversationId, choice.ids); setAdding(false); await reloadThread(); }} />
@@ -305,12 +305,12 @@ function TeamThread({ conversationId, onClose, onRead, moderator }: { conversati
             {item.reply_to ? <ReplyQuote mine={mine} author={original ? authorOf(original) : "Message"} text={original ? messagePreview(original.body, original.attachment) : null} onPress={original ? () => goTo(original.id) : undefined} /> : null}
             {item.attachment ? <AttachmentView attachment={item.attachment} mine={mine} /> : null}
             {item.body ? <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text> : null}
-            <Text style={[styles.time, mine && { color: "#d4e3d6" }]}>{formatDateTime(item.created_at)}</Text>
+            <Text style={[styles.time, mine && { color: colors.onPrimaryMuted }]}>{formatDateTime(item.created_at)}</Text>
             <View style={styles.footer}>
               <ReplyAction mine={mine} onPress={() => setReplyTo(item)} />
               {canFlag ? <Pressable onPress={() => void toggleFlag(item)} hitSlop={6} style={styles.flagRow}>
-                <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? "#d4e3d6" : colors.muted} />
-                <Text style={[styles.flagText, mine && { color: "#d4e3d6" }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
+                <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? colors.onPrimaryMuted : colors.muted} />
+                <Text style={[styles.flagText, mine && { color: colors.onPrimaryMuted }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
               </Pressable> : null}
             </View>
           </Pressable>;
@@ -332,16 +332,16 @@ function TeamThread({ conversationId, onClose, onRead, moderator }: { conversati
 
 const styles = StyleSheet.create({
   conversation: { flexDirection: "row", alignItems: "center", gap: 10 },
-  unreadCard: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#e6efe4", alignItems: "center", justifyContent: "center" },
+  unreadCard: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   badgeText: { color: colors.white, fontSize: 11, fontWeight: "800" },
   choice: { flexDirection: "row", alignItems: "center", gap: 10 },
-  selected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  selected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   person: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, paddingVertical: 9, marginTop: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
-  link: { color: colors.green, fontSize: 12, fontWeight: "800" },
+  link: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   bubble: { maxWidth: "82%", padding: 9, borderRadius: 12, marginVertical: 3 },
-  mine: { alignSelf: "flex-end", backgroundColor: colors.green, borderBottomRightRadius: 3 },
+  mine: { alignSelf: "flex-end", backgroundColor: colors.primary, borderBottomRightRadius: 3 },
   theirs: { alignSelf: "flex-start", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: 3 },
   author: { color: colors.orange, fontSize: 10, fontWeight: "800", marginBottom: 2 },
   body: { color: colors.text, fontSize: 14, lineHeight: 20 },
@@ -351,5 +351,5 @@ const styles = StyleSheet.create({
   flagRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   flagText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
-  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
 });

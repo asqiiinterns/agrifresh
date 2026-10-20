@@ -139,7 +139,7 @@ export async function shareCreditNote(credit: CreditNote): Promise<void> {
     return `<tr><td>${escapeHtml(line.label)}</td><td class="number">${pdfQuantity(line.quantity)} ${escapeHtml(line.unit)}</td>
       <td class="number">${pdfAmount(line.unit_price)}</td><td class="number">${Number(line.vat_rate)} %</td><td class="number">${pdfAmount(total)}</td></tr>`;
   }).join("");
-  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles}
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles()}
     .stamp{position:fixed;top:50%;left:50%;font-size:72px;color:rgba(166,61,47,.18);transform:translate(-50%,-50%) rotate(-24deg);font-weight:bold;white-space:nowrap;pointer-events:none;z-index:0}
   </style></head><body>
     ${credit.status === "cancelled" ? `<div class="stamp">ANNULÉ</div>` : credit.status === "draft" ? `<div class="stamp">BROUILLON</div>` : ""}

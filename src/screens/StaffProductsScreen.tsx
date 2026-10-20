@@ -57,7 +57,7 @@ export function StaffProductsModal({ visible, onClose }: { visible: boolean; onC
           <View style={{ flex: 1 }}>
             <Text style={ui.strong}>{item.name}{item.active ? "" : " (inactif)"}</Text>
             <Text style={ui.small}>{formatPrice(item.price)} HT / {item.unit_label} · TVA {Number(item.vat_rate)} % · stock {formatQuantity(item.stock_quantity)}</Text>
-            {item.origin_producer || item.origin_region ? <Text style={[ui.small, { color: colors.green }]}>Origine : {[item.origin_producer, item.origin_region, item.origin_label].filter(Boolean).join(" · ")}</Text> : <Text style={[ui.small, { color: colors.amber }]}>Origine non renseignée</Text>}
+            {item.origin_producer || item.origin_region ? <Text style={[ui.small, { color: colors.primary }]}>Origine : {[item.origin_producer, item.origin_region, item.origin_label].filter(Boolean).join(" · ")}</Text> : <Text style={[ui.small, { color: colors.amber }]}>Origine non renseignée</Text>}
           </View>
         </Pressable>}
       />}
@@ -145,7 +145,7 @@ function ProductEditor({ product, visible, categories, onClose, onSaved }: {
             <Field label="Lien de la photo (facultatif)" value={form.image_url} onChangeText={set("image_url")} autoCapitalize="none" />
             <View style={[ui.row, { marginTop: 12 }]}>
               <Text style={ui.body}>Proposé à la commande</Text>
-              <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.green, false: colors.line }} />
+              <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.primary, false: colors.line }} />
             </View>
           </View>
 

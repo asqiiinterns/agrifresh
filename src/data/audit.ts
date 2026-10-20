@@ -29,6 +29,7 @@ export const entityLabels: Record<string, string> = {
   messages: "Messages",
   notification_settings: "Alertes",
   app_settings: "Réglages e-mail",
+  company_profile: "Entreprise",
   home_layouts: "Accueil",
   returns: "Retours",
   credit_notes: "Avoirs",

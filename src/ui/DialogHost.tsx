@@ -35,6 +35,6 @@ const styles = StyleSheet.create({
   message: { color: colors.text, fontSize: 13, lineHeight: 19, marginTop: 8 },
   buttons: { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 16 },
   button: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: colors.line },
-  primary: { backgroundColor: colors.green, borderColor: colors.green },
-  buttonText: { color: colors.green, fontSize: 13, fontWeight: "800" },
+  primary: { backgroundColor: colors.primary, borderColor: colors.primary },
+  buttonText: { color: colors.primary, fontSize: 13, fontWeight: "800" },
 });

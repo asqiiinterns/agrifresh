@@ -68,7 +68,7 @@ const statusOptions = [
 
 const statusStyle: Record<AccountStatus, { label: string; color: string; background: string }> = {
   pending: { label: "En attente", color: "#7a5a12", background: "#fbf0d5" },
-  active: { label: "Actif", color: colors.green, background: "#dcebd7" },
+  active: { label: "Actif", color: colors.primary, background: colors.primarySoft },
   suspended: { label: "Suspendu", color: colors.amber, background: "#fdf3e1" },
   refused: { label: "Refusé", color: colors.danger, background: "#f8e5e1" },
 };
@@ -149,7 +149,7 @@ function AccountsPage({ onBack }: { onBack: () => void }) {
       data={visible}
       keyExtractor={(account) => account.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucun compte" body="Aucun compte ne correspond à ces filtres." />}
       renderItem={({ item }) => {
@@ -237,7 +237,7 @@ function AddAccountModal({ visible, onClose, onCreated }: { visible: boolean; on
               const label = option.role === "customer" ? "Client" : option.label;
               const body = option.role === "customer" ? "Accès client : l’e-mail doit être celui d’une fiche client pour pouvoir commander." : option.description;
               return <Pressable key={option.role} onPress={() => setRole(option.role)} style={[styles.roleOption, selected && styles.roleSelected]}>
-                <Text style={[ui.strong, selected && { color: colors.green }]}>{label}</Text>
+                <Text style={[ui.strong, selected && { color: colors.primary }]}>{label}</Text>
                 <Text style={ui.small}>{body}</Text>
               </Pressable>;
             })}
@@ -255,5 +255,5 @@ function AddAccountModal({ visible, onClose, onCreated }: { visible: boolean; on
 const styles = StyleSheet.create({
   pendingCard: { borderColor: "#e3c46f", backgroundColor: "#fffbef" },
   roleOption: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
-  roleSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  roleSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
 });

@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { QR, qrSvg } from "../ui/Qr";
+import { company } from "../config/company";
 import { documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity, sellerBlock } from "./pdf";
 
 export type OrderLine = {
@@ -112,7 +113,7 @@ export async function fetchMyOrders(): Promise<Order[]> {
   return (data ?? []) as unknown as Order[];
 }
 
-// Answer to an order reopened by AgriFresh ("awaiting_client").
+// Answer to an order reopened by the supplier ("awaiting_client").
 export async function respondToOrder(orderId: string, accept: boolean, note?: string): Promise<void> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
   const { error } = await supabase.rpc("client_respond_order", { p_order_id: orderId, p_accept: accept, p_note: note?.trim() || null });
@@ -143,9 +144,9 @@ export async function shareDeliveryNote(order: Order, options: { showPrices: boo
       ${showPrices ? `<td class="number">${pdfAmount(line.unit_price)}</td><td class="number">${pdfAmount(line.line_total)}</td>` : ""}
     </tr>`).join("");
 
-  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles}</style></head><body>
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>${documentStyles()}</style></head><body>
     <div class="top">
-      <div><h1>AgriFresh</h1><div class="muted">Le goût du naturel</div></div>
+      <div><h1>${escapeHtml(company.name)}</h1><div class="muted">${escapeHtml(company.tagline)}</div></div>
       <div class="doc"><strong>BON DE LIVRAISON</strong><br/>${number}<br/><span class="muted">Commande #${order.order_number} du ${pdfDate(order.created_at)}</span>
         ${order.requested_delivery_date ? `<br/><span class="muted">Livraison souhaitée : ${pdfDate(order.requested_delivery_date)}</span>` : ""}</div>
       <div class="qr">${qrSvg(QR.deliveryNote(order.delivery_token))}</div>

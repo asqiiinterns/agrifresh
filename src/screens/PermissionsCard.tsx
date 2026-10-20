@@ -32,7 +32,7 @@ const accesses: Access[] = [
 ];
 
 const labels: Record<State, { text: string; color: string }> = {
-  granted: { text: "Autorisé", color: colors.green },
+  granted: { text: "Autorisé", color: colors.primary },
   denied: { text: "Refusé", color: colors.amber },
   blocked: { text: "Bloqué (réglages)", color: colors.danger },
   undetermined: { text: "Jamais demandé", color: colors.muted },
@@ -67,11 +67,11 @@ export function PermissionsCard() {
 
   return <View>{canShare ? <LocationConsentCard /> : null}<View style={ui.card}>
     <Text style={ui.strong}>Autorisations</Text>
-    <Text style={ui.small}>AgriFresh fonctionne sans ces accès. Chacun n’est demandé qu’au moment où vous utilisez la fonction ; vous pouvez les accorder ou les retirer ici.</Text>
+    <Text style={ui.small}>Appro+ fonctionne sans ces accès. Chacun n’est demandé qu’au moment où vous utilisez la fonction ; vous pouvez les accorder ou les retirer ici.</Text>
     {accesses.map((access) => {
       const state = states[access.key] ?? "undetermined";
       return <View key={access.key} style={[ui.row, ui.divider]}>
-        <Ionicons name={access.icon} size={20} color={colors.green} />
+        <Ionicons name={access.icon} size={20} color={colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={ui.body}>{access.label} · <Text style={{ color: labels[state].color, fontWeight: "800" }}>{labels[state].text}</Text></Text>
           <Text style={ui.small}>{access.use}</Text>
@@ -106,7 +106,7 @@ function LocationConsentCard() {
         <Text style={ui.strong}>Partager ma position</Text>
         <Text style={ui.small}>L’administration voit votre dernière position, uniquement quand l’application est ouverte. Vous pouvez arrêter à tout moment : votre position est alors effacée.</Text>
       </View>
-      <Switch value={consent} disabled={busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.green, false: colors.line }} />
+      <Switch value={consent} disabled={busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
     </View>
   </View>;
 }

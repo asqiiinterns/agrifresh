@@ -9,7 +9,7 @@ import { colors, ui } from "../ui/theme";
 
 const pushStatusText: Record<PushStatus, string> = {
   registered: "Ce téléphone reçoit les alertes sur l’écran de verrouillage.",
-  denied: "Les notifications sont refusées pour AgriFresh dans les réglages du téléphone.",
+  denied: "Les notifications sont refusées pour Appro+ dans les réglages du téléphone.",
   unavailable: Platform.OS === "web"
     ? "Sur le web, les alertes s’affichent dans l’onglet Alertes."
     : "Notifications d’écran de verrouillage indisponibles ici (Expo Go ou configuration en attente) : les alertes restent dans l’onglet Alertes.",
@@ -46,13 +46,13 @@ export function MyNotificationsCard() {
     {!prefs ? <Loading /> : <>
       <View style={[ui.row, { marginTop: 10 }]}>
         <View style={{ flex: 1 }}><Text style={ui.body}>Notifications sur le téléphone</Text><Text style={ui.small}>Alertes affichées sur l’écran de verrouillage.</Text></View>
-        <Switch value={prefs.push} onValueChange={(value) => void save({ ...prefs, push: value })} trackColor={{ true: colors.green, false: colors.line }} />
+        <Switch value={prefs.push} onValueChange={(value) => void save({ ...prefs, push: value })} trackColor={{ true: colors.primary, false: colors.line }} />
       </View>
       <View style={[ui.row, { marginTop: 10 }]}>
-        <View style={{ flex: 1 }}><Text style={ui.body}>E-mails</Text><Text style={ui.small}>Pour les alertes qu’AgriFresh envoie aussi par e-mail.</Text></View>
-        <Switch value={prefs.email} onValueChange={(value) => void save({ ...prefs, email: value })} trackColor={{ true: colors.green, false: colors.line }} />
+        <View style={{ flex: 1 }}><Text style={ui.body}>E-mails</Text><Text style={ui.small}>Pour les alertes envoyées aussi par e-mail.</Text></View>
+        <Switch value={prefs.email} onValueChange={(value) => void save({ ...prefs, email: value })} trackColor={{ true: colors.primary, false: colors.line }} />
       </View>
-      {pushStatus ? <Text style={[ui.small, { marginTop: 10, color: pushStatus === "registered" ? colors.green : colors.amber }]}>{pushStatusText[pushStatus]}</Text> : null}
+      {pushStatus ? <Text style={[ui.small, { marginTop: 10, color: pushStatus === "registered" ? colors.primary : colors.amber }]}>{pushStatusText[pushStatus]}</Text> : null}
       {pushStatus === "denied" && Platform.OS !== "web" ? <Button label="AUTORISER LES NOTIFICATIONS" variant="secondary" onPress={() => enable()} busy={busy} style={{ marginTop: 10 }} /> : null}
     </>}
   </View>;
@@ -108,8 +108,8 @@ export function AlertSettingsPanel() {
       </View>
       {settings.map((setting) => <View key={setting.event} style={[ui.row, ui.divider, { marginTop: 6, paddingTop: 6 }]}>
         <View style={{ flex: 1 }}><Text style={ui.body}>{setting.label}</Text><Text style={ui.small}>{setting.audience}</Text></View>
-        <View style={{ width: 64, alignItems: "center" }}><Switch value={setting.push_enabled} onValueChange={(value) => void run(setting.event, () => setNotificationSetting(setting.event, value, setting.email_enabled))} trackColor={{ true: colors.green, false: colors.line }} /></View>
-        <View style={{ width: 64, alignItems: "center" }}><Switch value={setting.email_enabled} onValueChange={(value) => void run(setting.event, () => setNotificationSetting(setting.event, setting.push_enabled, value))} trackColor={{ true: colors.green, false: colors.line }} /></View>
+        <View style={{ width: 64, alignItems: "center" }}><Switch value={setting.push_enabled} onValueChange={(value) => void run(setting.event, () => setNotificationSetting(setting.event, value, setting.email_enabled))} trackColor={{ true: colors.primary, false: colors.line }} /></View>
+        <View style={{ width: 64, alignItems: "center" }}><Switch value={setting.email_enabled} onValueChange={(value) => void run(setting.event, () => setNotificationSetting(setting.event, setting.push_enabled, value))} trackColor={{ true: colors.primary, false: colors.line }} /></View>
       </View>)}
     </View>
 
@@ -118,11 +118,11 @@ export function AlertSettingsPanel() {
       <Text style={ui.small}>Service Resend (resend.com) : créez une clé API, puis vérifiez votre domaine pour écrire à tous vos clients. Sans domaine vérifié, Resend n’envoie qu’à l’adresse du compte Resend.</Text>
       <View style={[ui.row, { marginTop: 12 }]}>
         <Text style={[ui.body, { flex: 1 }]}>Activer l’envoi d’e-mails</Text>
-        <Switch value={email.enabled} onValueChange={(value) => void run("enabled", () => setEmailSettings(value, from || email.from))} trackColor={{ true: colors.green, false: colors.line }} />
+        <Switch value={email.enabled} onValueChange={(value) => void run("enabled", () => setEmailSettings(value, from || email.from))} trackColor={{ true: colors.primary, false: colors.line }} />
       </View>
-      <Field label="Expéditeur (ex. AgriFresh <commandes@votre-domaine.tn>)" value={from} onChangeText={setFrom} autoCapitalize="none" />
+      <Field label="Expéditeur (ex. Ma Société <commandes@votre-domaine.tn>)" value={from} onChangeText={setFrom} autoCapitalize="none" />
       <Button label="ENREGISTRER L’EXPÉDITEUR" variant="secondary" onPress={() => run("from", () => setEmailSettings(email.enabled, from), "Expéditeur enregistré.")} busy={busy === "from"} style={{ marginTop: 8 }} />
-      <Text style={[ui.small, { marginTop: 12, color: email.has_key ? colors.green : colors.amber }]}>{email.has_key ? "Clé API enregistrée (masquée)." : "Aucune clé API enregistrée."}</Text>
+      <Text style={[ui.small, { marginTop: 12, color: email.has_key ? colors.primary : colors.amber }]}>{email.has_key ? "Clé API enregistrée (masquée)." : "Aucune clé API enregistrée."}</Text>
       <View style={ui.field}>
         <Text style={ui.fieldLabel}>{email.has_key ? "Remplacer la clé API" : "Clé API Resend"}</Text>
         <TextInput value={apiKey} onChangeText={setApiKey} placeholder="re_…" placeholderTextColor={colors.muted} style={ui.input} autoCapitalize="none" autoCorrect={false} secureTextEntry />

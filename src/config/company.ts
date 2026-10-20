@@ -1,11 +1,18 @@
-// Seller details printed on invoices and delivery notes.
-// TODO: replace with AgriFresh's legal details before issuing real invoices.
+// The seller's details printed on its own documents. Entered by the administrator in
+// Paramétrage → Entreprise (company_profile), loaded at sign-in; empty until then.
 export const company = {
-  name: "AgriFresh",
-  tagline: "Le goût du naturel",
-  address: "Tunis",
-  phone: "99 999 999",
-  email: "contact@agrifresh.tn",
-  taxId: "MF 9999999E",
-  rib: "99 9999 9999 9999",
+  name: "",
+  tagline: "",
+  address: "",
+  phone: "",
+  email: "",
+  taxId: "",
+  rib: "",
+  brandColor: "",
 };
+
+export type CompanyProfile = typeof company;
+
+export function applyCompanyProfile(profile: Partial<CompanyProfile>) {
+  Object.assign(company, profile);
+}

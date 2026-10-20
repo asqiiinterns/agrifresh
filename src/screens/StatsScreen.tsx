@@ -113,7 +113,7 @@ export function StatsScreen() {
       <Chip label="90 jours" selected={period === "90"} onPress={() => setPeriod("90")} />
       <Chip label="12 mois" selected={period === "365"} onPress={() => setPeriod("365")} />
     </View>
-    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
       {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
       {sheet === "overview" ? <>
         <View style={styles.tiles}>

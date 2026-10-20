@@ -41,7 +41,7 @@ export function AuthScreen() {
       } else if (mode === "activate") {
         const { data, error: authError } = await supabase.auth.signUp({ email: cleanEmail, password, options: { emailRedirectTo: authRedirectUrl() } });
         if (authError) throw authError;
-        setMessage(data.session ? "Compte créé : il est en attente de validation par AgriFresh." : "Compte créé. Consultez votre boîte e-mail pour confirmer votre adresse, puis attendez la validation d’AgriFresh.");
+        setMessage(data.session ? "Compte créé : il est en attente de validation par l’administrateur." : "Compte créé. Consultez votre boîte e-mail pour confirmer votre adresse, puis attendez la validation de l’administrateur.");
       } else {
         const { error: authError } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: authRedirectUrl() });
         if (authError) throw authError;
@@ -57,7 +57,7 @@ export function AuthScreen() {
   return <KeyboardAvoidingView style={ui.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[ui.content, { paddingTop: 40, maxWidth: 520, width: "100%", alignSelf: "center" }]} keyboardShouldPersistTaps="handled">
       <View style={{ alignItems: "center", marginBottom: 26 }}>
-        <Text style={{ color: colors.dark, fontSize: 34, fontWeight: "800", letterSpacing: -1 }}>agri<Text style={{ color: colors.orange }}>fresh</Text></Text>
+        <Text style={{ color: colors.primaryDark, fontSize: 34, fontWeight: "800", letterSpacing: -1 }}>agri<Text style={{ color: colors.orange }}>fresh</Text></Text>
         <Text style={[ui.eyebrow, { marginTop: 4 }]}>ESPACE COMMANDES PROFESSIONNELLES</Text>
       </View>
 
@@ -68,7 +68,7 @@ export function AuthScreen() {
 
       <Text style={[ui.subtitle, { textAlign: "center", marginTop: 16 }]}>
         {mode === "signin" ? "Connectez-vous pour passer et suivre vos commandes."
-          : mode === "activate" ? "Utilisez l’adresse e-mail communiquée à AgriFresh. Votre compte sera actif dès qu’AgriFresh l’aura validé."
+          : mode === "activate" ? "Utilisez l’adresse e-mail communiquée à votre fournisseur. Votre compte sera actif dès qu’il l’aura validé."
           : "Recevez un lien de connexion pour choisir un nouveau mot de passe."}
       </Text>
 

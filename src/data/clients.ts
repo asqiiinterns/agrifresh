@@ -1,3 +1,5 @@
+import { company } from "../config/company";
+import { brandColor } from "./pdf";
 import { Platform, Share } from "react-native";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "./account";
@@ -137,23 +139,23 @@ export async function printDeliveryPointQr(record: ClientRecord, points: Deliver
   const sheets = points.map((point) => {
     const svg = qrSvg(QR.point(point.qr_token), 8);
     return `<section class="sheet">
-      <div class="brand">AgriFresh</div>
+      <div class="brand">${escapeHtml(company.name || "Appro+")}</div>
       <div class="client">${escapeHtml(record.business_name)}</div>
       <div class="point">${escapeHtml(point.label)} · ${escapeHtml(formatClientNumber(record.client_number))}</div>
       <div class="qr">${svg}</div>
       <div class="address">${escapeHtml(point.address_line)}, ${escapeHtml(point.city)}</div>
-      <div class="hint">Livreur : scannez ce code avec l’application AgriFresh à chaque livraison.</div>
+      <div class="hint">Livreur : scannez ce code avec l’application Appro+ à chaque livraison.</div>
     </section>`;
   }).join("");
 
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" /><style>
-    @page{margin:12mm} body{font-family:Arial,sans-serif;color:#24372c;margin:0}
-    .sheet{page-break-after:always;text-align:center;padding:24px;border:3px solid #24543b;border-radius:18px;max-width:520px;margin:0 auto 24px}
+    @page{margin:12mm} body{font-family:Arial,sans-serif;color:#1d2939;margin:0}
+    .sheet{page-break-after:always;text-align:center;padding:24px;border:3px solid ${brandColor()};border-radius:18px;max-width:520px;margin:0 auto 24px}
     .sheet:last-child{page-break-after:auto}
-    .brand{color:#24543b;font-weight:bold;font-size:28px;letter-spacing:1px}
-    .client{font-size:24px;font-weight:bold;margin-top:14px}.point{color:#737b71;font-size:15px;margin-top:6px}
+    .brand{color:${brandColor()};font-weight:bold;font-size:28px;letter-spacing:1px}
+    .client{font-size:24px;font-weight:bold;margin-top:14px}.point{color:#667085;font-size:15px;margin-top:6px}
     .qr{width:320px;height:320px;margin:20px auto}.qr svg{width:100%;height:100%}
-    .address{font-size:14px}.hint{margin-top:14px;font-size:12px;color:#737b71}
+    .address{font-size:14px}.hint{margin-top:14px;font-size:12px;color:#667085}
   </style></head><body>${sheets}</body></html>`;
 
   await outputPdf(html, `QR-${record.business_name}-${points.length > 1 ? "points" : points[0].label}`, `QR codes · ${record.business_name}`);
@@ -161,11 +163,11 @@ export async function printDeliveryPointQr(record: ClientRecord, points: Deliver
 
 export async function shareInvitation(record: ClientRecord): Promise<"shared" | "copied"> {
   const link = Platform.OS === "web" && typeof window !== "undefined" ? `\n${window.location.origin}` : "";
-  const message = `Bonjour ${record.contact_name || record.business_name},\n\nVotre accès AgriFresh est prêt. Ouvrez l’application AgriFresh${link ? ` (${link.trim()})` : ""}, touchez « Créer mon compte » et utilisez l’adresse e-mail ${record.email ?? ""} pour choisir votre mot de passe.\n\nDès que nous aurons validé votre compte, vous pourrez passer vos commandes directement.\n\nL’équipe AgriFresh`;
+  const message = `Bonjour ${record.contact_name || record.business_name},\n\nVotre accès sur Appro+ est prêt. Ouvrez l’application Appro+${link ? ` (${link.trim()})` : ""}, touchez « Créer mon compte » et utilisez l’adresse e-mail ${record.email ?? ""} pour choisir votre mot de passe.\n\nDès que nous aurons validé votre compte, vous pourrez passer vos commandes directement.${company.name ? `\n\n${company.name}` : ""}`;
   if (Platform.OS === "web" && typeof navigator !== "undefined" && typeof navigator.share !== "function") {
     await navigator.clipboard.writeText(message);
     return "copied";
   }
-  await Share.share({ message, title: "Invitation AgriFresh" });
+  await Share.share({ message, title: "Invitation Appro+" });
   return "shared";
 }

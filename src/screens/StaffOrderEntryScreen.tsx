@@ -73,7 +73,7 @@ export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {
       data={visible}
       keyExtractor={(record) => record.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucun client" body="Aucune fiche client active ne correspond." />}
       renderItem={({ item }) => {
@@ -93,6 +93,6 @@ export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#e6efe4", alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.green, fontWeight: "800", fontSize: 16 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: colors.primary, fontWeight: "800", fontSize: 16 },
 });

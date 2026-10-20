@@ -63,7 +63,7 @@ export function DecideScreen({ isAdmin, onCount }: { isAdmin: boolean; onCount: 
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`${total} ÉLÉMENT(S) EN SUSPENS`} title="À décider" />
-    <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
+    <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
       {total === 0 ? <EmptyState title="Rien en suspens" body="Commandes en attente, suivis spéciaux, réclamations, messages à répondre, facturation et relances apparaîtront ici." /> : null}
 
       {board.toDecide.length ? <ListGroup title={`Commandes en attente de décision (${board.toDecide.length})`}>

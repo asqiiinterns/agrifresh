@@ -159,7 +159,7 @@ export function PlanningTab() {
       queue={queue}
       focusId={null}
       onChanged={() => reload()}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       header={(subtitle) => <>
         <ScreenHeader eyebrow={`FILE DE PRODUCTION · ${queue.length} COMMANDE(S)`} title="Planning" subtitle={subtitle} />
         {error ? <Text style={[ui.error, { paddingHorizontal: 14, marginTop: 8 }]}>{error}</Text> : null}
@@ -171,17 +171,17 @@ export function PlanningTab() {
 const styles = StyleSheet.create({
   clientName: { color: colors.text, fontSize: 15, fontWeight: "800" },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
-  rowSelected: { borderColor: colors.green, borderWidth: 2, backgroundColor: "#f3f8f1" },
-  position: { minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.cream, color: colors.green, textAlign: "center", lineHeight: 26, fontWeight: "800" },
-  positionSelected: { backgroundColor: colors.green, color: colors.white },
+  rowSelected: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primarySoft },
+  position: { minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.cream, color: colors.primary, textAlign: "center", lineHeight: 26, fontWeight: "800" },
+  positionSelected: { backgroundColor: colors.primary, color: colors.white },
   reschedule: { color: colors.danger, fontSize: 10, fontWeight: "800" },
   flag: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, alignSelf: "flex-start" },
   flagBox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: colors.line, textAlign: "center", lineHeight: 15, color: colors.white, fontSize: 11, fontWeight: "800" },
   flagBoxOn: { backgroundColor: colors.danger, borderColor: colors.danger },
   flagText: { color: colors.muted, fontSize: 11, fontWeight: "700" },
-  insert: { marginTop: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.green, borderStyle: "dashed", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
-  insertText: { color: colors.green, fontSize: 11, fontWeight: "800" },
+  insert: { marginTop: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.primary, borderStyle: "dashed", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  insertText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   arrows: { gap: 4 },
   arrow: { width: 38, height: 30, borderRadius: 8, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
-  arrowText: { color: colors.green, fontSize: 13 },
+  arrowText: { color: colors.primary, fontSize: 13 },
 });

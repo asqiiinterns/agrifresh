@@ -40,7 +40,7 @@ export function CalendarScreen() {
     const next: CalendarEvent[] = [];
     for (const order of orders) {
       if (!order.requested_delivery_date || ["declined", "cancelled"].includes(order.status)) continue;
-      next.push({ key: `o-${order.id}`, day: order.requested_delivery_date, title: `Livraison · ${order.clients?.business_name ?? "Client"}`, detail: `#${order.order_number} · ${statusLabel(order.status)}`, color: statusStyles[order.status]?.color ?? colors.green, icon: "car-outline", tab: "orders", params: { orderId: order.id, back: "calendar" } });
+      next.push({ key: `o-${order.id}`, day: order.requested_delivery_date, title: `Livraison · ${order.clients?.business_name ?? "Client"}`, detail: `#${order.order_number} · ${statusLabel(order.status)}`, color: statusStyles[order.status]?.color ?? colors.primary, icon: "car-outline", tab: "orders", params: { orderId: order.id, back: "calendar" } });
     }
     for (const invoice of invoices) {
       if (invoice.status !== "issued" || !invoice.due_date) continue;
@@ -98,11 +98,11 @@ export function CalendarScreen() {
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="LIVRAISONS · ÉCHÉANCES · ABSENCES · RAPPELS" title="Calendrier" right={<Button label="+ RAPPEL" onPress={() => setAdding(true)} />} />
-    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
       <View style={[ui.row, { marginTop: 10 }]}>
-        <Pressable onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} hitSlop={10}><Ionicons name="chevron-back" size={22} color={colors.green} /></Pressable>
+        <Pressable onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} hitSlop={10}><Ionicons name="chevron-back" size={22} color={colors.primary} /></Pressable>
         <Text style={[ui.strong, { textTransform: "capitalize" }]}>{month.toLocaleDateString(appLocale(), { month: "long", year: "numeric" })}</Text>
-        <Pressable onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} hitSlop={10}><Ionicons name="chevron-forward" size={22} color={colors.green} /></Pressable>
+        <Pressable onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} hitSlop={10}><Ionicons name="chevron-forward" size={22} color={colors.primary} /></Pressable>
       </View>
       <View style={styles.week}>{WEEKDAYS.map((day, index) => <Text key={index} style={styles.weekday}>{day}</Text>)}</View>
       <View style={styles.grid}>
@@ -124,7 +124,7 @@ export function CalendarScreen() {
           {event.detail ? <Text style={ui.small}>{event.detail}</Text> : null}
         </View>
         {event.reminder ? <>
-          <Pressable onPress={() => void toggleDone(event.reminder!)} hitSlop={8}><Ionicons name={event.reminder.done ? "checkmark-circle" : "ellipse-outline"} size={22} color={colors.green} /></Pressable>
+          <Pressable onPress={() => void toggleDone(event.reminder!)} hitSlop={8}><Ionicons name={event.reminder.done ? "checkmark-circle" : "ellipse-outline"} size={22} color={colors.primary} /></Pressable>
           <Pressable onPress={() => remove(event.reminder!)} hitSlop={8}><Ionicons name="trash-outline" size={18} color={colors.danger} /></Pressable>
         </> : <Ionicons name="chevron-forward" size={16} color={colors.muted} />}
       </Pressable>)}
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   weekday: { flex: 1, textAlign: "center", color: colors.muted, fontSize: 11, fontWeight: "800" },
   grid: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 },
   cell: { width: `${100 / 7}%`, height: 46, alignItems: "center", justifyContent: "center", borderRadius: 10 },
-  cellSelected: { backgroundColor: colors.green },
+  cellSelected: { backgroundColor: colors.primary },
   dayNumber: { color: colors.text, fontSize: 13, fontWeight: "700" },
   today: { color: colors.orange, fontWeight: "800" },
   dots: { flexDirection: "row", gap: 2, height: 6, marginTop: 2 },

@@ -76,7 +76,7 @@ function OfflineBanner({ onSynced }: { onSynced: () => void }) {
 }
 
 function Check({ on }: { on: boolean }) {
-  return <Ionicons name={on ? "checkbox" : "square-outline"} size={22} color={on ? colors.green : colors.muted} />;
+  return <Ionicons name={on ? "checkbox" : "square-outline"} size={22} color={on ? colors.primary : colors.muted} />;
 }
 
 // Prepared orders: the driver ticks the delivery notes loaded together, then ships them in one vehicle.
@@ -114,7 +114,7 @@ function PickupList({ onShipped }: { onShipped: () => void }) {
       data={pickups}
       keyExtractor={(item) => item.id}
       contentContainerStyle={[ui.content, { paddingBottom: 90 }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={<View style={[ui.row, { marginTop: 8 }]}>
         <Text style={[ui.small, { flex: 1 }]}>{error || `${pickups.length} bon(s) prêt(s). Cochez ceux que vous chargez.`}</Text>
         {pickups.length ? <Pressable onPress={() => setSelected(allSelected ? [] : pickups.map((item) => item.id))} hitSlop={8}>
@@ -228,7 +228,7 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (groups: Shipment
       keyExtractor={(item) => item.id}
       contentContainerStyle={[ui.content, { paddingBottom: 90 }]}
       stickySectionHeadersEnabled={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || `${shipments.length} commande(s) à livrer. Cochez les commandes à remettre, pour un ou plusieurs clients.`}</Text>}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune livraison" body="Les commandes expédiées apparaîtront ici." />}
       renderSectionHeader={({ section }) => {
@@ -322,7 +322,7 @@ function DeliveryHistory() {
     keyExtractor={(item) => item.id}
     contentContainerStyle={ui.content}
     keyboardShouldPersistTaps="handled"
-    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
     ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || `${visible.length} livraison(s)`}</Text>}
     ListEmptyComponent={error ? null : <EmptyState title="Aucune livraison" body="Aucune livraison ne correspond à ces filtres." />}
     renderItem={({ item }) => <View style={ui.card}>
@@ -331,7 +331,7 @@ function DeliveryHistory() {
         <Text style={ui.small}>#{item.order_number}</Text>
       </View>
       <Text style={ui.small}>{item.point_label} — {item.address_line}, {item.city} · {item.item_count} produit(s)</Text>
-      <Text style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Livrée le {formatDateTime(item.delivered_at)}{item.driver_name ? ` · ${item.driver_name}` : ""}{item.vehicle_label ? ` · ${item.vehicle_label}` : ""}</Text>
+      <Text style={[ui.small, { color: colors.primary, fontWeight: "700" }]}>Livrée le {formatDateTime(item.delivered_at)}{item.driver_name ? ` · ${item.driver_name}` : ""}{item.vehicle_label ? ` · ${item.vehicle_label}` : ""}</Text>
     </View>}
   />}
   </View>;
@@ -410,7 +410,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
 
     const scanned = parseQr(data);
     if (!scanned) {
-      setError("Ce QR code n’est pas un code AgriFresh.");
+      setError("Ce QR code n’est pas un code Appro+.");
       return;
     }
     setError("");
@@ -506,7 +506,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
           {[...chosen.map((item) => ({ id: item.id, number: item.order_number, label: item.point_label })), ...notes.filter((note) => !chosen.some((item) => item.id === note.id)).map((note) => ({ id: note.id, number: note.order_number, label: note.point_label }))].map((line) => {
             const scanned = notes.some((note) => note.id === line.id);
             return <View key={line.id} style={[ui.card, ui.row]}>
-              <Ionicons name={scanned ? "checkmark-circle" : "ellipse-outline"} size={18} color={scanned ? colors.green : colors.muted} />
+              <Ionicons name={scanned ? "checkmark-circle" : "ellipse-outline"} size={18} color={scanned ? colors.primary : colors.muted} />
               <Text style={[ui.strong, { flex: 1 }]}>Bon #{line.number}</Text>
               <Text style={ui.small}>{line.label}{rules?.notes ? (scanned ? " · scanné" : " · à scanner") : ""}</Text>
             </View>;
@@ -521,9 +521,9 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
 const styles = StyleSheet.create({
   clientName: { color: colors.text, fontSize: 15, fontWeight: "800" },
   offline: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginTop: 8, padding: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.danger, backgroundColor: "#fdecea" },
-  link: { color: colors.green, fontSize: 12, fontWeight: "800" },
+  link: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   selectable: { flexDirection: "row", alignItems: "center", gap: 10 },
-  selectedCard: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  selectedCard: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   sectionHeader: { marginTop: 14, marginBottom: 2 },
   line: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
   actionBar: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.white },

@@ -62,7 +62,7 @@ export function ReturnsScreen({ initialSheet, initialOrderId }: { initialSheet?:
 
   const pending = returns.filter((item) => ["requested", "approved", "received"].includes(item.status)).length;
   const openCredits = credits.filter((item) => item.status === "draft" || item.status === "issued").length;
-  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />;
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />;
 
   return <View style={ui.screen}>
     <ScreenHeader
@@ -139,12 +139,12 @@ function ReturnsList({ returns, refreshControl, onChanged, focused, onShowAll }:
           </View>
           {item.staff_note ? <Text style={[ui.small, { color: colors.amber }]}>Note : {item.staff_note}</Text> : null}
           {item.status === "received" ? <Text style={ui.small}>Reçu le {item.received_at ? formatDateTime(item.received_at) : "—"}{item.restocked ? " · remis en stock" : " · non remis en stock"}</Text> : null}
-          {item.credit_notes.map((credit) => <Text key={credit.id} style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Avoir {creditLabel(credit)} · {creditStatusStyle[credit.status].label}</Text>)}
+          {item.credit_notes.map((credit) => <Text key={credit.id} style={[ui.small, { color: colors.primary, fontWeight: "700" }]}>Avoir {creditLabel(credit)} · {creditStatusStyle[credit.status].label}</Text>)}
 
           {item.status === "requested" || item.status === "approved" ? <TextInput value={notes[item.id] ?? ""} onChangeText={(text) => setNotes({ ...notes, [item.id]: text })} placeholder="Note au client (facultatif)" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 8 }]} /> : null}
           {item.status === "approved" ? <View style={[ui.row, { marginTop: 8 }]}>
             <Text style={[ui.body, { flex: 1 }]}>Remettre en stock à la réception</Text>
-            <Switch value={restock[item.id] ?? true} onValueChange={(value) => setRestock({ ...restock, [item.id]: value })} trackColor={{ true: colors.green, false: colors.line }} />
+            <Switch value={restock[item.id] ?? true} onValueChange={(value) => setRestock({ ...restock, [item.id]: value })} trackColor={{ true: colors.primary, false: colors.line }} />
           </View> : null}
           <View style={[ui.wrapRow, { marginTop: 8 }]}>
             {item.status === "requested" ? <>
@@ -291,7 +291,7 @@ export function ReturnFormModal({ mode, visible, order, onClose, onSaved }: { mo
     setError("");
     try {
       const number = mode === "client" ? await requestReturn(selected.id, items, reason, description) : await staffCreateReturn(selected.id, items, reason, description);
-      notify(mode === "client" ? "Demande envoyée" : "Retour créé", mode === "client" ? `Votre demande ${number} est transmise à AgriFresh. Vous serez averti de la réponse.` : `Retour ${number} accepté : marquez la marchandise reçue à son arrivée.`);
+      notify(mode === "client" ? "Demande envoyée" : "Retour créé", mode === "client" ? `Votre demande ${number} est transmise à votre fournisseur. Vous serez averti de la réponse.` : `Retour ${number} accepté : marquez la marchandise reçue à son arrivée.`);
       onSaved();
     } catch (cause) {
       setError(errorMessage(cause, "Le retour n’a pas pu être enregistré."));
@@ -461,13 +461,13 @@ export function ClientReturnsList({ refreshControl, returns }: { returns: Produc
       </View>
       <Text style={ui.small}>{item.orders ? `Commande #${item.orders.order_number} · ` : ""}{formatDateTime(item.created_at)} · {returnReasonLabel(item.reason)}</Text>
       {item.return_items.map((line) => <Text key={line.id} style={ui.body}>{formatQuantity(line.quantity)} {line.unit} · {line.product_name}</Text>)}
-      {item.staff_note ? <Text style={[ui.small, { color: colors.text, marginTop: 4 }]}>AgriFresh : {item.staff_note}</Text> : null}
-      {item.credit_notes.filter((credit) => credit.status !== "draft").map((credit) => <Text key={credit.id} style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Avoir {creditLabel(credit)}</Text>)}
+      {item.staff_note ? <Text style={[ui.small, { color: colors.text, marginTop: 4 }]}>Fournisseur : {item.staff_note}</Text> : null}
+      {item.credit_notes.filter((credit) => credit.status !== "draft").map((credit) => <Text key={credit.id} style={[ui.small, { color: colors.primary, fontWeight: "700" }]}>Avoir {creditLabel(credit)}</Text>)}
     </View>}
   />;
 }
 
 const styles = StyleSheet.create({
-  focusBar: { marginHorizontal: 14, marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
-  link: { color: colors.green, fontSize: 12, fontWeight: "800" },
+  focusBar: { marginHorizontal: 14, marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
+  link: { color: colors.primary, fontSize: 12, fontWeight: "800" },
 });

@@ -1,3 +1,4 @@
+import { colors } from "./ui/theme";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
@@ -19,9 +20,9 @@ export async function registerForPush(askPermission: boolean): Promise<PushStatu
   try {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("alerts", {
-        name: "Alertes AgriFresh",
+        name: "Alertes Appro+",
         importance: Notifications.AndroidImportance.HIGH,
-        lightColor: "#24543B",
+        lightColor: colors.primary,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
     }

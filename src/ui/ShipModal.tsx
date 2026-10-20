@@ -67,8 +67,8 @@ export function ShipModal({ orders, onClose, onShipped }: {
           {vehicles.map((vehicle) => {
             const selected = vehicle.id === vehicleId;
             return <Pressable key={vehicle.id} onPress={() => setVehicleId(vehicle.id)} style={[styles.row, selected && styles.rowSelected]}>
-              <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.green : colors.muted} />
-              <Ionicons name="car-outline" size={18} color={colors.green} />
+              <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.primary : colors.muted} />
+              <Ionicons name="car-outline" size={18} color={colors.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={ui.strong}>{vehicle.label}</Text>
                 {vehicle.plate || vehicle.notes ? <Text style={ui.small}>{[vehicle.plate, vehicle.notes].filter(Boolean).join(" · ")}</Text> : null}
@@ -88,5 +88,5 @@ export function ShipModal({ orders, onClose, onShipped }: {
 const styles = StyleSheet.create({
   group: { marginTop: 6, backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
-  rowSelected: { backgroundColor: "#f3f8f1" },
+  rowSelected: { backgroundColor: colors.primarySoft },
 });

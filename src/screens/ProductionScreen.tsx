@@ -76,7 +76,7 @@ export function ProductionScreen() {
     ? [{ kind: "date", title: "Préparées le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: prepared, onChange: setPrepared }]
     : [{ kind: "date", title: "Livraison", presets: [presets.late, presets.today, presets.tomorrow, presets.next7, presets.noDate], value: delivery, onChange: setDelivery }];
 
-  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />;
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`${toPrepare.length} COMMANDE(S) À PRÉPARER`} title="Production" />
@@ -107,7 +107,7 @@ export function ProductionScreen() {
             </View>
             <StatusBadge status={item.order.status} />
           </View>
-          <Text style={[ui.small, { color: colors.green, fontWeight: "700" }]}>Préparée le {formatDateTime(item.at)}</Text>
+          <Text style={[ui.small, { color: colors.primary, fontWeight: "700" }]}>Préparée le {formatDateTime(item.at)}</Text>
           <Text style={ui.small} numberOfLines={3}>{item.order.order_items.map((line) => `${formatQuantity(line.quantity)} ${line.unit_snapshot} ${line.product_name_snapshot}`).join(" · ")}</Text>
         </View>}
       />}
@@ -155,7 +155,7 @@ function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshC
         return <View key={line.key} style={styles.totalBlock}>
           <View style={[ui.row, { paddingVertical: 8 }]}>
             <Pressable onPress={() => toggleProduct(line)} hitSlop={8} style={[styles.checkbox, all && styles.checkboxChecked, partial && styles.checkboxPartial]} accessibilityLabel={`Cocher ${line.name} pour tous les clients`}>
-              {all ? <Text style={styles.checkmark}>✓</Text> : partial ? <Text style={[styles.checkmark, { color: colors.green }]}>–</Text> : null}
+              {all ? <Text style={styles.checkmark}>✓</Text> : partial ? <Text style={[styles.checkmark, { color: colors.primary }]}>–</Text> : null}
             </Pressable>
             <Pressable onPress={() => toggleOpen(line.key)} style={[ui.row, { flex: 1 }]}>
               <View style={{ flex: 1 }}>
@@ -164,7 +164,7 @@ function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshC
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={[styles.quantity, all && styles.doneText]}>{formatQuantity(line.quantity)} {line.unit}</Text>
-                {made > 0 ? <Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>fait {formatQuantity(made)}</Text> : null}
+                {made > 0 ? <Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>fait {formatQuantity(made)}</Text> : null}
               </View>
             </Pressable>
           </View>
@@ -225,7 +225,7 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
         {item.order_items.map((line, lineIndex) => <Text key={`${item.id}-${lineIndex}`} style={ui.body}><Text style={{ fontWeight: "800" }}>{formatQuantity(line.quantity)} {line.unit_snapshot}</Text> · {line.product_name_snapshot}</Text>)}
       </View>
       {item.customer_note ? <Text style={[ui.small, { color: colors.orange, marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
-      {item.status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.green, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
+      {item.status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.primary, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
         : !canUpdate ? null : <Button label={item.status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
     </View>}
   />;
@@ -238,13 +238,13 @@ const styles = StyleSheet.create({
   clientList: { paddingLeft: 34, paddingBottom: 8, gap: 2 },
   quantity: { color: colors.text, fontSize: 14, fontWeight: "800", minWidth: 92, textAlign: "right" },
   checkbox: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
-  checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
-  checkboxPartial: { borderColor: colors.green },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxPartial: { borderColor: colors.primary },
   smallBox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.line, marginBottom: 8, marginLeft: 34 },
-  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.green },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.primary },
   checkmark: { color: colors.white, fontWeight: "800" },
   doneText: { color: colors.muted, textDecorationLine: "line-through" },
   activeCard: { borderColor: "#2f5d8a", backgroundColor: "#f3f7fb" },
-  position: { minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.green, color: colors.white, textAlign: "center", lineHeight: 26, fontWeight: "800", paddingHorizontal: 4 },
+  position: { minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, color: colors.white, textAlign: "center", lineHeight: 26, fontWeight: "800", paddingHorizontal: 4 },
 });

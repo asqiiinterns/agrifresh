@@ -31,7 +31,7 @@ export const claimReasonLabel = (reason: ClaimReason) => claimReasons.find((item
 export const claimStatusStyle: Record<ClaimStatus, { label: string; color: string; background: string }> = {
   open: { label: "Ouverte", color: "#7a5a12", background: "#fbf0d5" },
   in_progress: { label: "En traitement", color: "#2f5d8a", background: "#e3edf7" },
-  resolved: { label: "Résolue", color: "#24543b", background: "#dcebd7" },
+  resolved: { label: "Résolue", color: "#1d6b36", background: "#d6efdc" },
   rejected: { label: "Rejetée", color: "#a63d2f", background: "#f8e5e1" },
 };
 

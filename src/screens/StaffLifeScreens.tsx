@@ -60,7 +60,7 @@ export function LeavesScreen({ isAdmin }: { isAdmin: boolean }) {
     validate: pending,
     planning: leaves.filter((leave) => leave.status === "approved" && leave.end_date >= today),
   };
-  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />;
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={manage ? `${pending.length} DEMANDE(S) À VALIDER` : "VOS ABSENCES"} title="Congés" right={<Button label="+ DEMANDE" onPress={() => setSheet("new")} />} />
@@ -80,7 +80,7 @@ export function LeavesScreen({ isAdmin }: { isAdmin: boolean }) {
           <Text style={ui.strong}>Validation des congés requise</Text>
           <Text style={ui.small}>Désactivée : chaque demande est acceptée automatiquement.</Text>
         </View>
-        <Switch value={approval} onValueChange={(value) => { setApproval(value); void setLeaveApproval(value).catch((cause: unknown) => { setApproval(!value); notify("Congés", errorMessage(cause, "Réglage impossible.")); }); }} trackColor={{ true: colors.green, false: colors.line }} />
+        <Switch value={approval} onValueChange={(value) => { setApproval(value); void setLeaveApproval(value).catch((cause: unknown) => { setApproval(!value); notify("Congés", errorMessage(cause, "Réglage impossible.")); }); }} trackColor={{ true: colors.primary, false: colors.line }} />
       </View> : null}
       ListEmptyComponent={<EmptyState title={sheet === "validate" ? "Aucune demande à valider" : sheet === "mine" ? "Aucune demande" : "Aucune absence prévue"} body={sheet === "mine" ? "Touchez « + DEMANDE » pour poser un congé." : undefined} />}
       renderItem={({ item }) => <View style={ui.card}>
@@ -136,7 +136,7 @@ function LeaveForm({ onSaved }: { onSaved: () => void }) {
     <Text style={[ui.body, { marginTop: 6 }]}>Du {formatDay(from, { weekday: "long", day: "numeric", month: "long" })} au {formatDay(to, { weekday: "long", day: "numeric", month: "long" })}</Text>
     <View style={[ui.row, { marginTop: 8 }]}>
       <Text style={[ui.body, { flex: 1 }]}>Demi-journée</Text>
-      <Switch value={halfDay} onValueChange={setHalfDay} trackColor={{ true: colors.green, false: colors.line }} />
+      <Switch value={halfDay} onValueChange={setHalfDay} trackColor={{ true: colors.primary, false: colors.line }} />
     </View>
     <Field label="Motif / commentaire (facultatif)" value={note} onChangeText={setNote} multiline />
     {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
@@ -184,7 +184,7 @@ export function IncidentsScreen() {
       data={incidents.filter((item) => sheet === "open" ? item.status === "open" : item.status === "resolved")}
       keyExtractor={(item) => item.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListEmptyComponent={<EmptyState title="Aucun incident" body={sheet === "open" ? "Les incidents signalés par les livreurs apparaîtront ici." : undefined} />}
       renderItem={({ item }) => <View style={[ui.card, item.status === "open" && { borderLeftWidth: 4, borderLeftColor: colors.danger }]}>
         <View style={ui.row}>
@@ -193,7 +193,7 @@ export function IncidentsScreen() {
         </View>
         <Text style={ui.body}>{item.description}</Text>
         <Text style={ui.small}>{item.reporter?.full_name ?? ""}{item.vehicles ? ` · ${item.vehicles.label}` : ""}{item.orders ? ` · cde #${item.orders.order_number}` : ""}</Text>
-        {item.resolution ? <Text style={[ui.small, { color: colors.green }]}>Réglé : {item.resolution}</Text> : null}
+        {item.resolution ? <Text style={[ui.small, { color: colors.primary }]}>Réglé : {item.resolution}</Text> : null}
         {manage && item.status === "open" ? <>
           <TextInput value={resolutions[item.id] ?? ""} onChangeText={(text) => setResolutions({ ...resolutions, [item.id]: text })} placeholder="Solution apportée" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 8 }]} />
           <Button label="CLÔTURER" onPress={() => resolve(item)} style={{ marginTop: 8, alignSelf: "flex-start" }} />

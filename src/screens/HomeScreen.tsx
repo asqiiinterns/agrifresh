@@ -128,7 +128,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
       eyebrow={today.toLocaleUpperCase("fr")}
       title={`${new Date().getHours() < 18 ? "Bonjour" : "Bonsoir"}${name ? ` ${name}` : ""}`}
       right={<Pressable onPress={() => setEditing(true)} style={styles.gear} hitSlop={8} accessibilityLabel="Personnaliser l’accueil">
-        <Ionicons name="settings-outline" size={20} color={colors.green} />
+        <Ionicons name="settings-outline" size={20} color={colors.primary} />
       </Pressable>}
     />
     {/* Gear next to the greeting: choose and order the figures and shortcuts shown here. */}
@@ -143,7 +143,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
       onReset={async () => { await setMyHomeLayout(null); onLayoutChanged(); }}
       onClose={() => setEditing(false)}
     />
-    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
       {tiles.length ? <View style={styles.grid}>
         {tiles.map((tile) => {
           const value = valueOf(tile.key);
@@ -151,7 +151,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
           return <Pressable key={tile.key} onPress={() => navigate(tile.tab, tile.params)} style={({ pressed }) => [styles.tile, highlight === "action" && styles.tileAction, highlight === "warn" && styles.tileWarn, pressed && { opacity: 0.7 }]}>
             <View style={styles.tileTop}>
               <Text style={styles.tileValue}>{value}</Text>
-              <Ionicons name={tile.icon} size={16} color={highlight === "warn" ? colors.amber : highlight ? colors.green : colors.muted} />
+              <Ionicons name={tile.icon} size={16} color={highlight === "warn" ? colors.amber : highlight ? colors.primary : colors.muted} />
             </View>
             <Text style={styles.tileLabel} numberOfLines={2}>{tile.label}</Text>
           </Pressable>;
@@ -198,10 +198,10 @@ export function HomeCustomizeCard({ account, onLayoutChanged }: { account: Accou
 const styles = StyleSheet.create({
   gear: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   edit: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.white },
-  editText: { color: colors.green, fontSize: 11, fontWeight: "800" },
+  editText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   tile: { flexBasis: "31%", flexGrow: 1, backgroundColor: colors.white, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.line },
-  tileAction: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
+  tileAction: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   tileWarn: { borderColor: "#e3c46f", backgroundColor: "#fffbef" },
   tileTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   tileValue: { color: colors.text, fontSize: 20, fontWeight: "800" },

@@ -14,15 +14,15 @@ export function messagePreview(body: string | null | undefined, attachment?: Att
 // Inside a bubble: who and what is answered. Tap = go to the original message.
 export function ReplyQuote({ author, text, mine, onPress }: { author: string; text: string | null; mine: boolean; onPress?: () => void }) {
   return <Pressable onPress={onPress} disabled={!onPress} style={[styles.quote, mine ? styles.quoteMine : styles.quoteTheirs]} accessibilityLabel="Voir le message d’origine">
-    <Text style={[styles.quoteAuthor, mine && { color: "#f8e0c4" }]} numberOfLines={1}>{author}</Text>
-    <Text style={[styles.quoteText, mine && { color: "#e6efe6" }]} numberOfLines={2}>{text ?? "Message plus ancien"}</Text>
+    <Text style={[styles.quoteAuthor, mine && { color: colors.onPrimaryMuted }]} numberOfLines={1}>{author}</Text>
+    <Text style={[styles.quoteText, mine && { color: colors.onPrimaryMuted }]} numberOfLines={2}>{text ?? "Message plus ancien"}</Text>
   </Pressable>;
 }
 
 // Above the composer while a reply is being written.
 export function ReplyBanner({ author, text, onCancel }: { author: string; text: string; onCancel: () => void }) {
   return <View style={styles.banner}>
-    <Ionicons name="arrow-undo" size={16} color={colors.green} />
+    <Ionicons name="arrow-undo" size={16} color={colors.primary} />
     <View style={{ flex: 1 }}>
       <Text style={styles.bannerTitle} numberOfLines={1}>Réponse à {author}</Text>
       <Text style={styles.bannerText} numberOfLines={1}>{text}</Text>
@@ -34,20 +34,20 @@ export function ReplyBanner({ author, text, onCancel }: { author: string; text: 
 // Small "Répondre" action in a bubble's footer.
 export function ReplyAction({ mine, onPress }: { mine: boolean; onPress: () => void }) {
   return <Pressable onPress={onPress} hitSlop={6} style={styles.action} accessibilityLabel="Répondre à ce message">
-    <Ionicons name="arrow-undo-outline" size={13} color={mine ? "#d4e3d6" : colors.green} />
-    <Text style={[styles.actionText, mine && { color: "#d4e3d6" }]}>Répondre</Text>
+    <Ionicons name="arrow-undo-outline" size={13} color={mine ? colors.onPrimaryMuted : colors.primary} />
+    <Text style={[styles.actionText, mine && { color: colors.onPrimaryMuted }]}>Répondre</Text>
   </Pressable>;
 }
 
 const styles = StyleSheet.create({
   quote: { borderLeftWidth: 3, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6 },
-  quoteMine: { borderLeftColor: "#f8e0c4", backgroundColor: "rgba(255,255,255,0.14)" },
-  quoteTheirs: { borderLeftColor: colors.orange, backgroundColor: "#f6f1e7" },
+  quoteMine: { borderLeftColor: colors.onPrimaryMuted, backgroundColor: "rgba(255,255,255,0.14)" },
+  quoteTheirs: { borderLeftColor: colors.orange, backgroundColor: colors.cream },
   quoteAuthor: { color: colors.orange, fontSize: 10, fontWeight: "800" },
   quoteText: { color: colors.text, fontSize: 12, marginTop: 1 },
-  banner: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 10, marginTop: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderLeftWidth: 3, borderLeftColor: colors.green, backgroundColor: "#f3f8f1" },
-  bannerTitle: { color: colors.green, fontSize: 11, fontWeight: "800" },
+  banner: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 10, marginTop: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderLeftWidth: 3, borderLeftColor: colors.primary, backgroundColor: colors.primarySoft },
+  bannerTitle: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   bannerText: { color: colors.text, fontSize: 12 },
   action: { flexDirection: "row", alignItems: "center", gap: 3 },
-  actionText: { color: colors.green, fontSize: 10, fontWeight: "800" },
+  actionText: { color: colors.primary, fontSize: 10, fontWeight: "800" },
 });

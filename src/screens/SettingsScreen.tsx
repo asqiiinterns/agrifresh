@@ -15,10 +15,11 @@ import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { HomeEditor } from "./HomeEditor";
+import { CompanyPage } from "./CompanyPage";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import type { IconName } from "../ui/navigation";
 
-type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" };
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
@@ -117,6 +118,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   }
   if (page.kind === "home") return <HomeRolesPage header={back} />;
   if (page.kind === "numbering") return <NumberingPage header={back} />;
+  if (page.kind === "company") return <CompanyPage header={back} />;
   if (page.kind === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
@@ -151,6 +153,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi." onPress={() => setPage({ kind: "alerts" })} />
       </ListGroup>
       <ListGroup title="Documents">
+        <ListRow icon="business-outline" title="Entreprise" detail="Raison sociale, adresse, matricule fiscal, RIB et couleur imprimés sur vos documents." onPress={() => setPage({ kind: "company" })} />
         <ListRow icon="barcode-outline" title="Numérotation des documents" detail="Format et numéro de départ des bons de livraison, factures, avoirs et retours." onPress={() => setPage({ kind: "numbering" })} />
       </ListGroup>
       <ListGroup title="Accueil">
@@ -204,7 +207,7 @@ function BlockPage({ block, header, accounts, clients, roleValue, setRole, userV
       {block.items.map((item) => <View key={item.key} style={styles.matrixRow}>
         <Text style={[ui.body, { flex: 1 }]}>{item.label}</Text>
         {roles.map((role) => <View key={role.role} style={styles.cell}>
-          <Switch value={roleValue(role.role, item.key)} onValueChange={(value) => setRole(role.role, item.key, value)} trackColor={{ true: colors.green, false: colors.line }} />
+          <Switch value={roleValue(role.role, item.key)} onValueChange={(value) => setRole(role.role, item.key, value)} trackColor={{ true: colors.primary, false: colors.line }} />
         </View>)}
       </View>)}
     </View>;
@@ -275,7 +278,7 @@ function ClientOptionsPage({ theme, header, clients, defaults, setDefault, setCl
       {sheet === "all" ? <>
         <Text style={[ui.small, { marginTop: 8 }]}>Réglage commun à tous les clients. Une fiche peut avoir sa propre valeur (onglet « Par client » ou dans la fiche).</Text>
         {clientOptionBlocks.filter((block) => !theme || block.title === theme).map((block) => <ListGroup key={block.title} title={block.title}>
-          {block.items.map((item) => <ListRow key={item.key} title={item.label} detail={item.hint} right={<Switch value={optionToBool(item.key, defaults[item.key])} onValueChange={(value) => setDefault(item.key, value)} trackColor={{ true: colors.green, false: colors.line }} />} />)}
+          {block.items.map((item) => <ListRow key={item.key} title={item.label} detail={item.hint} right={<Switch value={optionToBool(item.key, defaults[item.key])} onValueChange={(value) => setDefault(item.key, value)} trackColor={{ true: colors.primary, false: colors.line }} />} />)}
         </ListGroup>)}
       </> : record ? <>
         <ListRow icon="storefront-outline" title={record.business_name} detail={`${record.custom_settings.length} option(s) propre(s)`} right={<BackButton label="Liste" onPress={() => setClientId(null)} />} />
@@ -382,7 +385,7 @@ function NumberingPage({ header }: { header: React.ReactNode }) {
       {items.map((item) => <View key={item.doc_type} style={ui.card}>
         <View style={ui.row}>
           <Text style={[ui.strong, { flex: 1 }]}>{docTypeLabels[item.doc_type]}</Text>
-          <Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>Prochain : {previewNumber(item)}</Text>
+          <Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>Prochain : {previewNumber(item)}</Text>
         </View>
         <View style={[ui.row, { marginTop: 4 }]}>
           <View style={{ flex: 1 }}><Field label="Préfixe" value={item.prefix} onChangeText={(text) => patch(item.doc_type, { prefix: text })} autoCapitalize="characters" /></View>
@@ -391,11 +394,11 @@ function NumberingPage({ header }: { header: React.ReactNode }) {
         </View>
         <View style={[ui.row, { marginTop: 8 }]}>
           <Text style={[ui.body, { flex: 1 }]}>Inclure l’année (ex. 2026-)</Text>
-          <Switch value={item.with_year} onValueChange={(value) => patch(item.doc_type, { with_year: value })} trackColor={{ true: colors.green, false: colors.line }} />
+          <Switch value={item.with_year} onValueChange={(value) => patch(item.doc_type, { with_year: value })} trackColor={{ true: colors.primary, false: colors.line }} />
         </View>
         <View style={[ui.row, { marginTop: 4 }]}>
           <Text style={[ui.body, { flex: 1 }]}>Repartir à 1 chaque année</Text>
-          <Switch value={item.yearly_reset} onValueChange={(value) => patch(item.doc_type, { yearly_reset: value })} trackColor={{ true: colors.green, false: colors.line }} />
+          <Switch value={item.yearly_reset} onValueChange={(value) => patch(item.doc_type, { yearly_reset: value })} trackColor={{ true: colors.primary, false: colors.line }} />
         </View>
         <Button label="ENREGISTRER" variant="secondary" onPress={() => save(item)} busy={busy === item.doc_type} style={{ marginTop: 8, alignSelf: "flex-start" }} />
       </View>)}
@@ -405,7 +408,7 @@ function NumberingPage({ header }: { header: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   matrixRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 },
-  roleHead: { width: 58, textAlign: "center", color: "#405447", fontSize: 10, fontWeight: "800" },
+  roleHead: { width: 58, textAlign: "center", color: colors.textSoft, fontSize: 10, fontWeight: "800" },
   cell: { width: 58, alignItems: "center" },
-  groupTitle: { color: "#6f7a6b", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginLeft: 2 },
+  groupTitle: { color: colors.textSoft, fontSize: 10, fontWeight: "800", letterSpacing: 1, marginLeft: 2 },
 });

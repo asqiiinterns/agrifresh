@@ -95,9 +95,9 @@ export function RecurringModal({ visible, order, existing, onClose, onSaved }: {
         <Field label="Remarque jointe à chaque commande (facultatif)" value={note} onChangeText={setNote} />
         <View style={[ui.row, { marginTop: 10 }]}>
           <Text style={[ui.body, { flex: 1 }]}>Active</Text>
-          <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.green, false: colors.line }} />
+          <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.primary, false: colors.line }} />
         </View>
-        <Text style={[ui.small, { marginTop: 6 }]}>Chaque commande arrive comme une commande normale : elle est acceptée par AgriFresh, et vous pouvez la modifier ou l’annuler.</Text>
+        <Text style={[ui.small, { marginTop: 6 }]}>Chaque commande arrive comme une commande normale : elle est acceptée par votre fournisseur, et vous pouvez la modifier ou l’annuler.</Text>
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
         <Button label="ENREGISTRER" onPress={() => save()} busy={busy} disabled={weekdays.length === 0 || items.length === 0} style={{ marginTop: 14 }} />
       </ScrollView>
@@ -138,12 +138,12 @@ export function RecurringScreen({ team }: { team: boolean }) {
       data={rows}
       keyExtractor={(row) => row.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListEmptyComponent={<EmptyState title="Aucune commande récurrente" body="Dans une commande, touchez « Répéter automatiquement » pour la recevoir chaque semaine aux jours choisis." />}
       renderItem={({ item }) => <View style={[ui.card, !item.active && { opacity: 0.6 }]}>
         <View style={ui.row}>
           <Text style={[ui.strong, { flex: 1 }]}>{team ? item.clients?.business_name ?? "Client" : item.weekdays.map((day) => DAYS[day - 1]).join(", ")}</Text>
-          <Text style={[ui.small, { color: item.active ? colors.green : colors.muted, fontWeight: "800" }]}>{item.active ? "ACTIVE" : "EN PAUSE"}</Text>
+          <Text style={[ui.small, { color: item.active ? colors.primary : colors.muted, fontWeight: "800" }]}>{item.active ? "ACTIVE" : "EN PAUSE"}</Text>
         </View>
         <Text style={ui.small}>{team ? `${item.weekdays.map((day) => DAYS[day - 1]).join(", ")} · ` : ""}prochaine livraison {formatDay(item.next_delivery)} · créée {item.lead_days === 0 ? "le jour même" : `${item.lead_days} j avant`}</Text>
         <Text style={ui.small} numberOfLines={2}>{item.items.map((line) => `${formatQuantity(line.quantity)} ${line.unit ?? ""} ${line.name ?? ""}`).join(" · ")}</Text>

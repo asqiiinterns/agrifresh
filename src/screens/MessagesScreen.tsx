@@ -16,10 +16,10 @@ import { TeamMessagesList } from "./TeamMessagesScreen";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
-// Client side: a single conversation with the AgriFresh team.
+// Client side: a single conversation with the supplier's team.
 export function ClientMessagesScreen({ clientId, onRead }: { clientId: string; onRead: () => void }) {
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" subtitle="Une question sur une commande, un produit, une livraison ? L’équipe AgriFresh vous répond ici." />
+    <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" subtitle="Une question sur une commande, un produit, une livraison ? Votre fournisseur vous répond ici." />
     <Thread clientId={clientId} viewerIsStaff={false} onRead={onRead} />
   </View>;
 }
@@ -103,7 +103,7 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
       data={visible}
       keyExtractor={(entry) => entry.client_id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucun client" body="Créez des fiches clients pour échanger avec eux." />}
       renderItem={({ item }) => <Pressable style={ui.card} onPress={() => setOpenClient(item)}>
@@ -136,7 +136,7 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
   const [me, setMe] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const list = useRef<FlatList<Message>>(null);
-  const authorOf = (message: Message) => message.from_staff === viewerIsStaff ? "Vous" : message.from_staff ? "AgriFresh" : "Client";
+  const authorOf = (message: Message) => message.from_staff === viewerIsStaff ? "Vous" : message.from_staff ? "Fournisseur" : "Client";
   function goTo(id: string) {
     const index = messages.findIndex((item) => item.id === id);
     if (index < 0) return;
@@ -238,16 +238,16 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
         const original = item.reply_to ? messages.find((other) => other.id === item.reply_to) : undefined;
         return <Pressable onLongPress={() => setReplyTo(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && styles.waiting, highlight === item.id && styles.highlight]}>
           {item.needs_reply ? <NeedsReplyTag mine={mine} /> : null}
-          {!mine ? <Text style={styles.author}>{item.from_staff ? "AgriFresh" : "Client"}</Text> : null}
+          {!mine ? <Text style={styles.author}>{item.from_staff ? "Fournisseur" : "Client"}</Text> : null}
           {item.reply_to ? <ReplyQuote mine={mine} author={original ? authorOf(original) : "Message"} text={original ? messagePreview(original.body, original.attachment) : null} onPress={original ? () => goTo(original.id) : undefined} /> : null}
           {item.attachment ? <AttachmentView attachment={item.attachment} mine={mine} /> : null}
           {item.body ? <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text> : null}
-          <Text style={[styles.time, mine && { color: "#d4e3d6" }]}>{formatDateTime(item.created_at)}{mine && item.read_at ? " · lu" : ""}</Text>
+          <Text style={[styles.time, mine && { color: colors.onPrimaryMuted }]}>{formatDateTime(item.created_at)}{mine && item.read_at ? " · lu" : ""}</Text>
           <View style={styles.footer}>
             <ReplyAction mine={mine} onPress={() => setReplyTo(item)} />
             {canFlag ? <Pressable onPress={() => void toggleNeedsReply(item)} style={styles.needsReply} hitSlop={6}>
-              <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? "#d4e3d6" : colors.muted} />
-              <Text style={[styles.needsReplyText, mine && { color: "#d4e3d6" }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
+              <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? colors.onPrimaryMuted : colors.muted} />
+              <Text style={[styles.needsReplyText, mine && { color: colors.onPrimaryMuted }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
             </Pressable> : null}
           </View>
         </Pressable>;
@@ -268,13 +268,13 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
 
 const styles = StyleSheet.create({
   bubble: { maxWidth: "82%", padding: 10, borderRadius: 12, marginVertical: 4 },
-  mine: { alignSelf: "flex-end", backgroundColor: colors.green, borderBottomRightRadius: 3 },
+  mine: { alignSelf: "flex-end", backgroundColor: colors.primary, borderBottomRightRadius: 3 },
   theirs: { alignSelf: "flex-start", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: 3 },
   author: { color: colors.orange, fontSize: 10, fontWeight: "800", marginBottom: 2 },
   body: { color: colors.text, fontSize: 14, lineHeight: 20 },
   time: { color: colors.muted, fontSize: 9, marginTop: 4, textAlign: "right" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
-  send: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  send: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   sendText: { color: colors.white, fontSize: 18 },
   waiting: { borderWidth: 2, borderColor: colors.danger },
   footer: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 5, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 4 },

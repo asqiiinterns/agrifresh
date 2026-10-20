@@ -128,6 +128,6 @@ const now = new Date();
 const pad = (value) => String(value).padStart(2, "0");
 const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 mkdirSync(join(root, "dist-apk"), { recursive: true });
-const target = join(root, "dist-apk", `AgriFresh-${version}-${stamp}${signing ? "" : "-test"}.apk`);
+const target = join(root, "dist-apk", `Appro-plus-${version}-${stamp}${signing ? "" : "-test"}.apk`);
 copyFileSync(built, target);
 console.log(`\n✔ APK prêt : ${target}\n`);

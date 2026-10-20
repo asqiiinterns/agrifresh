@@ -38,7 +38,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
   const [error, setError] = useState("");
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
-  // Two sheets: orders still moving, and closed ones (history, if AgriFresh enables it).
+  // Two sheets: orders still moving, and closed ones (history, if the supplier enables it).
   const [sheet, setSheet] = useState<"open" | "closed">("open");
   const [expanded, setExpanded] = useState<string[]>(initialOrderId ? [initialOrderId] : []);
   const historyEnabled = client.history_enabled !== false;
@@ -154,7 +154,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
       data={visible}
       keyExtractor={(order) => order.id}
       contentContainerStyle={ui.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
         : focused ? <View style={[ui.row, styles.focusBar]}>
           <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
@@ -176,9 +176,9 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
           {item.requested_delivery_date ? ` · livraison souhaitée ${formatDay(item.requested_delivery_date)}` : ""}
         </Text>
         {item.address_snapshot?.point_label ? <Text style={ui.small}>Livraison : {item.address_snapshot.point_label} — {item.address_snapshot.address_line}</Text> : null}
-        {item.delivered_at ? <Text style={[ui.small, { color: colors.green }]}>Livrée le {formatDateTime(item.delivered_at)}</Text> : null}
+        {item.delivered_at ? <Text style={[ui.small, { color: colors.primary }]}>Livrée le {formatDateTime(item.delivered_at)}</Text> : null}
         {item.status === "awaiting_client" ? <View style={styles.reconfirm}>
-          <Text style={[ui.strong, { color: "#9a4f0f" }]}>AgriFresh vous propose de reconfirmer cette commande</Text>
+          <Text style={[ui.strong, { color: "#9a4f0f" }]}>Votre fournisseur vous propose de reconfirmer cette commande</Text>
           {item.status_note ? <Text style={[ui.body, { marginTop: 4 }]}>{item.status_note}</Text> : null}
           <View style={[ui.wrapRow, { marginTop: 10 }]}>
             <Button label="RECONFIRMER" onPress={() => answer(item, true)} busy={respondingId === item.id} style={{ flexGrow: 1 }} />
@@ -204,7 +204,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
             <View style={[ui.badge, { backgroundColor: claimStatusStyle[claim.status].background }]}><Text style={[ui.badgeText, { color: claimStatusStyle[claim.status].color }]}>{claimStatusStyle[claim.status].label}</Text></View>
           </View>
           <Text style={ui.small}>{claim.description}</Text>
-          {claim.staff_response ? <Text style={[ui.body, { marginTop: 4 }]}>Réponse AgriFresh : {claim.staff_response}</Text> : null}
+          {claim.staff_response ? <Text style={[ui.body, { marginTop: 4 }]}>Réponse du fournisseur : {claim.staff_response}</Text> : null}
         </View>)}
         {historyEnabled ? <OrderTimeline order={item} viewer="client" /> : null}
         {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
@@ -258,7 +258,7 @@ function ClaimModal({ order, onClose, onSent }: { order: Order | null; onClose: 
     setError("");
     try {
       await createClaim(order.id, reason, description);
-      notify("Réclamation envoyée", "AgriFresh vous répondra ici dès son traitement.");
+      notify("Réclamation envoyée", "Votre fournisseur vous répondra ici dès son traitement.");
       onSent();
     } catch (cause) {
       setError(errorMessage(cause, "La réclamation n’a pas pu être envoyée."));
@@ -286,10 +286,10 @@ function ClaimModal({ order, onClose, onSent }: { order: Order | null; onClose: 
 }
 
 const styles = StyleSheet.create({
-  focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
+  focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   reconfirm: { marginTop: 10, padding: 12, borderRadius: 8, backgroundColor: "#fde7d4" },
   claim: { marginTop: 10, padding: 10, borderRadius: 8, backgroundColor: colors.cream },
-  origin: { color: colors.green, fontSize: 10, marginTop: 1 },
+  origin: { color: colors.primary, fontSize: 10, marginTop: 1 },
   filters: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
   banner: { marginTop: 12, padding: 12, borderRadius: 8, backgroundColor: "#ece6f6", color: "#5b3f8a" },
 });

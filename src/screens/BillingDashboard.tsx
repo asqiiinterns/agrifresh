@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
   columnSlot: { flex: 1, alignItems: "center", height: "100%" },
   columnValue: { color: colors.muted, fontSize: 9, height: 13 },
   columnTrack: { flex: 1, width: "70%", justifyContent: "flex-end", borderBottomWidth: 1, borderBottomColor: colors.line },
-  column: { backgroundColor: colors.green, borderTopLeftRadius: 4, borderTopRightRadius: 4, minHeight: 1 },
+  column: { backgroundColor: colors.primary, borderTopLeftRadius: 4, borderTopRightRadius: 4, minHeight: 1 },
   columnLabel: { color: colors.muted, fontSize: 10, marginTop: 4, textTransform: "capitalize" },
-  barTrack: { height: 8, borderRadius: 4, backgroundColor: "#eef0ea", marginTop: 3, overflow: "hidden" },
-  bar: { height: 8, borderRadius: 4, backgroundColor: colors.green },
+  barTrack: { height: 8, borderRadius: 4, backgroundColor: colors.cream, marginTop: 3, overflow: "hidden" },
+  bar: { height: 8, borderRadius: 4, backgroundColor: colors.primary },
 });
