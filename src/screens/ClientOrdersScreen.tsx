@@ -9,6 +9,7 @@ import { deliveryNoteNumber, fetchMyOrders, formatOrigin, respondToOrder, shareD
 import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
 import { OrderTimeline } from "../ui/OrderTimeline";
 import { ReturnFormModal } from "./ReturnsScreen";
+import { RecurringModal } from "./RecurringScreen";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { useCan } from "../data/permissions";
@@ -50,6 +51,8 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const canClaim = useCan()("client.claims");
   const canReturn = useCan()("client.returns");
+  const canRecurring = useCan()("client.recurring");
+  const [recurringOrder, setRecurringOrder] = useState<Order | null>(null);
   const [returnOrder, setReturnOrder] = useState<Order | null>(null);
 
   async function answer(order: Order, accept: boolean) {
@@ -208,12 +211,14 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
           <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} />
           {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
           {canReturn && item.status === "delivered" ? <Button label="DEMANDER UN RETOUR" variant="secondary" onPress={() => setReturnOrder(item)} /> : null}
+          {canRecurring ? <Button label="RÉPÉTER AUTOMATIQUEMENT" variant="secondary" onPress={() => setRecurringOrder(item)} /> : null}
         </View> : null}
         </> : null}
       </View>;
       }}
     />}
 
+    <RecurringModal visible={recurringOrder !== null} order={recurringOrder} onClose={() => setRecurringOrder(null)} onSaved={() => setRecurringOrder(null)} />
     <ReturnFormModal mode="client" visible={returnOrder !== null} order={returnOrder} onClose={() => setReturnOrder(null)} onSaved={() => setReturnOrder(null)} />
     <ClaimModal order={claimOrder} onClose={() => setClaimOrder(null)} onSent={() => { setClaimOrder(null); void reload("silent"); }} />
 

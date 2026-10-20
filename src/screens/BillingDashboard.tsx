@@ -3,7 +3,10 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
 import { balanceOf, isOverdue, paymentMethodLabel, type InvoiceWithOrders } from "../data/invoices";
 import type { CreditNote } from "../data/returns";
-import { formatPrice } from "../ui/components";
+import { Button, Chip, formatPrice } from "../ui/components";
+import { invoicesCsv, paymentsCsv, salesJournalCsv, saveCsv } from "../data/exports";
+import { presets, type DateFilterValue } from "../ui/dateFilter";
+import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
 const monthKey = (value: string) => value.slice(0, 7);
@@ -57,7 +60,40 @@ export function BillingDashboard({ invoices, credits }: { invoices: InvoiceWithO
     <ColumnChart title="Encaissé par mois" points={data.collected} />
     <BarList title="Encaissements par mode (90 jours)" points={data.methods} empty="Aucun règlement enregistré sur 90 jours." />
     <BarList title="Clients : reste à encaisser" points={data.clients} empty="Aucune facture à encaisser." />
+    <ExportsCard invoices={invoices} credits={credits} />
   </ScrollView>;
+}
+
+// Excel and accounting exports for a period.
+function ExportsCard({ invoices, credits }: { invoices: InvoiceWithOrders[]; credits: CreditNote[] }) {
+  const [period, setPeriod] = useState<DateFilterValue>(() => presets.thisMonth.value());
+  const [busy, setBusy] = useState<string | null>(null);
+  const from = period?.from ?? "2000-01-01";
+  const to = period?.to ?? "2100-12-31";
+  async function run(key: string, name: string, content: () => string) {
+    setBusy(key);
+    try {
+      await saveCsv(`${name}-${from}-${to}.csv`, content());
+    } catch (cause) {
+      notify("Export", errorMessage(cause, "Export impossible."));
+    } finally {
+      setBusy(null);
+    }
+  }
+  return <View style={ui.card}>
+    <Text style={ui.strong}>Exports</Text>
+    <Text style={ui.small}>Fichiers CSV qui s’ouvrent dans Excel (séparateur « ; »), à envoyer au comptable.</Text>
+    <View style={[ui.wrapRow, { marginTop: 8 }]}>
+      {[presets.thisMonth, presets.lastMonth, presets.last30].map((preset) => <Chip key={preset.label} label={preset.label} selected={period?.label === preset.label} onPress={() => setPeriod(preset.value())} />)}
+      <Chip label="Tout" selected={period === null} onPress={() => setPeriod(null)} />
+    </View>
+    <View style={[ui.wrapRow, { marginTop: 8 }]}>
+      <Button label="FACTURES" variant="secondary" busy={busy === "invoices"} onPress={() => void run("invoices", "factures", () => invoicesCsv(invoices, from, to))} />
+      <Button label="RÈGLEMENTS" variant="secondary" busy={busy === "payments"} onPress={() => void run("payments", "reglements", () => paymentsCsv(invoices, from, to))} />
+      <Button label="JOURNAL DES VENTES" variant="secondary" busy={busy === "journal"} onPress={() => void run("journal", "journal-ventes", () => salesJournalCsv(invoices, credits, from, to))} />
+    </View>
+    <Text style={[ui.small, { marginTop: 6 }]}>Journal : 411 clients, 706 ventes, 4457 TVA collectée, 4458 timbre, 709 avoirs. À faire valider par votre comptable.</Text>
+  </View>;
 }
 
 export function Tile({ label, value, warn }: { label: string; value: string; warn?: boolean }) {

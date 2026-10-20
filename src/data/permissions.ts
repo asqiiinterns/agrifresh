@@ -7,7 +7,7 @@ export type Feature =
   | "orders.decide" | "orders.plan" | "orders.ship" | "orders.create" | "production.view" | "production.update"
   | "clients.view" | "clients.edit" | "clients.create" | "invoices.manage" | "products.manage"
   | "messages.manage" | "team.messages" | "claims.manage" | "returns.manage" | "client.returns"
-  | "location.share" | "location.view" | "leave.request" | "leave.manage" | "calendar.view" | "incidents.report" | "incidents.manage" | "stats.view" | "deliveries" | "fleet.manage" | "audit.view"
+  | "client.recurring" | "location.share" | "location.view" | "leave.request" | "leave.manage" | "calendar.view" | "incidents.report" | "incidents.manage" | "stats.view" | "deliveries" | "fleet.manage" | "audit.view"
   | "client.home" | "client.order" | "client.orders" | "client.alerts"
   | "client.invoices" | "client.messages" | "client.claims";
 
@@ -76,6 +76,7 @@ export const featureBlocks: SettingsBlock[] = [
     { key: "client.messages", label: "Messages" },
     { key: "client.claims", label: "Réclamations" },
     { key: "client.returns", label: "Demandes de retour et avoirs" },
+    { key: "client.recurring", label: "Commandes récurrentes" },
   ] },
 ];
 
@@ -88,7 +89,7 @@ export const configurableRoles: { role: Role; label: string; short: string; audi
 
 // Client options: one value for all clients, which a client record may override.
 export type ClientOptionKey = "show_prices" | "show_origin" | "show_stock" | "stock_managed" | "invoice_mode" | "reception_qr"
-  | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr" | "payment_reminders" | "reminder_opt_out_allowed";
+  | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr" | "payment_reminders" | "reminder_opt_out_allowed" | "delivery_signature";
 export const clientOptionBlocks: { title: string; icon: string; items: { key: ClientOptionKey; label: string; hint: string }[] }[] = [
   { title: "Affichage", icon: "eye-outline", items: [
     { key: "show_prices", label: "Afficher les prix", hint: "Dans l’application et sur les bons de livraison." },
@@ -104,6 +105,7 @@ export const clientOptionBlocks: { title: string; icon: string; items: { key: Cl
     { key: "scan_delivery_note", label: "Scan du bon de livraison", hint: "Le livreur scanne le QR de chaque bon à la remise." },
     { key: "scan_client_qr", label: "Scan du QR client", hint: "QR collé au point de livraison (ou QR de réception)." },
     { key: "reception_qr", label: "QR de réception dans l’appli du client", hint: "Remplace le QR collé au point de livraison." },
+    { key: "delivery_signature", label: "Signature du client à la livraison", hint: "Le client signe sur l’écran du livreur ; la signature figure sur le bon de livraison." },
   ] },
   { title: "Facturation et relances", icon: "document-text-outline", items: [
     { key: "invoice_mode", label: "Facture automatique à l’acceptation", hint: "Sinon : factures regroupées par l’équipe (fréquence réglée sur la fiche)." },

@@ -1,4 +1,6 @@
 import { supabase } from "../lib/supabase";
+import { cacheGet, cacheSet, enqueue, isOnline } from "./offline";
+import type { Signature } from "../ui/SignaturePad";
 
 export type Vehicle = { id: string; label: string; plate: string; notes: string; active: boolean };
 export type VehicleInput = Pick<Vehicle, "label" | "plate" | "notes" | "active">;
@@ -25,20 +27,31 @@ export async function saveVehicle(id: string | null, input: VehicleInput): Promi
 }
 
 // One shipment: the selected prepared orders, loaded in one vehicle.
-export async function shipOrders(orderIds: string[], vehicleId: string | null): Promise<{ shipment_number: number; count: number }> {
-  const { data, error } = await client().rpc("driver_ship_orders", { p_order_ids: orderIds, p_vehicle_id: vehicleId });
+// Without network the shipment is queued on the phone and sent when the connection comes back.
+export async function shipOrders(orderIds: string[], vehicleId: string | null): Promise<{ shipment_number: number | null; count: number; queued?: boolean }> {
+  const args = { p_order_ids: orderIds, p_vehicle_id: vehicleId };
+  if (!(await isOnline())) {
+    await enqueue("ship", "driver_ship_orders", args, `Expédition de ${orderIds.length} bon(s)`);
+    const cached = await cacheGet<{ id: string }[]>("pickups");
+    if (cached) await cacheSet("pickups", cached.filter((item) => !orderIds.includes(item.id)));
+    return { shipment_number: null, count: orderIds.length, queued: true };
+  }
+  const { data, error } = await client().rpc("driver_ship_orders", args);
   if (error) throw error;
   return data as { shipment_number: number; count: number };
 }
 
 // Hand-over: proof required depends on the client's options (delivery-note scans, client QR).
-export async function deliverOrders(orderIds: string[], deliveryTokens: string[], clientQr: { kind: "point" | "client"; token: string } | null): Promise<number> {
-  const { data, error } = await client().rpc("driver_deliver", {
-    p_order_ids: orderIds,
-    p_delivery_tokens: deliveryTokens,
-    p_client_qr_kind: clientQr?.kind ?? null,
-    p_client_qr_token: clientQr?.token ?? null,
-  });
+// Returns the number delivered, or -1 when recorded offline (sent and checked when back online).
+export async function deliverOrders(orderIds: string[], deliveryTokens: string[], clientQr: { kind: "point" | "client"; token: string } | null, signature: Signature | null = null, signer = ""): Promise<number> {
+  const base = { p_order_ids: orderIds, p_delivery_tokens: deliveryTokens, p_client_qr_kind: clientQr?.kind ?? null, p_client_qr_token: clientQr?.token ?? null };
+  const rpc = signature ? "driver_deliver_v2" : "driver_deliver";
+  const args = signature ? { ...base, p_signature: signature, p_signer: signer.trim() || null } : base;
+  if (!(await isOnline())) {
+    await enqueue("deliver", rpc, args, `Remise de ${Math.max(orderIds.length, deliveryTokens.length)} commande(s)`);
+    return -1;
+  }
+  const { data, error } = await client().rpc(rpc, args);
   if (error) throw error;
   return Number(data);
 }

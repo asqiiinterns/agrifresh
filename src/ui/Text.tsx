@@ -1,4 +1,5 @@
-import { forwardRef, type ComponentProps, type ElementRef } from "react";
+import { Children, forwardRef, type ComponentProps, type ElementRef, type ReactNode } from "react";
+import { translate, type Language } from "./i18n";
 import { Text as NativeText, TextInput as NativeTextInput, StyleSheet } from "react-native";
 import { useDisplay } from "./display";
 
@@ -14,12 +15,17 @@ function scaled<T>(style: T, scale: number): T {
   }] as T;
 }
 
+// Plain text pieces are translated into the chosen language (see i18n.ts).
+const translated = (children: ReactNode, language: Language): ReactNode => language === "fr" ? children
+  : Children.map(children, (child) => typeof child === "string" ? translate(child, language) : child);
+
 export const Text = forwardRef<ElementRef<typeof NativeText>, ComponentProps<typeof NativeText>>(function Text(props, ref) {
-  const { fontScale } = useDisplay();
-  return <NativeText ref={ref} {...props} style={scaled(props.style, fontScale)} />;
+  const { fontScale, language } = useDisplay();
+  const style = scaled(props.style, fontScale);
+  return <NativeText ref={ref} {...props} style={language === "ar" ? [style, { writingDirection: "rtl" }] : style}>{translated(props.children, language)}</NativeText>;
 });
 
 export const TextInput = forwardRef<ElementRef<typeof NativeTextInput>, ComponentProps<typeof NativeTextInput>>(function TextInput(props, ref) {
-  const { fontScale } = useDisplay();
-  return <NativeTextInput ref={ref} {...props} style={scaled(props.style, fontScale)} />;
+  const { fontScale, language } = useDisplay();
+  return <NativeTextInput ref={ref} {...props} placeholder={props.placeholder ? translate(props.placeholder, language) : props.placeholder} style={scaled(props.style, fontScale)} />;
 });

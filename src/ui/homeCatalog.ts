@@ -64,6 +64,7 @@ export const homeShortcuts: HomeShortcutDef[] = [
   { key: "c_order", label: "Passer une commande", icon: "add-circle-outline", audience: "customer", need: "client.order", tab: "order" },
   { key: "c_orders", label: "Mes commandes", icon: "receipt-outline", audience: "customer", need: "client.orders", tab: "orders" },
   { key: "c_invoices", label: "Mes factures", icon: "document-text-outline", audience: "customer", need: "client.invoices", tab: "invoices" },
+  { key: "c_recurring", label: "Mes commandes récurrentes", icon: "repeat-outline", audience: "customer", need: "client.recurring", tab: "recurring" },
   { key: "c_messages", label: "Écrire à AgriFresh", icon: "chatbubbles-outline", audience: "customer", need: "client.messages", tab: "messages" },
   { key: "c_account", label: "Mon compte", icon: "person-circle-outline", audience: "customer", need: null, tab: "account" },
 ];

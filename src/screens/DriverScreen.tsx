@@ -5,7 +5,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { fetchDeliveryHistory, fetchPickups, fetchShipments, lookupDeliveryNote, type DeliveredOrder, type Pickup, type ScannedDeliveryNote, type Shipment } from "../data/delivery";
+import { fetchDeliveryHistory, fetchPickups, fetchShipments, forgetShipments, lookupDeliveryNote, type DeliveredOrder, type Pickup, type ScannedDeliveryNote, type Shipment } from "../data/delivery";
+import { flushQueue, useOfflineQueue, useOnline } from "../data/offline";
+import { SignatureModal, type Signature } from "../ui/SignaturePad";
 import { deliverOrders } from "../data/fleet";
 import { useCan } from "../data/permissions";
 import { Button, CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
@@ -43,11 +45,33 @@ export function DriverScreen() {
         {tab === "todo" ? <Button label="SCANNER" onPress={() => setHandover([[]])} /> : null}
       </View>}
     />
+    <OfflineBanner onSynced={bump} />
     <Sheets items={tabs} value={tab} onChange={setTab} />
     {tab === "pickup" ? <PickupList key={`pickup-${refreshKey}`} onShipped={bump} />
       : tab === "todo" ? <ShipmentList key={`todo-${refreshKey}`} onDeliver={setHandover} onDelivered={bump} />
       : <DeliveryHistory key={`history-${refreshKey}`} />}
     <HandoverModal queue={handover} onClose={() => setHandover(null)} onDelivered={bump} />
+  </View>;
+}
+
+// Offline: the lists come from the phone; actions are queued and sent when the network is back.
+function OfflineBanner({ onSynced }: { onSynced: () => void }) {
+  const online = useOnline();
+  const pending = useOfflineQueue();
+  const [busy, setBusy] = useState(false);
+  if (online && pending === 0) return null;
+  async function sync() {
+    setBusy(true);
+    const result = await flushQueue();
+    setBusy(false);
+    if (result.failed.length) notify("Synchronisation", `Refusé par le serveur :\n${result.failed.join("\n")}`);
+    else if (result.sent) notify("Synchronisation", `${result.sent} action(s) envoyée(s).`);
+    onSynced();
+  }
+  return <View style={[styles.offline, online && { backgroundColor: "#fffbef", borderColor: "#e3c46f" }]}>
+    <Ionicons name={online ? "cloud-upload-outline" : "cloud-offline-outline"} size={18} color={online ? colors.amber : colors.danger} />
+    <Text style={[ui.small, { flex: 1, color: colors.text }]}>{online ? `${pending} action(s) enregistrée(s) hors ligne à envoyer.` : `Hors ligne : vous pouvez continuer, ${pending ? `${pending} action(s) en attente` : "les actions seront envoyées au retour du réseau"}.`}</Text>
+    {online && pending ? <Button label="ENVOYER" variant="secondary" onPress={() => void sync()} busy={busy} /> : null}
   </View>;
 }
 
@@ -158,8 +182,9 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (groups: Shipment
   function deliver() {
     if (!chosen.length) return;
     const groups = [...new Map(chosen.map((item) => [item.client_id, chosen.filter((other) => other.client_id === item.client_id)])).values()];
-    const direct = groups.filter((group) => !group[0].scan_delivery_note && !group[0].scan_client_qr);
-    const scanned = groups.filter((group) => group[0].scan_delivery_note || group[0].scan_client_qr);
+    // Clients who sign at delivery always go through the hand-over screen.
+    const direct = groups.filter((group) => !group[0].scan_delivery_note && !group[0].scan_client_qr && !group[0].delivery_signature);
+    const scanned = groups.filter((group) => group[0].scan_delivery_note || group[0].scan_client_qr || group[0].delivery_signature);
     if (!direct.length) {
       onDeliver(scanned);
       return;
@@ -174,8 +199,12 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (groups: Shipment
     setBusy(true);
     let delivered = 0;
     try {
-      for (const group of direct) delivered += await deliverOrders(group.map((item) => item.id), [], null);
-      notify("Livraison confirmée", `${delivered} commande(s) livrée(s) chez ${direct.length} client(s).`);
+      let queued = false;
+      for (const group of direct) {
+        const result = await deliverOrders(group.map((item) => item.id), [], null);
+        if (result < 0) { queued = true; await forgetShipments(group.map((item) => item.id)); } else delivered += result;
+      }
+      notify("Livraison confirmée", queued ? "Pas de réseau : les remises sont enregistrées sur le téléphone et seront envoyées au retour de la connexion." : `${delivered} commande(s) livrée(s) chez ${direct.length} client(s).`);
       setSelected((current) => current.filter((id) => !direct.flat().some((item) => item.id === id)));
       onDelivered();
       if (scanned.length) onDeliver(scanned);
@@ -342,17 +371,28 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
   const readyForClient = orderIds.length > 0 && missing.length === 0;
   const businessName = first?.business_name ?? "Scanner";
 
+  // Signature: mandatory for some clients, possible for all ("Faire signer").
+  const [signing, setSigning] = useState<{ clientQr: { kind: "point" | "client"; token: string } | null } | null>(null);
+  const [signature, setSignature] = useState<{ value: Signature | null; signer: string } | null>(null);
+  const needsSignature = chosen.some((item) => item.delivery_signature);
+
   async function deliver(clientQr: { kind: "point" | "client"; token: string } | null) {
+    if (needsSignature && !signature?.value) {
+      setSigning({ clientQr });
+      return;
+    }
     setBusy(true);
     try {
-      const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), clientQr);
+      const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), clientQr, signature?.value ?? null, signature?.signer ?? "");
+      if (count < 0) await forgetShipments(orderIds);
+      setSignature(null);
       onDelivered();
       if (step + 1 < total) {
         setStep(step + 1);
         setMessage("");
-        notify("Livraison confirmée", `${count} commande(s) livrée(s) chez ${businessName}. Client suivant : ${queue?.[step + 1]?.[0]?.business_name ?? ""}.`);
+        notify("Livraison confirmée", `${count < 0 ? "Enregistrée hors ligne" : `${count} commande(s) livrée(s)`} chez ${businessName}. Client suivant : ${queue?.[step + 1]?.[0]?.business_name ?? ""}.`);
       } else {
-        notify("Livraison confirmée", `${count} commande(s) livrée(s) chez ${businessName}.`);
+        notify("Livraison confirmée", count < 0 ? `Pas de réseau : la remise chez ${businessName} est enregistrée et sera envoyée au retour de la connexion.` : `${count} commande(s) livrée(s) chez ${businessName}.`);
         onClose();
       }
     } catch (cause) {
@@ -412,6 +452,33 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
     : "Tout est prêt : confirmez la remise.";
 
   return <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <SignatureModal
+      visible={signing !== null}
+      title={businessName}
+      required={needsSignature}
+      onClose={() => setSigning(null)}
+      onSigned={(value, signer) => {
+        const pending = signing;
+        setSignature({ value, signer });
+        setSigning(null);
+        // Signed after the client QR: finish the hand-over right away.
+        if (pending?.clientQr && value) void (async () => {
+          setBusy(true);
+          try {
+            const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), pending.clientQr, value, signer);
+            if (count < 0) await forgetShipments(orderIds);
+            setSignature(null);
+            onDelivered();
+            if (step + 1 < total) setStep(step + 1); else onClose();
+            notify("Livraison confirmée", count < 0 ? "Enregistrée hors ligne, envoyée au retour du réseau." : `${count} commande(s) livrée(s) et signée(s).`);
+          } catch (cause) {
+            setError(errorMessage(cause, "La remise n’a pas pu être confirmée."));
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
+    />
     <SafeAreaView style={ui.modalSafe}>
       <ScreenHeader eyebrow={total > 1 ? `REMISE · CLIENT ${step + 1}/${total}` : "REMISE AU CLIENT"} title={businessName} right={<CloseButton onPress={onClose} />} />
       {!permission ? <Loading /> : !permission.granted ? <EmptyState
@@ -435,6 +502,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
           {message && !error ? <Text style={[ui.success, { textAlign: "center", marginTop: 4 }]}>{message}</Text> : null}
           {error ? <Text style={[ui.error, { textAlign: "center", marginTop: 4 }]}>{error}</Text> : null}
           {readyForClient && !rules?.qr ? <Button label="CONFIRMER LA REMISE" onPress={() => void deliver(null)} busy={busy} style={{ marginTop: 10 }} /> : null}
+          {orderIds.length ? <Button label={signature?.value ? "✓ SIGNÉ · REFAIRE LA SIGNATURE" : needsSignature ? "FAIRE SIGNER (OBLIGATOIRE)" : "FAIRE SIGNER (FACULTATIF)"} variant="secondary" onPress={() => setSigning({ clientQr: null })} style={{ marginTop: 8 }} /> : null}
           {[...chosen.map((item) => ({ id: item.id, number: item.order_number, label: item.point_label })), ...notes.filter((note) => !chosen.some((item) => item.id === note.id)).map((note) => ({ id: note.id, number: note.order_number, label: note.point_label }))].map((line) => {
             const scanned = notes.some((note) => note.id === line.id);
             return <View key={line.id} style={[ui.card, ui.row]}>
@@ -452,6 +520,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
 
 const styles = StyleSheet.create({
   clientName: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  offline: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginTop: 8, padding: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.danger, backgroundColor: "#fdecea" },
   link: { color: colors.green, fontSize: 12, fontWeight: "800" },
   selectable: { flexDirection: "row", alignItems: "center", gap: 10 },
   selectedCard: { borderColor: colors.green, backgroundColor: "#f3f8f1" },

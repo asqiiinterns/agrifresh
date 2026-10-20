@@ -83,7 +83,7 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
 }
 
 type Options = Pick<ClientRecord, ClientOptionKey | "custom_settings">;
-const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, payment_reminders: true, reminder_opt_out_allowed: true, custom_settings: [] };
+const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, payment_reminders: true, reminder_opt_out_allowed: true, delivery_signature: false, custom_settings: [] };
 const blankBilling: BillingSettings = { payment_terms_days: 30, reminder_interval_days: 7, billing_frequency: "manual", billing_every_days: 7, billing_start: null, billing_month_day: 1 };
 const pickOptions = (record: ClientRecord): Options => ({ ...Object.fromEntries(clientOptionKeys.map((key) => [key, record[key]])), custom_settings: record.custom_settings ?? [] }) as Options;
 

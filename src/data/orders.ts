@@ -37,6 +37,7 @@ export type Order = {
   // Flags for « À décider » (20261031_billing_decisions.sql).
   special_follow?: boolean;
   needs_reschedule?: boolean;
+  delivery_signature?: { path: string; width: number; height: number; signer: string | null; signed_at: string } | null;
   client_invoice_id: string | null;
   address_snapshot: {
     business_name?: string;
@@ -51,7 +52,7 @@ export type Order = {
   order_status_history: StatusEvent[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, special_follow, needs_reschedule, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, special_follow, needs_reschedule, delivery_signature, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 
@@ -158,7 +159,7 @@ export async function shareDeliveryNote(order: Order, options: { showPrices: boo
     <table><thead><tr><th>Produit</th><th class="number">Quantité</th><th>Unité</th>${showPrices ? `<th class="number">Prix unitaire HT</th><th class="number">Total HT</th>` : ""}</tr></thead><tbody>${lines}</tbody></table>
     ${showPrices ? `<div class="totals"><div class="row grand"><span>Total HT</span><span>${pdfAmount(order.total)} TND</span></div></div>` : ""}
     ${order.customer_note ? `<div class="note"><strong>Remarque du client :</strong> ${escapeHtml(order.customer_note)}</div>` : ""}
-    <div class="signatures"><div>Livré par</div><div>Reçu par (nom, signature)</div></div>
+    <div class="signatures"><div>Livré par</div><div>Reçu par (nom, signature)${order.delivery_signature ? `<br/><svg viewBox="0 0 ${order.delivery_signature.width} ${order.delivery_signature.height}" style="width:180px;height:85px"><path d="${escapeHtml(order.delivery_signature.path)}" stroke="#24372c" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg><br/>${escapeHtml(order.delivery_signature.signer ?? "")} · ${new Date(order.delivery_signature.signed_at).toLocaleString("fr-TN")}` : ""}</div></div>
     <div class="note">Le livreur scanne le QR code de ce bon puis le QR code du client pour confirmer la livraison. Ce bon n’est pas une facture.</div>
   </body></html>`;
 

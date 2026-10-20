@@ -12,6 +12,7 @@ import { useCan } from "../data/permissions";
 import { MyNotificationsCard } from "./NotificationSettings";
 import { unregisterPush } from "../notifications";
 import { fontScales, useDisplay } from "../ui/display";
+import { languages } from "../ui/i18n";
 import { useNav, type TabDef } from "../ui/navigation";
 import { HomeCustomizeCard } from "./HomeScreen";
 import { StaffClientsScreen } from "./StaffClientsScreen";
@@ -166,6 +167,11 @@ function DisplaySettingsCard({ showProducts }: { showProducts: boolean }) {
   return <View style={ui.card}>
     <Text style={ui.strong}>Affichage</Text>
     <Text style={ui.small}>Réglages de cet appareil uniquement.</Text>
+    <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Langue</Text>
+    <View style={[ui.wrapRow, { marginTop: 6 }]}>
+      {languages.map((option) => <Chip key={option.value} label={option.label} selected={display.language === option.value} onPress={() => display.update({ language: option.value })} />)}
+    </View>
+    <Text style={[ui.small, { marginTop: 4 }]}>Les menus, boutons et libellés principaux sont traduits ; les autres textes restent en français pour l’instant.</Text>
     <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Taille du texte</Text>
     <View style={[ui.wrapRow, { marginTop: 6 }]}>
       {fontScales.map((option) => <Chip key={option.value} label={option.label} selected={display.fontScale === option.value} onPress={() => display.update({ fontScale: option.value })} />)}

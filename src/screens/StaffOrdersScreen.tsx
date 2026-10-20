@@ -15,6 +15,7 @@ const actionFeature = (status: OrderStatus): Feature =>
   status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { ShipModal } from "../ui/ShipModal";
+import { RecurringModal } from "./RecurringScreen";
 import { useNav } from "../ui/navigation";
 import { errorMessage, notify } from "../ui/notify";
 import { OrderTimeline } from "../ui/OrderTimeline";
@@ -225,6 +226,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   const clientName = order.clients?.business_name ?? address.business_name ?? address.recipient_name ?? "Client";
   const openClaims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress").length;
 
+  const [repeating, setRepeating] = useState(false);
   // Special follow-up keeps the order in « À décider » whatever its status; "to reschedule" flags it in the planning.
   async function toggleFlag(flag: "special" | "reschedule") {
     const next = flag === "special" ? !order.special_follow : !order.needs_reschedule;
@@ -323,6 +325,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
       <View style={[ui.wrapRow, { marginTop: 8 }]}>
         {can("orders.decide") || can("orders.plan") ? <Chip label={order.special_follow ? "★ Suivi spécial" : "☆ Suivi spécial"} selected={!!order.special_follow} onPress={() => void toggleFlag("special")} /> : null}
         {can("orders.plan") && ["confirmed", "preparing", "ready"].includes(order.status) ? <Chip label="↻ À reprogrammer" selected={!!order.needs_reschedule} onPress={() => void toggleFlag("reschedule")} /> : null}
+        {can("orders.create") ? <Chip label="⟳ Répéter automatiquement" selected={false} onPress={() => setRepeating(true)} /> : null}
       </View>
 
       {needsReason ? <TextInput
@@ -341,6 +344,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     </View>
     {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En route : en attente de la remise au client par le livreur.</Text> : null}
     {order.status === "awaiting_client" ? <Text style={[ui.small, { marginTop: 6, color: "#9a4f0f" }]}>En attente de la reconfirmation du client.</Text> : null}
+    <RecurringModal visible={repeating} order={order} onClose={() => setRepeating(false)} onSaved={() => setRepeating(false)} />
   </View>;
 }
 

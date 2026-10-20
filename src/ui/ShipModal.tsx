@@ -44,7 +44,9 @@ export function ShipModal({ orders, onClose, onShipped }: {
     try {
       const result = await shipOrders(orders.map((order) => order.id), vehicleId);
       const vehicle = vehicles.find((item) => item.id === vehicleId);
-      notify("Expédition enregistrée", `Expédition #${result.shipment_number} : ${result.count} commande(s)${vehicle ? ` dans ${vehicleName(vehicle)}` : ""}. Elles apparaissent dans « À livrer ».`);
+      notify("Expédition enregistrée", result.queued
+        ? `Pas de réseau : l’expédition de ${result.count} commande(s) est enregistrée sur le téléphone et sera envoyée dès le retour de la connexion.`
+        : `Expédition #${result.shipment_number} : ${result.count} commande(s)${vehicle ? ` dans ${vehicleName(vehicle)}` : ""}. Elles apparaissent dans « À livrer ».`);
       onShipped();
       onClose();
     } catch (cause) {

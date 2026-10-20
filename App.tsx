@@ -34,6 +34,7 @@ import { ReturnsScreen } from "./src/screens/ReturnsScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { IncidentsScreen, LeavesScreen } from "./src/screens/StaffLifeScreens";
 import { StatsScreen } from "./src/screens/StatsScreen";
+import { RecurringScreen, runRecurringOrders } from "./src/screens/RecurringScreen";
 import { sendMyLocation } from "./src/data/workplace";
 import { AppState } from "react-native";
 import { MoreScreen } from "./src/screens/MoreScreen";
@@ -60,6 +61,7 @@ const TAB = {
   calendar: { key: "calendar", label: "Calendrier", icon: "calendar-outline", description: "Livraisons, échéances, absences et rappels." },
   leaves: { key: "leaves", label: "Congés", icon: "airplane-outline", description: "Demandes, validation, absences à venir." },
   incidents: { key: "incidents", label: "Incidents", icon: "warning-outline", description: "Signaler un problème de livraison ou de véhicule." },
+  recurring: { key: "recurring", label: "Commandes récurrentes", icon: "repeat-outline", description: "Commandes créées automatiquement chaque semaine." },
   stats: { key: "stats", label: "Statistiques", icon: "stats-chart-outline", description: "Produits, clients, créneaux, temps de préparation." },
   returns: { key: "returns", label: "Retours et avoirs", icon: "return-down-back-outline", description: "Demandes de retour, réception, avoirs." },
   admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
@@ -87,6 +89,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
     add(tabs, TAB.messages, has("client.messages"));
     add(tabs, TAB.alerts, has("client.alerts"));
     add(tabs, TAB.invoices, has("client.invoices"));
+    add(tabs, TAB.recurring, has("client.recurring"));
     tabs.push(TAB.account);
     return { kind: "client", tabs };
   }
@@ -103,6 +106,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   add(tabs, TAB.leaves, has("leave.request") || has("leave.manage"));
   add(tabs, TAB.incidents, has("incidents.report") || has("incidents.manage"));
   add(tabs, TAB.stats, has("stats.view"));
+  add(tabs, TAB.recurring, has("orders.create"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
   tabs.push(TAB.account);
@@ -294,6 +298,11 @@ function Main({ session }: { session: Session }) {
     team: kind === "team" && !!account?.features.includes("team.messages"),
   });
   const isActive = !!account && (account.status ?? "active") === "active";
+  // Recurring orders due today are created when the team opens the app (also hourly by pg_cron if enabled).
+  useEffect(() => {
+    if (isActive && account && account.role !== "customer" && (account.features.includes("orders.create") || account.features.includes("orders.decide"))) void runRecurringOrders().catch(() => {});
+  }, [isActive, account?.role]);
+
   // Position shared only by accounts that agreed (Plus → Autorisations), only while the app is open.
   useEffect(() => {
     if (!isActive || !account?.features.includes("location.share")) return;
@@ -376,6 +385,8 @@ function Main({ session }: { session: Session }) {
         return <LeavesScreen isAdmin={account.role === "admin"} />;
       case "incidents":
         return <IncidentsScreen />;
+      case "recurring":
+        return <RecurringScreen team={kind === "team"} />;
       case "stats":
         return <StatsScreen />;
       case "returns":

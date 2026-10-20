@@ -2,7 +2,9 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Per-device display preferences, set in Compte → Affichage.
-export type DisplaySettings = { fontScale: number; compactProducts: boolean };
+import type { Language } from "./i18n";
+
+export type DisplaySettings = { fontScale: number; compactProducts: boolean; language: Language };
 
 export const fontScales = [
   { value: 0.9, label: "Petite" },
@@ -11,7 +13,7 @@ export const fontScales = [
   { value: 1.3, label: "Très grande" },
 ];
 
-const DEFAULTS: DisplaySettings = { fontScale: 1, compactProducts: false };
+const DEFAULTS: DisplaySettings = { fontScale: 1, compactProducts: false, language: "fr" };
 const STORAGE_KEY = "agrifresh-display";
 
 type DisplayContextValue = DisplaySettings & { update: (patch: Partial<DisplaySettings>) => void; reset: () => void };

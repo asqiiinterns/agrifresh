@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { cacheGet, cacheSet } from "./offline";
 
 export type Shipment = {
   id: string;
@@ -19,6 +20,9 @@ export type Shipment = {
   shipment_number: number | null;
   vehicle_label: string | null;
   driver_name: string | null;
+  // Present once 20261104 is installed: offline QR recognition and signature requirement.
+  delivery_token?: string;
+  delivery_signature?: boolean;
 };
 
 export type ScannedDeliveryNote = {
@@ -72,21 +76,45 @@ export type Pickup = {
 };
 
 // Orders prepared and waiting for the driver.
+// Lists are cached so the driver keeps them without network.
 export async function fetchPickups(): Promise<Pickup[]> {
   const { data, error } = await client().rpc("driver_pickups");
-  if (error) throw error;
+  if (error) {
+    const cached = await cacheGet<Pickup[]>("pickups");
+    if (cached) return cached;
+    throw error;
+  }
+  await cacheSet("pickups", data ?? []);
   return (data ?? []) as Pickup[];
 }
 
 export async function fetchShipments(): Promise<Shipment[]> {
   const { data, error } = await client().rpc("driver_shipments");
-  if (error) throw error;
+  if (error) {
+    const cached = await cacheGet<Shipment[]>("shipments");
+    if (cached) return cached;
+    throw error;
+  }
+  await cacheSet("shipments", data ?? []);
   return (data ?? []) as Shipment[];
+}
+
+// After an offline hand-over, the orders leave the cached list at once.
+export async function forgetShipments(ids: string[]) {
+  const cached = await cacheGet<Shipment[]>("shipments");
+  if (cached) await cacheSet("shipments", cached.filter((item) => !ids.includes(item.id)));
 }
 
 export async function lookupDeliveryNote(deliveryToken: string): Promise<ScannedDeliveryNote> {
   const { data, error } = await client().rpc("driver_lookup_delivery", { p_delivery_token: deliveryToken });
-  if (error) throw error;
+  if (error) {
+    // Offline: recognise the delivery note from the cached list.
+    const cached = (await cacheGet<Shipment[]>("shipments"))?.find((item) => item.delivery_token === deliveryToken);
+    if (!cached) throw error;
+    return { id: cached.id, order_number: cached.order_number, delivery_token: deliveryToken, client_id: cached.client_id, business_name: cached.business_name,
+      reception_qr: cached.reception_qr, scan_delivery_note: cached.scan_delivery_note, scan_client_qr: cached.scan_client_qr,
+      point_id: cached.point_id, point_label: cached.point_label, address_line: cached.address_line, city: cached.city, items: [] };
+  }
   return data as ScannedDeliveryNote;
 }
 
