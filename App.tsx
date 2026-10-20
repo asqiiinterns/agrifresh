@@ -113,6 +113,8 @@ function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" 
   add(tabs, TAB.recurring, has("orders.create") && on("recurring"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
+  // Admin pages (accounts, settings, fleet, log, location): reached from Plus → Rubriques and from shortcuts.
+  add(tabs, TAB.admin, account.role === "admin" || ["products.manage", "fleet.manage", "audit.view", "location.view"].some(has));
   tabs.push(TAB.account);
   return { kind: "team", tabs };
 }
