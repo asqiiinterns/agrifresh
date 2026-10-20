@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type { ClientSummary } from "../data/account";
-import { deliveryNoteNumber, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type Order } from "../data/orders";
+import { deliveryNoteNumber, fetchBuyerOrders, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type BuyerOrder, type Order } from "../data/orders";
 import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
 import { OrderTimeline } from "../ui/OrderTimeline";
 import { ReturnFormModal } from "./ReturnsScreen";
@@ -29,10 +29,14 @@ const filters = [
   { key: "refused", label: "Déclinées / annulées", statuses: ["declined", "cancelled"] },
 ] as const;
 
-export function ClientOrdersScreen({ session, client, initialOrderId }: { session: Session; client: ClientSummary; initialOrderId?: string }) {
+type ListedOrder = Order & Partial<Pick<BuyerOrder, "supplier_name" | "show_prices" | "show_origin" | "history_enabled">>;
+
+// Orders of all the buyer's suppliers in one list; acting on another supplier's order switches to it first (onOpenSupplier).
+export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupplier }: { session: Session; client: ClientSummary; initialOrderId?: string; onOpenSupplier?: (clientId: string, orderId: string) => void }) {
   // Opened from an alert: show that order alone (expanded) until "Voir toutes".
   const [focusId, setFocusId] = useState<string | null>(initialOrderId ?? null);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<ListedOrder[]>([]);
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +45,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
   // Two sheets: orders still moving, and closed ones (history, if the supplier enables it).
   const [sheet, setSheet] = useState<"open" | "closed">("open");
   const [expanded, setExpanded] = useState<string[]>(initialOrderId ? [initialOrderId] : []);
-  const historyEnabled = client.history_enabled !== false;
+  const historyEnabled = client.history_enabled !== false || orders.some((order) => order.history_enabled);
   const [placed, setPlaced] = useState<DateFilterValue>(null);
   const [search, setSearch] = useState("");
   const [receptionVisible, setReceptionVisible] = useState(false);
@@ -80,7 +84,8 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
     if (mode === "refresh") setRefreshing(true);
     setError("");
     try {
-      const [next, nextClaims] = await Promise.all([fetchMyOrders(), fetchClaims().catch(() => [] as Claim[])]);
+      const [all, nextClaims] = await Promise.all([fetchBuyerOrders(), fetchClaims().catch(() => [] as Claim[])]);
+      const next: ListedOrder[] = all ?? await fetchMyOrders();
       setClaims(nextClaims);
       statusesRef.current = Object.fromEntries(next.map((order) => [order.id, order.status]));
       setOrders(next);
@@ -111,10 +116,16 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
     return () => { void realtime.removeChannel(channel); };
   }, [session.user.id]);
 
-  async function share(order: Order) {
+  // What the order's supplier lets this client see.
+  const rulesOf = (order: ListedOrder) => ({ show_prices: order.show_prices ?? client.show_prices, show_origin: order.show_origin ?? client.show_origin, history: order.history_enabled ?? client.history_enabled !== false });
+  const supplierNames = useMemo(() => new Map(orders.filter((order) => order.supplier_name).map((order) => [order.client_id as string, order.supplier_name as string])), [orders]);
+  const multi = supplierNames.size > 1;
+  const elsewhere = (order: ListedOrder) => !!order.client_id && order.client_id !== client.id;
+
+  async function share(order: ListedOrder) {
     setSharingId(order.id);
     try {
-      await shareDeliveryNote(order, { showPrices: client.show_prices, showOrigin: client.show_origin });
+      await shareDeliveryNote(order, { showPrices: rulesOf(order).show_prices, showOrigin: rulesOf(order).show_origin });
     } catch (cause) {
       notify("Bon de livraison", errorMessage(cause, "Impossible de générer le PDF."));
     } finally {
@@ -122,18 +133,20 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
     }
   }
 
+  const scoped = useMemo(() => orders.filter((order) => supplierFilter === "all" || order.client_id === supplierFilter), [orders, supplierFilter]);
   const counts = useMemo(() => Object.fromEntries(filters.map((item) => [item.key, item.statuses
-    ? orders.filter((order) => (item.statuses as readonly string[]).includes(order.status)).length
-    : orders.length])), [orders]);
+    ? scoped.filter((order) => (item.statuses as readonly string[]).includes(order.status)).length
+    : scoped.length])), [scoped]);
   const selected = filters.find((item) => item.key === filter) ?? filters[0];
   const term = search.trim().toLocaleLowerCase("fr");
   const inSheet = (order: Order) => closedStatuses.includes(order.status) === (sheet === "closed");
   const focused = focusId ? orders.find((order) => order.id === focusId) ?? null : null;
-  const visible = focused ? [focused] : orders.filter((order) => inSheet(order) && (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
+  const visible = focused ? [focused] : scoped.filter((order) => inSheet(order) && (!selected.statuses || (selected.statuses as readonly string[]).includes(order.status))
     && matchesDate(order.created_at, placed)
-    && (!term || `${order.order_number} ${order.order_items.map((line) => line.product_name_snapshot).join(" ")}`.toLocaleLowerCase("fr").includes(term)));
+    && (!term || `${order.order_number} ${order.supplier_name ?? ""} ${order.order_items.map((line) => line.product_name_snapshot).join(" ")}`.toLocaleLowerCase("fr").includes(term)));
   const listFilters: Filter[] = [
-    { kind: "choice", title: "Statut", options: filters.filter((item) => !item.statuses || item.statuses.some((status) => closedStatuses.includes(status) === (sheet === "closed"))).map((item) => ({ key: item.key, label: item.label, count: item.statuses ? counts[item.key] ?? 0 : orders.filter(inSheet).length })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "choice", title: "Statut", options: filters.filter((item) => !item.statuses || item.statuses.some((status) => closedStatuses.includes(status) === (sheet === "closed"))).map((item) => ({ key: item.key, label: item.label, count: item.statuses ? counts[item.key] ?? 0 : scoped.filter(inSheet).length })), value: filter, defaultValue: "all", onChange: setFilter },
+    ...(multi ? [{ kind: "choice" as const, title: "Fournisseur", options: [{ key: "all", label: "Tous les fournisseurs" }, ...[...supplierNames].map(([key, label]) => ({ key, label }))], value: supplierFilter, defaultValue: "all", onChange: setSupplierFilter }] : []),
     { kind: "date", title: "Passée le", presets: [presets.today, presets.yesterday, presets.last7, presets.last30], value: placed, onChange: setPlaced },
   ];
   const shippedCount = counts.shipped ?? 0;
@@ -145,11 +158,11 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
       right={client.reception_qr && client.reception_token ? <Button label="QR RÉCEPTION" onPress={() => setReceptionVisible(true)} /> : undefined}
     />
     {historyEnabled ? <Sheets
-      items={[{ key: "open", label: "En cours", count: orders.filter((order) => !closedStatuses.includes(order.status)).length }, { key: "closed", label: "Clôturées", count: orders.filter((order) => closedStatuses.includes(order.status)).length }]}
+      items={[{ key: "open", label: "En cours", count: scoped.filter((order) => !closedStatuses.includes(order.status)).length }, { key: "closed", label: "Clôturées", count: scoped.filter((order) => closedStatuses.includes(order.status)).length }]}
       value={sheet}
       onChange={(next) => { setSheet(next); setFilter("all"); }}
     /> : null}
-    <FilterBar search={search} onSearch={setSearch} placeholder="N° de commande ou produit" filters={listFilters} />
+    <FilterBar search={search} onSearch={setSearch} placeholder={multi ? "N° de commande, produit ou fournisseur" : "N° de commande ou produit"} filters={listFilters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(order) => order.id}
@@ -164,10 +177,13 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
       ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body={filter === "all" ? "Vos commandes apparaîtront ici avec leur statut." : "Aucune commande avec ce statut."} />}
       renderItem={({ item }) => {
         const open = item.status === "awaiting_client" || expanded.includes(item.id);
+        const rules = rulesOf(item);
+        const away = elsewhere(item);
         return <View style={ui.card}>
         <Pressable onPress={() => setExpanded((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])}>
           <View style={ui.row}><Text style={ui.strong}>{open ? "▾" : "▸"} Commande #{item.order_number}</Text><StatusBadge status={item.status} /></View>
-          {!open ? <Text style={[ui.small, { marginTop: 2 }]}>{formatDateTime(item.created_at)} · {item.order_items.length} produit(s){client.show_prices ? ` · ${formatPrice(item.total)}` : ""}</Text> : null}
+          {multi && item.supplier_name ? <Text style={styles.supplierName}>{item.supplier_name}</Text> : null}
+          {!open ? <Text style={[ui.small, { marginTop: 2 }]}>{formatDateTime(item.created_at)} · {item.order_items.length} produit(s){rules.show_prices ? ` · ${formatPrice(item.total)}` : ""}</Text> : null}
           <OrderProgress status={item.status} />
         </Pressable>
         {open ? <>
@@ -180,21 +196,21 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
         {item.status === "awaiting_client" ? <View style={styles.reconfirm}>
           <Text style={[ui.strong, { color: "#9a4f0f" }]}>Votre fournisseur vous propose de reconfirmer cette commande</Text>
           {item.status_note ? <Text style={[ui.body, { marginTop: 4 }]}>{item.status_note}</Text> : null}
-          <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          {away ? null : <View style={[ui.wrapRow, { marginTop: 10 }]}>
             <Button label="RECONFIRMER" onPress={() => answer(item, true)} busy={respondingId === item.id} style={{ flexGrow: 1 }} />
             <Button label="REFUSER" variant="danger" onPress={() => confirmRefusal(item)} disabled={respondingId === item.id} />
-          </View>
+          </View>}
         </View> : item.status_note && (item.status === "declined" || item.status === "on_hold" || item.status === "cancelled") ? <Text style={[ui.body, { color: colors.amber, marginTop: 6 }]}>Motif : {item.status_note}</Text> : null}
         <View style={ui.divider}>
           {item.order_items.map((line, index) => <View key={`${item.id}-${index}`} style={ui.row}>
             <View style={{ flex: 1 }}>
               <Text style={ui.body}>{formatQuantity(line.quantity)} {line.unit_snapshot} · {line.product_name_snapshot}</Text>
-              {client.show_origin && line.origin_snapshot ? <Text style={styles.origin}>Origine : {formatOrigin(line.origin_snapshot)}{line.origin_snapshot.label ? ` · ${line.origin_snapshot.label}` : ""}</Text> : null}
+              {rules.show_origin && line.origin_snapshot ? <Text style={styles.origin}>Origine : {formatOrigin(line.origin_snapshot)}{line.origin_snapshot.label ? ` · ${line.origin_snapshot.label}` : ""}</Text> : null}
             </View>
-            {client.show_prices ? <Text style={ui.small}>{formatPrice(line.line_total)}</Text> : null}
+            {rules.show_prices ? <Text style={ui.small}>{formatPrice(line.line_total)}</Text> : null}
           </View>)}
         </View>
-        {client.show_prices ? <View style={[ui.row, ui.divider]}>
+        {rules.show_prices ? <View style={[ui.row, ui.divider]}>
           <Text style={ui.strong}>Total HT</Text>
           <Text style={ui.amount}>{formatPrice(item.total)}</Text>
         </View> : null}
@@ -206,8 +222,11 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
           <Text style={ui.small}>{claim.description}</Text>
           {claim.staff_response ? <Text style={[ui.body, { marginTop: 4 }]}>Réponse du fournisseur : {claim.staff_response}</Text> : null}
         </View>)}
-        {historyEnabled ? <OrderTimeline order={item} viewer="client" /> : null}
-        {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+        {rules.history ? <OrderTimeline order={item} viewer="client" /> : null}
+        {away ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          <Button label={`OUVRIR CHEZ ${(item.supplier_name ?? "CE FOURNISSEUR").toLocaleUpperCase("fr")}`} variant="secondary" onPress={() => onOpenSupplier?.(item.client_id as string, item.id)} disabled={!onOpenSupplier} />
+          <Text style={[ui.small, { flexBasis: "100%" }]}>{item.status === "awaiting_client" ? "Pour reconfirmer ou refuser, passez sur ce fournisseur." : "Bon de livraison, réclamation, retour : passez sur ce fournisseur."}</Text>
+        </View> : item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => share(item)} busy={sharingId === item.id} />
           {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
           {canReturn && item.status === "delivered" ? <Button label="DEMANDER UN RETOUR" variant="secondary" onPress={() => setReturnOrder(item)} /> : null}
@@ -290,6 +309,7 @@ const styles = StyleSheet.create({
   reconfirm: { marginTop: 10, padding: 12, borderRadius: 8, backgroundColor: "#fde7d4" },
   claim: { marginTop: 10, padding: 10, borderRadius: 8, backgroundColor: colors.cream },
   origin: { color: colors.primary, fontSize: 10, marginTop: 1 },
+  supplierName: { color: colors.textSoft, fontSize: 11, fontWeight: "700", marginTop: 2 },
   filters: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
   banner: { marginTop: 12, padding: 12, borderRadius: 8, backgroundColor: "#ece6f6", color: "#5b3f8a" },
 });

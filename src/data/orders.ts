@@ -130,6 +130,16 @@ export async function fetchMyOrders(): Promise<Order[]> {
   return (data ?? []) as unknown as Order[];
 }
 
+// A buyer's orders with all its suppliers (20261115): each order carries its supplier's display rules.
+export type BuyerOrder = Order & { supplier_name: string; show_prices: boolean; show_origin: boolean; history_enabled: boolean };
+// Null before 20261115: the screen keeps the current supplier's orders.
+export async function fetchBuyerOrders(): Promise<BuyerOrder[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("buyer_orders");
+  if (error) return null;
+  return (data ?? []) as BuyerOrder[];
+}
+
 // Answer to an order reopened by the supplier ("awaiting_client").
 export async function respondToOrder(orderId: string, accept: boolean, note?: string): Promise<void> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");

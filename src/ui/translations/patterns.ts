@@ -1,6 +1,7 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["OUVRIR CHEZ {0}", "OPEN WITH {0}", "فتح لدى {0}"],
   ["{0} fournisseurs", "{0} suppliers", "{0} مورّدين"],
   ["Aucun point de livraison n’est configuré chez {0}. Contactez ce fournisseur.", "No delivery point is set up with {0}. Contact this supplier.", "لا توجد نقطة تسليم مهيأة لدى {0}. اتصل بهذا المورّد."],
   ["Choisissez le point de livraison pour {0}.", "Choose the delivery point for {0}.", "اختر نقطة التسليم لـ {0}."],

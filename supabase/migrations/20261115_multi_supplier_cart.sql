@@ -3,6 +3,7 @@
 --     (prices, stock, origin) and my delivery points with each of them;
 --   * place_multi_order(): sends the cart, one order per supplier, all or nothing. Each order follows exactly
 --     the same rules as an order placed with that supplier selected (points, stock, credit limit, rights).
+--   * buyer_orders(): the orders of all my suppliers in one list, each following its supplier's settings.
 -- Run in Supabase SQL Editor AFTER 20261114_accounts.sql. Safe to rerun.
 
 -- A right of mine within one of my supplier relations (same order as user_has_permission, for that relation).
@@ -126,3 +127,53 @@ end;
 $$;
 REVOKE ALL ON FUNCTION public.place_multi_order(jsonb, date, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.place_multi_order(jsonb, date, text) TO authenticated;
+
+-- Orders of all my suppliers in one list (orders follow each relation's own settings:
+-- prices hidden when the supplier hides them, closed orders hidden when it turned history off).
+create or replace function public.buyer_relations(p_permission text)
+returns setof public.clients
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select c.* from public.profiles pr
+  join public.clients c on c.buyer_org_id = pr.org_id and c.link_status = 'active' and c.active
+  join public.organizations s on s.id = c.supplier_org_id and s.status = 'active'
+  where pr.id = (select auth.uid()) and pr.role = 'customer' and pr.account_status = 'active'
+    and public.buyer_relation_can(c.id, p_permission);
+$$;
+REVOKE ALL ON FUNCTION public.buyer_relations(text) FROM PUBLIC, anon, authenticated;
+
+create or replace function public.buyer_orders()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(x.o order by x.created_at desc), '[]'::jsonb) from (
+    select o.created_at,
+      (to_jsonb(o) - 'subtotal' - 'total' - 'delivery_fee')
+      || jsonb_build_object(
+        'total', case when c.show_prices then o.total end,
+        'supplier_name', s.name, 'show_prices', c.show_prices, 'show_origin', c.show_origin, 'history_enabled', c.history_enabled,
+        'order_items', coalesce((select jsonb_agg(jsonb_build_object(
+            'product_id', i.product_id, 'product_name_snapshot', i.product_name_snapshot, 'quantity', i.quantity,
+            'unit_snapshot', i.unit_snapshot, 'vat_rate', i.vat_rate,
+            'unit_price', case when c.show_prices then i.unit_price end, 'line_total', case when c.show_prices then i.line_total end,
+            'origin_snapshot', case when c.show_origin then i.origin_snapshot end) order by i.product_name_snapshot)
+          from public.order_items i where i.order_id = o.id), '[]'::jsonb),
+        'order_status_history', coalesce((select jsonb_agg(jsonb_build_object(
+            'status', h.status, 'note', h.note, 'changed_by', h.changed_by, 'changed_by_name', h.changed_by_name, 'created_at', h.created_at) order by h.created_at)
+          from public.order_status_history h where h.order_id = o.id), '[]'::jsonb)) as o
+    from public.buyer_relations('client.orders') c
+    join public.organizations s on s.id = c.supplier_org_id
+    join public.orders o on o.client_id = c.id
+    where c.history_enabled or o.status not in ('delivered', 'cancelled')
+    order by o.created_at desc
+    limit 300
+  ) x;
+$$;
+REVOKE ALL ON FUNCTION public.buyer_orders() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.buyer_orders() TO authenticated;

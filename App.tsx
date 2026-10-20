@@ -426,7 +426,8 @@ function Main({ session }: { session: Session }) {
       case "order":
         return account.client ? <OrderScreen client={account.client} onPlaced={() => { setOrdersKey((key) => key + 1); setTab("orders"); }} /> : null;
       case "orders":
-        return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId} /> : null;
+        return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId}
+          onOpenSupplier={(clientId, orderId) => void switchSupplier(clientId).then(() => loadAccount()).then(() => navigate("orders", { orderId })).catch((cause: unknown) => notify("Fournisseur", errorMessage(cause, "Impossible de changer de fournisseur.")))} /> : null;
       case "messages":
         return kind === "team" ? <StaffMessagesScreen moderator={["admin", "supervisor", "staff"].includes(account.role)} canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "production":
