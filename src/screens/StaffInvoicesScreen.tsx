@@ -9,6 +9,7 @@ import { deliveryNoteNumber, type Order } from "../data/orders";
 import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDay, formatPrice } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { DocumentViewerHost } from "../ui/DocumentViewer";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 
@@ -173,6 +174,7 @@ function InvoiceDetail({ invoice, onClose, onChanged, onEdit }: {
 
   return <Modal visible={invoice !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
+      <DocumentViewerHost />
       {invoice ? <>
         <ScreenHeader eyebrow={invoice.client_snapshot.business_name.toLocaleUpperCase("fr")} title={invoiceLabel(invoice)} right={<CloseButton onPress={onClose} />} />
         <ScrollView contentContainerStyle={ui.content}>
@@ -288,6 +290,7 @@ function InvoiceEditor({ editor, onClose, onSaved }: { editor: Editor | null; on
 
   return <Modal visible={editor !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
+      <DocumentViewerHost />
       <ScreenHeader
         eyebrow={draft ? "MODIFIER LE BROUILLON" : client ? "BONS À FACTURER" : "NOUVELLE FACTURE"}
         title={client ? client.business_name : "Choisir le client"}

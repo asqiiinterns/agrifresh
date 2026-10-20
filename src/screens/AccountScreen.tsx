@@ -4,7 +4,7 @@ import { Text } from "../ui/Text";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber, roleLabels, type Account } from "../data/account";
-import { Button, Field, ScreenHeader } from "../ui/components";
+import { Button, Chip, Field, ListGroup, ListRow, ScreenHeader, Sheets } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
@@ -12,16 +12,88 @@ import { useCan } from "../data/permissions";
 import { MyNotificationsCard } from "./NotificationSettings";
 import { unregisterPush } from "../notifications";
 import { fontScales, useDisplay } from "../ui/display";
-import { Chip } from "../ui/components";
+import { useNav, type TabDef } from "../ui/navigation";
+import { HomeCustomizeCard } from "./HomeScreen";
+import { StaffClientsScreen } from "./StaffClientsScreen";
 
-export function AccountScreen({ session, account }: { session: Session; account: Account | null }) {
+export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications";
+
+// "Compte": the other sections of the app (former "Plus") and every personal setting, as sheets.
+export function AccountScreen({ session, account, sections = [], initialSheet, onLayoutChanged }: {
+  session: Session;
+  account: Account | null;
+  sections?: TabDef[];
+  initialSheet?: string;
+  onLayoutChanged?: () => void;
+}) {
+  const can = useCan();
+  const { navigate } = useNav();
+  const active = !!account && (account.status ?? "active") === "active";
+  const hasHome = active && (account?.role === "customer" ? can("client.home") : can("home.view"));
+  const sheets: { key: AccountSheet; label: string }[] = [
+    ...(sections.length ? [{ key: "sections" as const, label: "Rubriques" }] : []),
+    { key: "profile", label: "Profil" },
+    ...(hasHome ? [{ key: "home" as const, label: "Accueil" }] : []),
+    { key: "display", label: "Affichage" },
+    { key: "password", label: "Mot de passe" },
+    ...(active && can("products.manage") ? [{ key: "products" as const, label: "Produits" }] : []),
+    ...(active && can("clients.view") ? [{ key: "clients" as const, label: "Clients" }] : []),
+    ...(active ? [{ key: "notifications" as const, label: "Notifications" }] : []),
+  ];
+  const [sheet, setSheet] = useState<AccountSheet>(sheets.some((item) => item.key === initialSheet) ? initialSheet as AccountSheet : sheets[0].key);
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow={session.user.email?.toLocaleUpperCase("fr") ?? "VOTRE ESPACE"} title="Compte" />
+    <Sheets items={sheets} value={sheet} onChange={setSheet} />
+    {sheet === "clients" ? <StaffClientsScreen embedded /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      {sheet === "sections" ? <ListGroup>
+        {sections.map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} detail={item.description} onPress={() => navigate(item.key)} />)}
+      </ListGroup> : null}
+      {sheet === "profile" ? <ProfileCard session={session} account={account} /> : null}
+      {sheet === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
+      {sheet === "display" ? <DisplaySettingsCard showProducts={account?.role === "customer"} /> : null}
+      {sheet === "password" ? <PasswordCard /> : null}
+      {sheet === "products" ? <ProductsCard /> : null}
+      {sheet === "notifications" ? <MyNotificationsCard /> : null}
+    </ScrollView>}
+  </View>;
+}
+
+function ProfileCard({ session, account }: { session: Session; account: Account | null }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function signOut() {
+    if (!supabase) return;
+    setBusy(true);
+    await unregisterPush().catch(() => {});
+    const { error: authError } = await supabase.auth.signOut();
+    if (authError) setError(authError.message);
+    setBusy(false);
+  }
+
+  const client = account?.client;
+  return <>
+    <View style={ui.card}>
+      <Text style={ui.strong}>{account?.full_name || session.user.email}</Text>
+      <Text style={ui.small}>{session.user.email} · {account ? roleLabels[account.role] : "Profil en cours de chargement"}</Text>
+      {client ? <View style={ui.divider}>
+        <Text style={ui.strong}>{client.business_name}</Text>
+        <Text style={ui.small}>{formatClientNumber(client.client_number)}{client.contact_name ? ` · ${client.contact_name}` : ""}{client.phone ? ` · ${client.phone}` : ""}</Text>
+        {client.delivery_points.map((point) => <Text key={point.id} style={[ui.body, { marginTop: 4 }]}>• {point.label} — {point.address_line}, {point.city}</Text>)}
+        <Text style={[ui.small, { marginTop: 6 }]}>Pour modifier ces informations ou ajouter un point de livraison, contactez AgriFresh.</Text>
+      </View> : null}
+    </View>
+    {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
+    <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 14 }} />
+  </>;
+}
+
+function PasswordCard() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [productsVisible, setProductsVisible] = useState(false);
-  // Admins manage products from the Admin tab; other profiles with the right do it here.
-  const isStaff = useCan()("products.manage") && account?.role !== "admin";
 
   async function changePassword() {
     if (!supabase) return;
@@ -36,55 +108,24 @@ export function AccountScreen({ session, account }: { session: Session; account:
     setBusy(false);
   }
 
-  async function signOut() {
-    if (!supabase) return;
-    setBusy(true);
-    await unregisterPush().catch(() => {});
-    const { error: authError } = await supabase.auth.signOut();
-    if (authError) setError(authError.message);
-    setBusy(false);
-  }
+  return <View style={ui.card}>
+    <Text style={ui.strong}>Changer mon mot de passe</Text>
+    <Field label="Nouveau mot de passe (8 caractères minimum)" value={password} onChangeText={setPassword} secureTextEntry />
+    <View style={{ marginTop: 10, gap: 8 }}>
+      {message ? <Text style={ui.success}>{message}</Text> : null}
+      {error ? <Text style={ui.error}>{error}</Text> : null}
+      <Button label="ENREGISTRER" onPress={() => void changePassword()} busy={busy} />
+    </View>
+  </View>;
+}
 
-  const client = account?.client;
-  return <View style={ui.screen}>
-    <ScreenHeader eyebrow="VOTRE ESPACE AGRIFRESH" title="Mon compte" />
-    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
-      <View style={ui.card}>
-        <Text style={ui.strong}>{session.user.email}</Text>
-        <Text style={ui.small}>{account ? roleLabels[account.role] : "Profil en cours de chargement"}</Text>
-        {client ? <View style={ui.divider}>
-          <Text style={ui.strong}>{client.business_name}</Text>
-          <Text style={ui.small}>{formatClientNumber(client.client_number)}{client.contact_name ? ` · ${client.contact_name}` : ""}{client.phone ? ` · ${client.phone}` : ""}</Text>
-          {client.delivery_points.map((point) => <Text key={point.id} style={[ui.body, { marginTop: 6 }]}>• {point.label} — {point.address_line}, {point.city}</Text>)}
-          <Text style={[ui.small, { marginTop: 8 }]}>Pour modifier ces informations ou ajouter un point de livraison, contactez AgriFresh.</Text>
-        </View> : null}
-      </View>
-
-      {isStaff ? <View style={ui.card}>
-        <Text style={ui.strong}>Catalogue</Text>
-        <Text style={ui.small}>Produits, prix, TVA, stock, nouveautés et origine (producteur, région, label).</Text>
-        <Button label="GÉRER LES PRODUITS" onPress={() => setProductsVisible(true)} style={{ marginTop: 10 }} />
-      </View> : null}
-
-
-
-      {account && (account.status ?? "active") === "active" ? <MyNotificationsCard /> : null}
-
-      <DisplaySettingsCard showProducts={account?.role === "customer"} />
-
-      <View style={ui.card}>
-        <Text style={ui.strong}>Changer mon mot de passe</Text>
-        <Field label="Nouveau mot de passe" value={password} onChangeText={setPassword} secureTextEntry />
-        <View style={{ marginTop: 12, gap: 8 }}>
-          {message ? <Text style={ui.success}>{message}</Text> : null}
-          {error ? <Text style={ui.error}>{error}</Text> : null}
-          <Button label="ENREGISTRER" variant="secondary" onPress={() => void changePassword()} busy={busy} />
-        </View>
-      </View>
-
-      <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 20 }} />
-    </ScrollView>
-    {isStaff ? <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} /> : null}
+function ProductsCard() {
+  const [visible, setVisible] = useState(false);
+  return <View style={ui.card}>
+    <Text style={ui.strong}>Catalogue</Text>
+    <Text style={ui.small}>Produits, prix, TVA, stock, nouveautés et origine (producteur, région, label).</Text>
+    <Button label="GÉRER LES PRODUITS" onPress={() => setVisible(true)} style={{ marginTop: 10 }} />
+    <StaffProductsModal visible={visible} onClose={() => setVisible(false)} />
   </View>;
 }
 

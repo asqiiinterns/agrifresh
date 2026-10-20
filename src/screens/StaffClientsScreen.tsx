@@ -9,9 +9,10 @@ import { errorMessage, notify } from "../ui/notify";
 import { boolToOption, clientOptionKeys, fetchClientDefaults, useCan, type ClientOptionKey } from "../data/permissions";
 import { ClientOptionsEditor } from "./SettingsScreen";
 import { colors, ui } from "../ui/theme";
+import { DocumentViewerHost } from "../ui/DocumentViewer";
 
 // Creating and editing client records follow the admin-defined permissions (also enforced by the database).
-export function StaffClientsScreen() {
+export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
   const can = useCan();
   const canCreate = can("clients.create");
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -44,9 +45,12 @@ export function StaffClientsScreen() {
     return clients.filter((item) => `${item.business_name} ${item.contact_name} ${item.email ?? ""} ${formatClientNumber(item.client_number)}`.toLocaleLowerCase("fr").includes(term));
   }, [clients, search]);
 
-  return <View style={ui.screen}>
-    <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={canCreate ? <Button label="+ NOUVEAU" onPress={() => setEditing("new")} /> : undefined} />
-    <View style={{ paddingHorizontal: 18, paddingTop: 12 }}>
+  return <View style={embedded ? { flex: 1 } : ui.screen}>
+    {embedded ? <View style={[ui.row, { paddingHorizontal: 14, paddingTop: 8 }]}>
+      <Text style={[ui.small, { flex: 1 }]}>{clients.length} fiche(s) client</Text>
+      {canCreate ? <Button label="+ NOUVEAU CLIENT" onPress={() => setEditing("new")} /> : null}
+    </View> : <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={canCreate ? <Button label="+ NOUVEAU" onPress={() => setEditing("new")} /> : undefined} />}
+    <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client" placeholderTextColor={colors.muted} style={ui.input} />
     </View>
     {loading ? <Loading /> : <FlatList
@@ -193,6 +197,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
 
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
+      <DocumentViewerHost />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScreenHeader
           eyebrow={record ? formatClientNumber(record.client_number) : "NOUVELLE FICHE"}

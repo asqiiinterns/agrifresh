@@ -42,21 +42,28 @@ export const sellerBlock = () => `<div class="party"><strong>${escapeHtml(compan
 
 export type PendingDocument = { html: string; fileName: string; title: string };
 
-let documentListener: ((document: PendingDocument | null) => void) | null = null;
+// One preview host per open window (app root, and each modal that makes documents):
+// the most recently opened one shows the preview, so it is never hidden behind a modal.
+type Listener = (document: PendingDocument | null) => void;
+const documentListeners: Listener[] = [];
 
-export function subscribeToDocuments(listener: (document: PendingDocument | null) => void) {
-  documentListener = listener;
-  return () => { if (documentListener === listener) documentListener = null; };
+export function subscribeToDocuments(listener: Listener) {
+  documentListeners.push(listener);
+  return () => {
+    const index = documentListeners.lastIndexOf(listener);
+    if (index >= 0) documentListeners.splice(index, 1);
+  };
 }
 
 // Opens the in-app preview (DocumentViewerHost) on web and mobile; the browser print
 // dialog is only a fallback when the preview is not mounted.
 export async function outputPdf(html: string, fileName: string, title: string): Promise<void> {
-  if (!documentListener) {
+  const listener = documentListeners.at(-1);
+  if (!listener) {
     await Print.printAsync({ html });
     return;
   }
-  documentListener({ html, fileName, title });
+  listener({ html, fileName, title });
 }
 
 // expo-print's own file lives outside the folders Sharing may read in Expo Go,

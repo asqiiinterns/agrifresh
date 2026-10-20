@@ -10,7 +10,7 @@ import { fetchInvoices } from "../data/invoices";
 import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
 import { fetchAllOrders } from "../data/staff";
-import { ListGroup, ListRow, Loading, ScreenHeader, toDayKey } from "../ui/components";
+import { Button, ListGroup, ListRow, Loading, ScreenHeader, toDayKey } from "../ui/components";
 import { allowedFor, defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { useNav } from "../ui/navigation";
 import { colors, ui } from "../ui/theme";
@@ -30,7 +30,6 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
   const [values, setValues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [editing, setEditing] = useState(false);
 
   const allowedTiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile.need, can, isAdmin));
   const allowedShortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item.need, can, isAdmin));
@@ -94,17 +93,11 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
 
   const today = new Date().toLocaleDateString("fr-TN", { weekday: "long", day: "numeric", month: "long" });
   const name = audience === "customer" ? account.client?.business_name : account.full_name?.split(" ")[0];
-  const editorTiles = useMemo(() => allowedTiles.map(({ key, label, icon }) => ({ key, label, icon })), [allowedTiles.length]);
-  const editorShortcuts = useMemo(() => allowedShortcuts.map(({ key, label, icon }) => ({ key, label, icon })), [allowedShortcuts.length]);
 
   return <View style={ui.screen}>
     <ScreenHeader
       eyebrow={today.toLocaleUpperCase("fr")}
       title={`${new Date().getHours() < 18 ? "Bonjour" : "Bonsoir"}${name ? ` ${name}` : ""}`}
-      right={<Pressable onPress={() => setEditing(true)} style={styles.edit} accessibilityLabel="Personnaliser l’accueil">
-        <Ionicons name="options-outline" size={16} color={colors.green} />
-        <Text style={styles.editText}>Personnaliser</Text>
-      </Pressable>}
     />
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
       {tiles.length ? <View style={styles.grid}>
@@ -125,14 +118,30 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
         {shortcuts.map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} onPress={() => navigate(item.tab, item.params)} />)}
       </ListGroup> : null}
 
-      {!tiles.length && !shortcuts.length ? <Text style={[ui.small, { marginTop: 14 }]}>Votre accueil est vide : touchez « Personnaliser » pour choisir vos chiffres et raccourcis.</Text> : null}
+      {!tiles.length && !shortcuts.length ? <Text style={[ui.small, { marginTop: 14 }]}>Votre accueil est vide : choisissez vos chiffres et raccourcis dans Compte → Accueil.</Text> : null}
     </ScrollView>}
 
+  </View>;
+}
+
+// Compte → Accueil: choose and order the figures and shortcuts of one's home screen.
+export function HomeCustomizeCard({ account, onLayoutChanged }: { account: Account; onLayoutChanged: () => void }) {
+  const can = useCan();
+  const isAdmin = account.role === "admin";
+  const audience = account.role === "customer" ? "customer" : "team";
+  const [editing, setEditing] = useState(false);
+  const layout = account.home_layout ?? defaultLayout(audience);
+  const tiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile.need, can, isAdmin)).map(({ key, label, icon }) => ({ key, label, icon }));
+  const shortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item.need, can, isAdmin)).map(({ key, label, icon }) => ({ key, label, icon }));
+  return <View style={ui.card}>
+    <Text style={ui.strong}>Mon accueil</Text>
+    <Text style={ui.small}>{account.home_layout ? "Personnalisé" : account.role_home_layout ? "Accueil de votre profil" : "Accueil standard"} : {layout.tiles.length} chiffre(s), {layout.shortcuts.length} raccourci(s).</Text>
+    <Button label="PERSONNALISER L’ACCUEIL" onPress={() => setEditing(true)} style={{ marginTop: 10 }} />
     <HomeEditor
       visible={editing}
       title="Mon accueil"
-      tiles={editorTiles}
-      shortcuts={editorShortcuts}
+      tiles={tiles}
+      shortcuts={shortcuts}
       value={layout}
       resetLabel={account.role_home_layout ? "REVENIR À L’ACCUEIL DE MON PROFIL" : "REVENIR À L’ACCUEIL PAR DÉFAUT"}
       onSave={async (next) => { await setMyHomeLayout(next); onLayoutChanged(); }}

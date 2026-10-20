@@ -4,7 +4,8 @@ import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
-import { fetchInbox, fetchMessages, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
+import { countUnread, fetchInbox, fetchMessages, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
+import { countTeamUnread } from "../data/teamMessages";
 import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime } from "../ui/components";
 import { TeamMessagesList } from "./TeamMessagesScreen";
 import { errorMessage } from "../ui/notify";
@@ -27,10 +28,26 @@ export function StaffMessagesScreen({ canClients, canTeam, initialSection, initi
   onRead: () => void;
 }) {
   const [sheet, setSheet] = useState<"clients" | "team">(!canClients || (canTeam && initialSection === "team") ? "team" : "clients");
+  // Unread badges on each sheet, kept live.
+  const [counts, setCounts] = useState({ clients: 0, team: 0 });
+  const refreshCounts = () => {
+    void Promise.all([canClients ? countUnread(true) : 0, canTeam ? countTeamUnread() : 0]).then(([clients, team]) => setCounts({ clients, team }));
+  };
+  useEffect(() => {
+    const realtime = supabase;
+    refreshCounts();
+    if (!realtime) return;
+    const channel = realtime.channel("messages-sheet-badges")
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, refreshCounts)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, refreshCounts)
+      .subscribe();
+    return () => { void realtime.removeChannel(channel); };
+  }, []);
+  const read = () => { onRead(); refreshCounts(); };
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" />
-    {canClients && canTeam ? <Sheets items={[{ key: "clients", label: "Clients" }, { key: "team", label: "Équipe" }]} value={sheet} onChange={setSheet} /> : null}
-    {sheet === "clients" ? <StaffInboxScreen embedded onRead={onRead} /> : <TeamMessagesList onRead={onRead} initialConversationId={initialConversationId} />}
+    {canClients && canTeam ? <Sheets items={[{ key: "clients", label: "Clients", count: counts.clients || undefined }, { key: "team", label: "Équipe", count: counts.team || undefined }]} value={sheet} onChange={setSheet} /> : null}
+    {sheet === "clients" ? <StaffInboxScreen embedded onRead={read} /> : <TeamMessagesList onRead={read} initialConversationId={initialConversationId} />}
   </View>;
 }
 

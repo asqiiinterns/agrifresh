@@ -27,6 +27,7 @@ import { DriverScreen } from "./src/screens/DriverScreen";
 import { ClientMessagesScreen, StaffMessagesScreen } from "./src/screens/MessagesScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { PlanningTab } from "./src/screens/PlanningScreen";
+import { ProductionHub, type HubSheet } from "./src/screens/ProductionHub";
 import { MoreScreen } from "./src/screens/MoreScreen";
 import { StaffOrderEntryScreen } from "./src/screens/StaffOrderEntryScreen";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,7 +43,7 @@ const TAB = {
   alerts: { key: "alerts", label: "Alertes", icon: "notifications-outline", description: "Notifications reçues." },
   orders: { key: "orders", label: "Commandes", icon: "receipt-outline", description: "À décider, en cours, clôturées, réclamations." },
   planning: { key: "planning", label: "Planning", icon: "list-outline", description: "File de production : ordre d’exécution." },
-  production: { key: "production", label: "Production", icon: "construct-outline", description: "Quantités à préparer." },
+  production: { key: "production", label: "Production", icon: "construct-outline", description: "Commandes, production et planning." },
   deliveries: { key: "deliveries", label: "Livraisons", icon: "car-outline", description: "Récupérer, livrer, historique." },
   clients: { key: "clients", label: "Clients", icon: "people-outline", description: "Fiches, points de livraison, QR codes." },
   invoices: { key: "invoices", label: "Factures", icon: "document-text-outline", description: "Factures et bons de livraison." },
@@ -54,6 +55,10 @@ const TAB = {
 
 // Bottom bar: at most five entries, the rest goes into "Plus".
 const MAX_BAR = 5;
+// Messages and alerts have their own icons at the top of the screen, with a badge.
+const TOP_KEYS: TabKey[] = ["messages", "alerts"];
+// Commandes and Planning live as sheets inside "Production" for the team.
+const HUB_KEYS: TabKey[] = ["orders", "planning", "production"];
 
 // Tabs follow the features the admin enabled for the account's role, most used first.
 function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
@@ -71,29 +76,24 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
     tabs.push(TAB.account);
     return { kind: "client", tabs };
   }
+  // Main menu: Accueil, Production (Commandes · Production · Planning), Facturation, Livraisons; the rest in "Plus".
   const tabs: TabDef[] = [];
   add(tabs, TAB.home, has("home.view"));
-  // The driver's and the production team's own work comes right after.
-  add(tabs, TAB.deliveries, account.role === "driver" && has("deliveries"));
-  add(tabs, TAB.production, account.role === "production" && has("production.view"));
-  add(tabs, TAB.orders, has("orders.view"));
-  // Planning stays in the bottom bar: it is the key daily task.
-  add(tabs, TAB.planning, has("orders.plan"));
+  add(tabs, TAB.production, has("orders.view") || has("production.view") || has("orders.plan"));
+  add(tabs, { ...TAB.invoices, label: "Facturation" }, has("invoices.manage"));
+  add(tabs, TAB.deliveries, has("deliveries"));
   add(tabs, TAB.staffOrder, has("orders.create"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
-  if (has("production.view") && !tabs.includes(TAB.production)) tabs.push(TAB.production);
-  if (has("deliveries") && !tabs.includes(TAB.deliveries)) tabs.push(TAB.deliveries);
-  if (has("clients.view")) tabs.push(TAB.clients);
-  if (has("invoices.manage")) tabs.push(TAB.invoices);
-  add(tabs, TAB.admin, account.role === "admin" || has("fleet.manage") || has("audit.view"));
   tabs.push(TAB.account);
   return { kind: "team", tabs };
 }
 
+// "Compte" closes the bar; the sections that do not fit are listed in Compte → Rubriques.
 function splitBar(tabs: TabDef[]): { bar: TabDef[]; overflow: TabDef[] } {
   if (tabs.length <= MAX_BAR) return { bar: tabs, overflow: [] };
-  return { bar: [...tabs.slice(0, MAX_BAR - 1), TAB.more], overflow: tabs.slice(MAX_BAR - 1) };
+  const main = tabs.filter((item) => item.key !== "account");
+  return { bar: [...main.slice(0, MAX_BAR - 1), TAB.account], overflow: main.slice(MAX_BAR - 1) };
 }
 
 const filledIcon = (icon: IconName) => icon.replace(/-outline$/, "") as IconName;
@@ -258,9 +258,16 @@ function Main({ session }: { session: Session }) {
   }, [session.user.id, loadAccount]);
 
   const { kind, tabs } = account ? tabsFor(account) : { kind: null, tabs: [] as TabDef[] };
-  const { bar, overflow } = splitBar(tabs);
-  const current = tab && (tabs.some((item) => item.key === tab) || (tab === "more" && overflow.length > 0)) ? tab : tabs[0]?.key;
-  const barCurrent = overflow.some((item) => item.key === current) ? "more" : current;
+  const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)));
+  // Commandes / Planning requested by a tile, an alert or a button open the matching sheet of "Production".
+  const hub = kind === "team" && tabs.some((item) => item.key === "production");
+  // Former "Plus" and client records now live in Compte.
+  const accountSheet = tab === "more" ? "sections" : tab === "clients" ? "clients" : tab === "account" ? nav.params?.section : undefined;
+  const requested = hub && tab && HUB_KEYS.includes(tab) ? "production" : tab === "more" || tab === "clients" ? "account" : tab;
+  const hubSheet: HubSheet | undefined = tab === "orders" ? "orders" : tab === "planning" ? "planning"
+    : nav.params?.section === "prepare" || nav.params?.section === "planning" || nav.params?.section === "orders" ? nav.params.section as HubSheet : undefined;
+  const current = requested && tabs.some((item) => item.key === requested) ? requested : bar[0]?.key ?? tabs[0]?.key;
+  const barCurrent = overflow.some((item) => item.key === current) ? "account" : current;
   const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
   const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team", {
     clients: kind !== "team" || !!account?.features.includes("messages.manage"),
@@ -309,8 +316,6 @@ function Main({ session }: { session: Session }) {
         return <HomeScreen account={account} unreadMessages={unread} unreadAlerts={alerts.unread} onLayoutChanged={() => void loadAccount()} />;
       case "planning":
         return <PlanningTab />;
-      case "more":
-        return <MoreScreen items={overflow} badges={{ messages: unread, alerts: alerts.unread }} />;
       case "staffOrder":
         return <StaffOrderEntryScreen onPlaced={() => navigate("orders", { section: "decide" })} />;
       case "order":
@@ -319,10 +324,8 @@ function Main({ session }: { session: Session }) {
         return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId} /> : null;
       case "messages":
         return kind === "team" ? <StaffMessagesScreen canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
-      case "clients":
-        return <StaffClientsScreen />;
       case "production":
-        return <ProductionScreen />;
+        return kind === "team" ? <ProductionHub initialSheet={hubSheet} ordersSection={tab === "orders" ? nav.params?.section : undefined} orderId={nav.params?.orderId} /> : null;
       case "invoices":
         return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
       case "deliveries":
@@ -338,17 +341,27 @@ function Main({ session }: { session: Session }) {
             <Text style={[ui.body, { marginTop: 6 }]}>Aucune fiche client active ne correspond à {session.user.email}. Demandez à AgriFresh de créer ou d’activer votre fiche avec cette adresse, puis touchez « Actualiser ».</Text>
             <Button label="ACTUALISER" variant="secondary" onPress={() => void loadAccount()} style={{ marginTop: 12 }} />
           </View> : null}
-          <AccountScreen session={session} account={account} />
+          <AccountScreen session={session} account={account} sections={overflow} initialSheet={accountSheet} onLayoutChanged={() => void loadAccount()} />
         </View>;
     }
   }
 
-  const badgeFor = (key: TabKey) => key === "messages" ? unread
-    : key === "alerts" ? alerts.unread
-    : key === "more" ? overflow.reduce((sum, item) => sum + (item.key === "messages" ? unread : item.key === "alerts" ? alerts.unread : 0), 0)
-    : 0;
+  const badgeFor = (key: TabKey) => key === "messages" ? unread : key === "alerts" ? alerts.unread : 0;
+  const topTabs = tabs.filter((item) => TOP_KEYS.includes(item.key));
 
   return <PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
+    {topTabs.length ? <View style={styles.topBar}>
+      <Text style={styles.brand}>AgriFresh</Text>
+      <View style={{ flex: 1 }} />
+      {topTabs.map((item) => {
+        const selected = item.key === current;
+        const badge = badgeFor(item.key);
+        return <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
+          <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.green : colors.text} />
+          {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
+        </Pressable>;
+      })}
+    </View> : null}
     <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}>{renderTab()}</View>
     {bar.length > 1 ? <View style={styles.tabBar}>
       {bar.map((item) => {
@@ -384,6 +397,9 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  topBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },
+  brand: { color: colors.green, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  topIcon: { width: 40, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   tabBar: { flexDirection: "row", paddingTop: 6, paddingBottom: 6, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.white },
   tab: { flex: 1, alignItems: "center", gap: 3, paddingHorizontal: 2 },
   tabPill: { width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },

@@ -20,7 +20,8 @@ type Tab = "pickup" | "todo" | "history";
 export function DriverScreen() {
   const canShip = useCan()("orders.ship");
   const [tab, setTab] = useState<Tab>(canShip ? "pickup" : "todo");
-  const [handover, setHandover] = useState<Shipment[] | null>(null);
+  // Hand-overs to do, one group per client, done one after the other.
+  const [handover, setHandover] = useState<Shipment[][] | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const bump = () => setRefreshKey((key) => key + 1);
 
@@ -34,13 +35,13 @@ export function DriverScreen() {
     <ScreenHeader
       eyebrow="ESPACE LIVREUR"
       title="Livraisons"
-      right={tab === "todo" ? <Button label="SCANNER" onPress={() => setHandover([])} /> : undefined}
+      right={tab === "todo" ? <Button label="SCANNER" onPress={() => setHandover([[]])} /> : undefined}
     />
     <Sheets items={tabs} value={tab} onChange={setTab} />
     {tab === "pickup" ? <PickupList key={`pickup-${refreshKey}`} onShipped={bump} />
       : tab === "todo" ? <ShipmentList key={`todo-${refreshKey}`} onDeliver={setHandover} onDelivered={bump} />
       : <DeliveryHistory key={`history-${refreshKey}`} />}
-    <HandoverModal preselected={handover} onClose={() => setHandover(null)} onDelivered={bump} />
+    <HandoverModal queue={handover} onClose={() => setHandover(null)} onDelivered={bump} />
   </View>;
 }
 
@@ -110,8 +111,8 @@ function PickupList({ onShipped }: { onShipped: () => void }) {
   </View>;
 }
 
-// Shipped orders, grouped by client: select the ones handed over together.
-function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (orders: Shipment[]) => void; onDelivered: () => void }) {
+// Shipped orders, grouped by client: tick the ones to deliver, for one or several clients.
+function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (groups: Shipment[][]) => void; onDelivered: () => void }) {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,37 +143,39 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (orders: Shipment
 
   const chosen = shipments.filter((item) => selected.includes(item.id));
 
-  // Selection stays within one client: a hand-over is for one client.
-  function toggle(item: Shipment) {
-    setSelected((current) => {
-      if (current.includes(item.id)) return current.filter((id) => id !== item.id);
-      const sameClient = current.filter((id) => shipments.find((other) => other.id === id)?.client_id === item.client_id);
-      return [...sameClient, item.id];
-    });
-  }
+  const toggle = (item: Shipment) => setSelected((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]);
+  const toggleClient = (data: Shipment[]) => setSelected((current) => data.every((item) => current.includes(item.id))
+    ? current.filter((id) => !data.some((item) => item.id === id))
+    : [...new Set([...current, ...data.map((item) => item.id)])]);
 
-  async function deliver() {
+  // One hand-over per client: clients without scans are confirmed at once, the others go through the scanner in turn.
+  function deliver() {
     if (!chosen.length) return;
-    const needsScan = chosen[0].scan_delivery_note || chosen[0].scan_client_qr;
-    if (needsScan) {
-      onDeliver(chosen);
+    const groups = [...new Map(chosen.map((item) => [item.client_id, chosen.filter((other) => other.client_id === item.client_id)])).values()];
+    const direct = groups.filter((group) => !group[0].scan_delivery_note && !group[0].scan_client_qr);
+    const scanned = groups.filter((group) => group[0].scan_delivery_note || group[0].scan_client_qr);
+    if (!direct.length) {
+      onDeliver(scanned);
       return;
     }
-    notify("Confirmer la remise", `${chosen.length} commande(s) remise(s) à ${chosen[0].business_name} ?`, [
+    notify("Confirmer la remise", `${direct.map((group) => `${group[0].business_name} : ${group.length} commande(s)`).join("\n")}${scanned.length ? `\n\nEnsuite, scans pour : ${scanned.map((group) => group[0].business_name).join(", ")}.` : ""}`, [
       { text: "Retour", style: "cancel" },
-      { text: "Confirmer", onPress: () => void confirmWithoutScan() },
+      { text: "Confirmer", onPress: () => void confirmWithoutScan(direct, scanned) },
     ]);
   }
 
-  async function confirmWithoutScan() {
+  async function confirmWithoutScan(direct: Shipment[][], scanned: Shipment[][]) {
     setBusy(true);
+    let delivered = 0;
     try {
-      const count = await deliverOrders(chosen.map((item) => item.id), [], null);
-      notify("Livraison confirmée", `${count} commande(s) livrée(s) chez ${chosen[0].business_name}.`);
-      setSelected([]);
+      for (const group of direct) delivered += await deliverOrders(group.map((item) => item.id), [], null);
+      notify("Livraison confirmée", `${delivered} commande(s) livrée(s) chez ${direct.length} client(s).`);
+      setSelected((current) => current.filter((id) => !direct.flat().some((item) => item.id === id)));
       onDelivered();
+      if (scanned.length) onDeliver(scanned);
     } catch (cause) {
       notify("Livraison", errorMessage(cause, "La remise n’a pas pu être confirmée."));
+      if (delivered) onDelivered();
     } finally {
       setBusy(false);
     }
@@ -191,12 +194,18 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (orders: Shipment
       contentContainerStyle={[ui.content, { paddingBottom: 90 }]}
       stickySectionHeadersEnabled={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}
-      ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || `${shipments.length} commande(s) à livrer. Cochez celles remises ensemble au même client.`}</Text>}
+      ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || `${shipments.length} commande(s) à livrer. Cochez les commandes à remettre, pour un ou plusieurs clients.`}</Text>}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune livraison" body="Les commandes expédiées apparaîtront ici." />}
-      renderSectionHeader={({ section }) => <View style={styles.sectionHeader}>
-        <Text style={styles.clientName} numberOfLines={1}>{section.title}</Text>
-        <Text style={ui.small}>{section.data.length} commande(s) · remise : {proofLabel(section.data[0])}</Text>
-      </View>}
+      renderSectionHeader={({ section }) => {
+        const all = section.data.every((item) => selected.includes(item.id));
+        return <Pressable onPress={() => toggleClient(section.data)} style={[styles.sectionHeader, ui.row]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.clientName} numberOfLines={1}>{section.title}</Text>
+            <Text style={ui.small}>{section.data.length} commande(s) · remise : {proofLabel(section.data[0])}</Text>
+          </View>
+          <Text style={styles.link}>{all ? "Tout décocher" : "Tout cocher"}</Text>
+        </Pressable>;
+      }}
       renderItem={({ item }) => {
         const on = selected.includes(item.id);
         return <Pressable onPress={() => toggle(item)} style={[styles.line, on && styles.selectedCard]}>
@@ -210,7 +219,7 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (orders: Shipment
       }}
     />
     {chosen.length ? <View style={styles.actionBar}>
-      <Button label={`LIVRER ${chosen.length} COMMANDE(S)`} onPress={() => void deliver()} busy={busy} style={{ flex: 1 }} />
+      <Button label={`LIVRER ${chosen.length} COMMANDE(S)${new Set(chosen.map((item) => item.client_id)).size > 1 ? ` · ${new Set(chosen.map((item) => item.client_id)).size} CLIENTS` : ""}`} onPress={deliver} busy={busy} style={{ flex: 1 }} />
       <Button label="ANNULER" variant="secondary" onPress={() => setSelected([])} disabled={busy} />
     </View> : null}
   </View>;
@@ -293,16 +302,24 @@ function DeliveryHistory() {
   </View>;
 }
 
-// Hand-over: scans what the client's options require (delivery notes, client QR), then confirms.
-function HandoverModal({ preselected, onClose, onDelivered }: { preselected: Shipment[] | null; onClose: () => void; onDelivered: () => void }) {
+// Hand-over: scans what each client's options require (delivery notes, client QR), then confirms,
+// client after client when several were selected.
+function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | null; onClose: () => void; onDelivered: () => void }) {
+  const [step, setStep] = useState(0);
+  const preselected = queue ? queue[step] ?? null : null;
   const [permission, requestPermission] = useCameraPermissions();
   const [notes, setNotes] = useState<ScannedDeliveryNote[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const lastScan = useRef({ data: "", at: 0 });
-  const visible = preselected !== null;
+  const visible = queue !== null;
   const chosen = preselected ?? [];
+  const total = queue?.length ?? 0;
+
+  useEffect(() => {
+    if (!visible) setStep(0);
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -310,7 +327,7 @@ function HandoverModal({ preselected, onClose, onDelivered }: { preselected: Shi
     setMessage("");
     setError("");
     lastScan.current = { data: "", at: 0 };
-  }, [visible]);
+  }, [visible, step]);
 
   const first = chosen[0] ?? notes[0];
   const rules = first ? { notes: first.scan_delivery_note, qr: first.scan_client_qr, reception: first.reception_qr } : null;
@@ -323,9 +340,15 @@ function HandoverModal({ preselected, onClose, onDelivered }: { preselected: Shi
     setBusy(true);
     try {
       const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), clientQr);
-      notify("Livraison confirmée", `${count} commande(s) livrée(s) chez ${businessName}.`);
       onDelivered();
-      onClose();
+      if (step + 1 < total) {
+        setStep(step + 1);
+        setMessage("");
+        notify("Livraison confirmée", `${count} commande(s) livrée(s) chez ${businessName}. Client suivant : ${queue?.[step + 1]?.[0]?.business_name ?? ""}.`);
+      } else {
+        notify("Livraison confirmée", `${count} commande(s) livrée(s) chez ${businessName}.`);
+        onClose();
+      }
     } catch (cause) {
       setError(errorMessage(cause, "La remise n’a pas pu être confirmée."));
     } finally {
@@ -384,7 +407,7 @@ function HandoverModal({ preselected, onClose, onDelivered }: { preselected: Shi
 
   return <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
-      <ScreenHeader eyebrow="REMISE AU CLIENT" title={businessName} right={<CloseButton onPress={onClose} />} />
+      <ScreenHeader eyebrow={total > 1 ? `REMISE · CLIENT ${step + 1}/${total}` : "REMISE AU CLIENT"} title={businessName} right={<CloseButton onPress={onClose} />} />
       {!permission ? <Loading /> : !permission.granted ? <EmptyState
         title="Accès à la caméra"
         body="La caméra sert uniquement à lire les QR codes des bons de livraison et des clients."
