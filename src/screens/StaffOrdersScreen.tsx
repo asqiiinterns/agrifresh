@@ -23,7 +23,8 @@ import { colors, ui } from "../ui/theme";
 type Section = "decide" | "queue" | "claims" | "done";
 const isSection = (value?: string): value is Section => value === "decide" || value === "queue" || value === "claims" || value === "done";
 
-export function StaffOrdersScreen({ initialSection, initialOrderId }: { initialSection?: string; initialOrderId?: string } = {}) {
+// mode "open": orders still moving (À décider, En cours, Réclamations); "closed": delivered, declined, cancelled.
+export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { initialSection?: string; initialOrderId?: string; mode?: "open" | "closed" } = {}) {
   // Opened from an alert: show that order alone (expanded) until "Voir toutes".
   const [focusId, setFocusId] = useState<string | null>(initialOrderId ?? null);
   const [orders, setOrders] = useState<StaffOrder[]>([]);
@@ -31,7 +32,7 @@ export function StaffOrdersScreen({ initialSection, initialOrderId }: { initialS
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [section, setSection] = useState<Section>(isSection(initialSection) ? initialSection : "decide");
+  const [section, setSection] = useState<Section>(mode === "closed" ? "done" : isSection(initialSection) && !(mode === "open" && initialSection === "done") ? initialSection : "decide");
   const [search, setSearch] = useState("");
   const [delivery, setDelivery] = useState<DateFilterValue>(null);
   // Orders of the day by default; the filter chip clears it in one tap.
@@ -92,12 +93,13 @@ export function StaffOrdersScreen({ initialSection, initialOrderId }: { initialS
   const openClaims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress");
 
   const closed = filtered.filter((order) => (statusGroups.done as readonly string[]).includes(order.status));
-  const sections: { key: Section; label: string; count?: number }[] = [
+  const allSections: { key: Section; label: string; count?: number }[] = [
     { key: "decide", label: "À décider", count: decide.length },
     { key: "queue", label: "En cours", count: inProgress.length },
     ...(can("claims.manage") ? [{ key: "claims" as const, label: "Réclamations", count: openClaims.length }] : []),
     { key: "done", label: "Clôturées", count: closed.length },
   ];
+  const sections = allSections.filter((item) => mode === "closed" ? item.key === "done" : mode === "open" ? item.key !== "done" : true);
   const hiddenByDate = placed ? orders.filter((order) => !matchesDate(order.created_at, placed)).length : 0;
 
   const focused = focusId ? orders.find((order) => order.id === focusId) ?? null : null;
@@ -151,10 +153,10 @@ export function StaffOrdersScreen({ initialSection, initialOrderId }: { initialS
   return <View style={ui.screen}>
     <ScreenHeader
       eyebrow={`${decide.length} À DÉCIDER · ${queue.length} EN FILE · ${openClaims.length} RÉCLAMATION(S)`}
-      title="Commandes"
+      title={mode === "closed" ? "Commandes clôturées" : mode === "open" ? "Commandes en cours" : "Commandes"}
       right={can("orders.plan") ? <Button label="PLANNING" onPress={() => navigate("planning")} /> : undefined}
     />
-    <Sheets items={sections} value={section} onChange={setSection} />
+    {sections.length > 1 ? <Sheets items={sections} value={section} onChange={setSection} /> : null}
     {section !== "claims" ? <FilterBar search={search} onSearch={setSearch} placeholder="Client, point de livraison ou n°" filters={filters} /> : null}
 
     {loading ? <Loading /> : section === "claims" ? <ClaimsView claims={claims} refreshControl={refresh} onChanged={() => void reload("silent")} />

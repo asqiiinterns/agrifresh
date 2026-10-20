@@ -22,24 +22,52 @@ export const formatDateTime = (value: string) =>
 export const toDayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-const statusStyles: Record<string, { label: string; color: string; background: string }> = {
-  pending: { label: "Nouvelle", color: "#7a5a12", background: "#fbf0d5" },
-  on_hold: { label: "En attente", color: colors.amber, background: "#fdf3e1" },
-  confirmed: { label: "Acceptée", color: colors.green, background: "#e6efe4" },
-  declined: { label: "Déclinée", color: colors.danger, background: "#f8e5e1" },
-  awaiting_client: { label: "À reconfirmer", color: "#9a4f0f", background: "#fde7d4" },
-  preparing: { label: "En préparation", color: "#2f5d8a", background: "#e3edf7" },
-  ready: { label: "Préparée", color: "#2f5d8a", background: "#e3edf7" },
-  out_for_delivery: { label: "Expédiée", color: "#5b3f8a", background: "#ece6f6" },
-  delivered: { label: "Livrée", color: colors.green, background: "#dcebd7" },
-  cancelled: { label: "Annulée", color: colors.danger, background: "#f8e5e1" },
+// One colour per step of the workflow, the same for the team and for clients.
+export const statusStyles: Record<string, { label: string; color: string; background: string }> = {
+  pending: { label: "Nouvelle", color: "#7a5a12", background: "#fbefc9" },
+  on_hold: { label: "En attente", color: "#8a4b08", background: "#fde3c8" },
+  awaiting_client: { label: "À reconfirmer", color: "#9a3412", background: "#fdd5c0" },
+  confirmed: { label: "Acceptée", color: "#1e4f8f", background: "#dbe7f8" },
+  preparing: { label: "En préparation", color: "#0f6b64", background: "#d3f0ec" },
+  ready: { label: "Préparée", color: "#3f3aa8", background: "#e3e2fa" },
+  out_for_delivery: { label: "Expédiée", color: "#76289f", background: "#f0e2fa" },
+  delivered: { label: "Livrée", color: "#1d6b36", background: "#d6efdc" },
+  declined: { label: "Déclinée", color: colors.danger, background: "#f8e2dd" },
+  cancelled: { label: "Annulée", color: "#5f6560", background: "#e9eae7" },
 };
+
+// Client-friendly progress: received → accepted → in preparation → shipped → delivered.
+const progressSteps = [
+  { key: "received", label: "Reçue", statuses: ["pending", "on_hold", "awaiting_client"] },
+  { key: "accepted", label: "Acceptée", statuses: ["confirmed"] },
+  { key: "preparing", label: "Préparation", statuses: ["preparing", "ready"] },
+  { key: "shipped", label: "En route", statuses: ["out_for_delivery"] },
+  { key: "delivered", label: "Livrée", statuses: ["delivered"] },
+];
+const stepColors = ["#c9a227", "#1e4f8f", "#0f6b64", "#76289f", "#1d6b36"];
+
+export function OrderProgress({ status }: { status: string }) {
+  if (status === "declined" || status === "cancelled") return null;
+  const index = progressSteps.findIndex((step) => step.statuses.includes(status));
+  return <View style={local.progress}>
+    {progressSteps.map((step, position) => {
+      const done = position <= index;
+      return <View key={step.key} style={{ flex: 1 }}>
+        <View style={[local.progressBar, { backgroundColor: done ? stepColors[Math.max(index, 0)] : colors.line }]} />
+        <Text style={[local.progressLabel, position === index && { color: stepColors[index], fontWeight: "800" }]} numberOfLines={1}>{step.label}</Text>
+      </View>;
+    })}
+  </View>;
+}
 
 export const statusLabel = (status: string) => statusStyles[status]?.label ?? status;
 
 export function StatusBadge({ status }: { status: string }) {
   const style = statusStyles[status] ?? { label: status, color: colors.muted, background: colors.cream };
-  return <View style={[ui.badge, { backgroundColor: style.background }]}><Text style={[ui.badgeText, { color: style.color }]}>{style.label}</Text></View>;
+  return <View style={[ui.badge, local.statusBadge, { backgroundColor: style.background }]}>
+    <View style={[local.statusDot, { backgroundColor: style.color }]} />
+    <Text style={[ui.badgeText, { color: style.color }]}>{style.label}</Text>
+  </View>;
 }
 
 export function ScreenHeader({ eyebrow, title, subtitle, right }: { eyebrow: string; title: string; subtitle?: string; right?: ReactNode }) {
@@ -167,6 +195,11 @@ export function BackButton({ label, onPress }: { label: string; onPress: () => v
 }
 
 const local = StyleSheet.create({
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  progress: { flexDirection: "row", gap: 4, marginTop: 8 },
+  progressBar: { height: 4, borderRadius: 2 },
+  progressLabel: { color: colors.muted, fontSize: 9, marginTop: 3, textAlign: "center" },
   sheetsWrap: { borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.paper },
   sheets: { paddingHorizontal: 14, paddingVertical: 6, gap: 6 },
   sheet: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },

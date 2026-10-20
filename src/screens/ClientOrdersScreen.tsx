@@ -11,7 +11,7 @@ import { OrderTimeline } from "../ui/OrderTimeline";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { useCan } from "../data/permissions";
-import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Loading, OrderProgress, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { QR, QrCode } from "../ui/Qr";
 import { colors, ui } from "../ui/theme";
@@ -162,6 +162,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
         <Pressable onPress={() => setExpanded((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])}>
           <View style={ui.row}><Text style={ui.strong}>{open ? "▾" : "▸"} Commande #{item.order_number}</Text><StatusBadge status={item.status} /></View>
           {!open ? <Text style={[ui.small, { marginTop: 2 }]}>{formatDateTime(item.created_at)} · {item.order_items.length} produit(s){client.show_prices ? ` · ${formatPrice(item.total)}` : ""}</Text> : null}
+          <OrderProgress status={item.status} />
         </Pressable>
         {open ? <>
         <Text style={[ui.small, { marginTop: 4 }]}>

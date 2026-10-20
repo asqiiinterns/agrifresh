@@ -114,53 +114,73 @@ export function ProductionScreen() {
   </View>;
 }
 
+// Ticking a product ticks every client; unticking one client recalculates what is done.
 function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshControl: ReactElement<ComponentProps<typeof RefreshControl>> }) {
   const totals = useMemo(() => preparationTotals(orders), [orders]);
   const [open, setOpen] = useState<string[]>([]);
   const [checked, setChecked] = useState<string[]>([]);
-  const storageKey = `agrifresh-prep-checks-${toDayKey(new Date())}`;
+  const storageKey = `agrifresh-prep-client-checks-${toDayKey(new Date())}`;
 
   // Ticks are a picking aid for the day, kept on this device only.
   useEffect(() => {
     void AsyncStorage.getItem(storageKey).then((stored) => { if (stored) setChecked(JSON.parse(stored) as string[]); }).catch(() => {});
   }, [storageKey]);
 
-  function toggleCheck(key: string) {
-    setChecked((current) => {
-      const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
-      void AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+  const keyOf = (product: string, client: string) => `${product}§${client}`;
+  function save(next: string[]) {
+    void AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
+    return next;
+  }
+  function toggleProduct(line: (typeof totals)[number]) {
+    const keys = line.clients.map((entry) => keyOf(line.key, entry.key));
+    setChecked((current) => save(keys.every((key) => current.includes(key)) ? current.filter((key) => !keys.includes(key)) : [...new Set([...current, ...keys])]));
+  }
+  function toggleClient(line: (typeof totals)[number], clientKey: string) {
+    const key = keyOf(line.key, clientKey);
+    setChecked((current) => save(current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   }
 
   const toggleOpen = (key: string) => setOpen((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
-  const done = totals.filter((line) => checked.includes(line.key)).length;
+  const doneOf = (line: (typeof totals)[number]) => line.clients.filter((entry) => checked.includes(keyOf(line.key, entry.key))).reduce((sum, entry) => sum + entry.quantity, 0);
+  const done = totals.filter((line) => line.clients.every((entry) => checked.includes(keyOf(line.key, entry.key)))).length;
 
   return <ScrollView contentContainerStyle={ui.content} refreshControl={refreshControl}>
-    <Text style={[ui.small, { marginTop: 8 }]}>{orders.length} commande(s) acceptée(s) ou en préparation · {done}/{totals.length} produit(s) cochés. Touchez un produit pour voir les clients.</Text>
+    <Text style={[ui.small, { marginTop: 8 }]}>{orders.length} commande(s) acceptée(s) ou en préparation · {done}/{totals.length} produit(s) terminés. Cocher un produit coche tous ses clients ; dépliez pour décocher un client.</Text>
     {totals.length === 0 ? <EmptyState title="Rien à préparer" body="Les commandes acceptées apparaîtront ici." /> : <View style={ui.card}>
       {totals.map((line) => {
         const expanded = open.includes(line.key);
-        const isChecked = checked.includes(line.key);
+        const made = doneOf(line);
+        const all = made >= line.quantity && line.clients.length > 0;
+        const partial = made > 0 && !all;
         return <View key={line.key} style={styles.totalBlock}>
-          <View style={[ui.row, { paddingVertical: 10 }]}>
-            <Pressable onPress={() => toggleCheck(line.key)} hitSlop={8} style={[styles.checkbox, isChecked && styles.checkboxChecked]} accessibilityLabel={`Cocher ${line.name}`}>
-              {isChecked ? <Text style={styles.checkmark}>✓</Text> : null}
+          <View style={[ui.row, { paddingVertical: 8 }]}>
+            <Pressable onPress={() => toggleProduct(line)} hitSlop={8} style={[styles.checkbox, all && styles.checkboxChecked, partial && styles.checkboxPartial]} accessibilityLabel={`Cocher ${line.name} pour tous les clients`}>
+              {all ? <Text style={styles.checkmark}>✓</Text> : partial ? <Text style={[styles.checkmark, { color: colors.green }]}>–</Text> : null}
             </Pressable>
             <Pressable onPress={() => toggleOpen(line.key)} style={[ui.row, { flex: 1 }]}>
-              <Text style={[ui.body, { flex: 1, fontWeight: expanded ? "800" : "400" }, isChecked && styles.doneText]}>{expanded ? "▾" : "▸"} {line.name}</Text>
-              <Text style={ui.small}>{line.clients.length} cl.</Text>
-              <Text style={[styles.quantity, isChecked && styles.doneText]}>{formatQuantity(line.quantity)} {line.unit}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[ui.body, { fontWeight: expanded ? "800" : "600" }, all && styles.doneText]}>{expanded ? "▾" : "▸"} {line.name}</Text>
+                <Text style={ui.small}>{line.clients.length} client(s){partial ? ` · reste ${formatQuantity(line.quantity - made)} ${line.unit}` : ""}</Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={[styles.quantity, all && styles.doneText]}>{formatQuantity(line.quantity)} {line.unit}</Text>
+                {made > 0 ? <Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>fait {formatQuantity(made)}</Text> : null}
+              </View>
             </Pressable>
           </View>
+          {partial || made > 0 ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.min(100, (made / line.quantity) * 100)}%` }]} /></View> : null}
           {expanded ? <View style={styles.clientList}>
-            {line.clients.map((entry) => <View key={entry.key} style={[ui.row, { paddingVertical: 4 }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={ui.body}>{entry.name}</Text>
-                <Text style={ui.small}>Cde {entry.orders.map((number) => `#${number}`).join(", ")}{entry.day ? ` · livraison ${formatDay(entry.day)}` : ""}</Text>
-              </View>
-              <Text style={[ui.body, { fontWeight: "800" }]}>{formatQuantity(entry.quantity)} {line.unit}</Text>
-            </View>)}
+            {line.clients.map((entry) => {
+              const on = checked.includes(keyOf(line.key, entry.key));
+              return <Pressable key={entry.key} onPress={() => toggleClient(line, entry.key)} style={[ui.row, { paddingVertical: 5 }]}>
+                <View style={[styles.smallBox, on && styles.checkboxChecked]}>{on ? <Text style={[styles.checkmark, { fontSize: 11 }]}>✓</Text> : null}</View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[ui.body, on && styles.doneText]}>{entry.name}</Text>
+                  <Text style={ui.small}>Cde {entry.orders.map((number) => `#${number}`).join(", ")}{entry.day ? ` · livraison ${formatDay(entry.day)}` : ""}</Text>
+                </View>
+                <Text style={[ui.body, { fontWeight: "800" }, on && styles.doneText]}>{formatQuantity(entry.quantity)} {line.unit}</Text>
+              </Pressable>;
+            })}
           </View> : null}
         </View>;
       })}
@@ -215,10 +235,14 @@ const styles = StyleSheet.create({
   tabs: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
   clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   totalBlock: { borderBottomWidth: 1, borderBottomColor: colors.line },
-  clientList: { paddingLeft: 34, paddingBottom: 10, gap: 2 },
+  clientList: { paddingLeft: 34, paddingBottom: 8, gap: 2 },
   quantity: { color: colors.text, fontSize: 14, fontWeight: "800", minWidth: 92, textAlign: "right" },
   checkbox: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
   checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
+  checkboxPartial: { borderColor: colors.green },
+  smallBox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.line, marginBottom: 8, marginLeft: 34 },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.green },
   checkmark: { color: colors.white, fontWeight: "800" },
   doneText: { color: colors.muted, textDecorationLine: "line-through" },
   activeCard: { borderColor: "#2f5d8a", backgroundColor: "#f3f7fb" },
