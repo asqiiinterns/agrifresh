@@ -1,6 +1,9 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["{0} TTC", "{0} incl. VAT", "{0} مع الأداءات"],
+  ["{0} HT · {1} TTC / {2}", "{0} excl. VAT · {1} incl. VAT / {2}", "{0} دون أداءات · {1} مع الأداءات / {2}"],
+  ["{0} HT · {1} TTC", "{0} excl. VAT · {1} incl. VAT", "{0} دون أداءات · {1} مع الأداءات"],
   ["Masquée · {0} produit(s)", "Hidden · {0} product(s)", "مخفي · {0} منتج(ات)"],
   ["OUVRIR CHEZ {0}", "OPEN WITH {0}", "فتح لدى {0}"],
   ["{0} fournisseurs", "{0} suppliers", "{0} مورّدين"],

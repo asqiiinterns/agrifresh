@@ -11,6 +11,7 @@ import { Button, Chip, CloseButton, EmptyState, Field, Loading, ProductImage, Sc
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { useDisplay } from "../ui/display";
+import { htTtc, withVat } from "../ui/price";
 
 type Filter = Category | "Nouveautés";
 const ALL = "Tous";
@@ -118,6 +119,8 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
     .map((product) => ({ product, quantity: parseQuantity(quantities[product.id] ?? "") }))
     .filter((line) => line.quantity > 0), [catalog, quantities]);
   const total = lines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+  const vatKnown = lines.every((line) => line.product.vatRate !== undefined);
+  const totalTtc = lines.reduce((sum, line) => sum + withVat(line.product.price * line.quantity, line.product.vatRate), 0);
   const priced = lines.every((line) => rulesOf(line.product).show_prices);
   const cartSuppliers = new Set(lines.map((line) => line.product.supplierId)).size;
   const inCart = (supplierId: string) => lines.filter((line) => line.product.supplierId === supplierId).length;
@@ -199,7 +202,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
             {multi && item.supplierId ? <Text style={styles.supplierName} numberOfLines={1}>{supplierById.get(item.supplierId)?.name}</Text> : null}
             {item.isNew && item.description ? <Text style={ui.small} numberOfLines={2}>{item.description}</Text> : null}
             {rules.show_origin && item.origin ? <Text style={styles.origin} numberOfLines={2}>Origine : {[formatOrigin(item.origin), item.origin.label].filter(Boolean).join(" · ")}{item.origin.note ? ` — ${item.origin.note}` : ""}</Text> : null}
-            <Text style={ui.small}>{rules.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
+            <Text style={ui.small}>{rules.show_prices ? `${htTtc(item.price, item.vatRate)} / ${item.unit}` : item.unit}</Text>
             {rules.show_stock && item.stock !== undefined ? <Text style={[ui.small, { color: item.stock > 0 ? colors.primary : colors.danger, fontWeight: "700" }]}>{item.stock > 0 ? `Stock : ${formatQuantity(item.stock)} ${item.unit}` : "Rupture de stock"}</Text> : null}
           </View>
           <View style={styles.stepper}>
@@ -225,6 +228,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
         <Text style={ui.small}>{lines.length} produit{lines.length > 1 ? "s" : ""}</Text>
         {cartSuppliers > 1 ? <Text style={ui.small}>{`${cartSuppliers} fournisseurs`}</Text> : null}
         {priced && lines.length ? <Text style={ui.amount}>{formatPrice(total)} HT</Text> : null}
+        {priced && vatKnown && lines.length ? <Text style={ui.small}>{`${formatPrice(totalTtc)} TTC`}</Text> : null}
       </View>
       {lines.length ? <Pressable onPress={() => setQuantities({})} style={{ padding: 8 }}><Text style={[ui.small, { textDecorationLine: "underline" }]}>Vider</Text></Pressable> : null}
       <Button label="VÉRIFIER ET ENVOYER" onPress={() => setReviewVisible(true)} disabled={!lines.length} />
@@ -335,6 +339,7 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
               {client.show_prices ? <Text style={ui.body}>{formatPrice(line.product.price * line.quantity)}</Text> : null}
             </View>)}
             {client.show_prices ? <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Total estimé HT</Text><Text style={ui.amount}>{formatPrice(total)}</Text></View> : null}
+            {client.show_prices && lines.every((line) => line.product.vatRate !== undefined) ? <View style={ui.row}><Text style={ui.body}>Total estimé TTC</Text><Text style={ui.body}>{formatPrice(lines.reduce((sum, line) => sum + withVat(line.product.price * line.quantity, line.product.vatRate), 0))}</Text></View> : null}
             <Text style={[ui.small, { marginTop: 6 }]}>{client.show_prices ? "Les prix et le stock sont confirmés par votre fournisseur à la réception." : "Le stock est confirmé par votre fournisseur à la réception."}</Text>
           </View>
 
@@ -436,6 +441,7 @@ function CartReviewModal({ visible, suppliers, lines, onClose, onPlaced }: {
         <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
           {groups.map(({ supplier, lines: supplierLines }) => {
             const subtotal = supplierLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+            const subtotalTtc = supplierLines.reduce((sum, line) => sum + withVat(line.product.price * line.quantity, line.product.vatRate), 0);
             const chosen = points[supplier.client_id] ?? null;
             return <View key={supplier.client_id} style={ui.card}>
               <Text style={ui.strong}>{supplier.name}</Text>
@@ -444,6 +450,7 @@ function CartReviewModal({ visible, suppliers, lines, onClose, onPlaced }: {
                 {supplier.show_prices ? <Text style={ui.body}>{formatPrice(line.product.price * line.quantity)}</Text> : null}
               </View>)}
               {supplier.show_prices ? <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Total estimé HT</Text><Text style={ui.amount}>{formatPrice(subtotal)}</Text></View> : null}
+              {supplier.show_prices && supplierLines.every((line) => line.product.vatRate !== undefined) ? <View style={ui.row}><Text style={ui.body}>Total estimé TTC</Text><Text style={ui.body}>{formatPrice(subtotalTtc)}</Text></View> : null}
               {supplier.delivery_points.length > 1 ? <View style={{ gap: 8, marginTop: 10 }}>
                 <Text style={ui.fieldLabel}>Point de livraison</Text>
                 {supplier.delivery_points.map((point) => <Pressable key={point.id} onPress={() => setPoints((current) => ({ ...current, [supplier.client_id]: point.id }))} style={[styles.pointOption, chosen === point.id && styles.pointOptionSelected]}>

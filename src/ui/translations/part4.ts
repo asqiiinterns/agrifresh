@@ -324,6 +324,7 @@ export const part4: [string, string, string][] = [
   ["VOIR TOUS", "SEE ALL", "عرض الكل"],
   ["Se déconnecter", "Sign out", "تسجيل الخروج"],
   ["Répondre", "Reply", "رد"],
+  ["Total estimé TTC", "Estimated total incl. VAT", "المجموع التقديري مع الأداءات"],
   ["Catégories", "Categories", "الأصناف"],
   ["La liste commune où chaque Pro range ses produits ; elle rend les produits comparables entre fournisseurs.", "The shared list where each Pro files its products; it makes products comparable between suppliers.", "القائمة المشتركة التي يرتب فيها كل محترف منتجاته؛ تجعل المنتجات قابلة للمقارنة بين المورّدين."],
   ["Une seule liste pour tous les Pros : leurs produits deviennent comparables entre fournisseurs.", "One list for all Pros: their products become comparable between suppliers.", "قائمة واحدة لكل المحترفين: تصبح منتجاتهم قابلة للمقارنة بين المورّدين."],

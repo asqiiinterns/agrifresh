@@ -10,6 +10,7 @@ type CatalogRow = {
   image_url: string | null;
   unit_label: string | null;
   price: number | string;
+  vat_rate?: number | string | null;
   active: boolean;
   created_at: string;
   stock_quantity: number | string | null;
@@ -36,6 +37,7 @@ function toProduct(row: CatalogRow): Product {
     category,
     categorySort: relation?.sort_order ?? 9999,
     price: Number.isFinite(price) ? price : 0,
+    vatRate: row.vat_rate === null || row.vat_rate === undefined ? undefined : Number(row.vat_rate),
     unit: row.unit_label ?? "unité",
     // No photo: a neutral placeholder (never another supplier's pictures).
     image: row.image_url ?? "",
@@ -53,7 +55,7 @@ export async function fetchCatalog(): Promise<Product[]> {
 
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, description, image_url, unit_label, price, active, created_at, stock_quantity, origin_producer, origin_region, origin_label, origin_note, categories(name, sort_order)")
+    .select("id, name, description, image_url, unit_label, price, vat_rate, active, created_at, stock_quantity, origin_producer, origin_region, origin_label, origin_note, categories(name, sort_order)")
     .eq("active", true)
     .order("created_at", { ascending: false });
 

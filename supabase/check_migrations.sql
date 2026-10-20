@@ -24,6 +24,7 @@ from (values
   (20, '20261113_directory.sql',                  to_regprocedure('public.pro_directory(text,text)') is not null),
   (21, '20261114_accounts.sql',                   to_regclass('public.account_entries') is not null),
   (22, '20261115_multi_supplier_cart.sql',        to_regprocedure('public.place_multi_order(jsonb, date, text)') is not null),
-  (23, '20261116_catalog_numbers.sql',           to_regclass('public.org_counters') is not null)
+  (23, '20261116_catalog_numbers.sql',           to_regclass('public.org_counters') is not null),
+  (24, '20261117_buyer_journey.sql',             to_regprocedure('public.client_cancel_order(uuid, text)') is not null)
 ) as checks(position, migration, installed)
 order by position;

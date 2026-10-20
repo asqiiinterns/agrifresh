@@ -8,6 +8,8 @@ export type Product = {
   category: string;
   categorySort?: number;
   price: number;
+  // VAT rate in %, prices being excl. VAT.
+  vatRate?: number;
   unit: string;
   image: string;
   badge?: string;
