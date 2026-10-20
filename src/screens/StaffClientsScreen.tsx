@@ -10,11 +10,13 @@ import { boolToOption, clientOptionKeys, fetchClientDefaults, useCan, type Clien
 import { ClientOptionsEditor } from "./SettingsScreen";
 import { colors, ui } from "../ui/theme";
 import { DocumentViewerHost } from "../ui/DocumentViewer";
+import { QR, QrCode } from "../ui/Qr";
 
 // Creating and editing client records follow the admin-defined permissions (also enforced by the database).
 export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
   const can = useCan();
-  const canCreate = can("clients.create");
+  // Clients are chosen in Réseau → Annuaire among the Pros validated by Appro+.
+  const canCreate = false;
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,7 +49,7 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
 
   return <View style={embedded ? { flex: 1 } : ui.screen}>
     {embedded ? <View style={[ui.row, { paddingHorizontal: 14, paddingTop: 8 }]}>
-      <Text style={[ui.small, { flex: 1 }]}>{clients.length} fiche(s) client</Text>
+      <Text style={[ui.small, { flex: 1 }]}>{clients.length} fiche(s) client · nouveaux clients : Réseau → Annuaire</Text>
       {canCreate ? <Button label="+ NOUVEAU CLIENT" onPress={() => setEditing("new")} /> : null}
     </View> : <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={canCreate ? <Button label="+ NOUVEAU" onPress={() => setEditing("new")} /> : undefined} />}
     <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
@@ -90,6 +92,7 @@ const pickOptions = (record: ClientRecord): Options => ({ ...Object.fromEntries(
 const emptyPoint: DeliveryPointInput = { label: "Principal", address_line: "", city: "", phone: "", instructions: "" };
 
 function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRecord | null; visible: boolean; onClose: () => void; onSaved: () => void }) {
+  const [shownQr, setShownQr] = useState<DeliveryPoint | null>(null);
   const can = useCan();
   const canEdit = record ? can("clients.edit") : can("clients.create");
   const [businessName, setBusinessName] = useState("");
@@ -275,7 +278,8 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
               <Text style={ui.body}>{point.address_line}, {point.city}{point.phone ? ` · ${point.phone}` : ""}</Text>
               {point.instructions ? <Text style={ui.small}>{point.instructions}</Text> : null}
               <View style={[ui.wrapRow, { marginTop: 8 }]}>
-                {point.active ? <Button label="IMPRIMER LE QR" variant="secondary" onPress={() => print([point])} disabled={busy} /> : null}
+                {point.active ? <Button label="AFFICHER LE QR" variant="secondary" onPress={() => setShownQr(point)} /> : null}
+                {point.active ? <Button label="IMPRIMER" variant="secondary" onPress={() => print([point])} disabled={busy} /> : null}
                 {canEdit ? <Button label="MODIFIER" variant="secondary" onPress={() => setPointForm({ id: point.id, values: { label: point.label, address_line: point.address_line, city: point.city, phone: point.phone, instructions: point.instructions ?? "" } })} disabled={busy} /> : null}
                 {canEdit ? <Button label={point.active ? "DÉSACTIVER" : "RÉACTIVER"} variant={point.active ? "danger" : "secondary"} onPress={() => togglePoint(point)} disabled={busy} /> : null}
               </View>
@@ -293,6 +297,15 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    <Modal visible={shownQr !== null} transparent animationType="fade" onRequestClose={() => setShownQr(null)}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24 }} onPress={() => setShownQr(null)}>
+        <View style={{ backgroundColor: colors.white, borderRadius: 14, padding: 18, alignItems: "center", gap: 8 }}>
+          <Text style={ui.strong}>{shownQr?.label}</Text>
+          {shownQr ? <QrCode value={QR.point(shownQr.qr_token)} size={240} /> : null}
+          <Text style={[ui.small, { textAlign: "center" }]}>Le livreur scanne ce code à la livraison. Touchez pour fermer.</Text>
+        </View>
+      </Pressable>
+    </Modal>
   </Modal>;
 }
 

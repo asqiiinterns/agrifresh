@@ -1,6 +1,11 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["Demande envoyée à {0}.", "Request sent to {0}.", "تم إرسال الطلب إلى {0}."],
+  ["Demander à {0} de devenir votre fournisseur ?", "Ask {0} to become your supplier?", "هل تطلب من {0} أن يصبح مورّدك؟"],
+  ["Proposer à {0} de devenir votre client ?", "Offer {0} to become your client?", "هل تقترح على {0} أن يصبح حريفك؟"],
+  ["{0} demande(s) à traiter", "{0} request(s) to handle", "{0} طلب(ات) للمعالجة"],
+  ["{0} ne fera plus partie de votre Pro. Son compte est conservé.", "{0} will no longer be part of your Pro. Their account is kept.", "لن يكون {0} جزءا من محترفك بعد الآن. يُحتفظ بحسابه."],
   [" avec {0} différence(s)", " with {0} difference(s)", " مع {0} اختلاف(ات)"],
   [" · dernière connexion le {0}", " · last sign-in on {0}", " · آخر دخول في {0}"],
   ["Comptes ({0})", "Accounts ({0})", "الحسابات ({0})"],

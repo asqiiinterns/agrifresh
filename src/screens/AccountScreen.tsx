@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { Text, TextInput } from "../ui/Text";
 import type { Session } from "@supabase/supabase-js";
@@ -21,8 +21,10 @@ import { Switch } from "react-native";
 import { colors } from "../ui/theme";
 import { useModules } from "../data/modules";
 import { confirmSignOut } from "../ui/signOut";
+import { fetchMyPro, type MyPro } from "../data/pros";
+import { RolesManager } from "./RolesManager";
 
-export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications" | "permissions";
+export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications" | "permissions" | "team";
 
 // "Plus": one page, grouped by what people look for — the sections that do not fit in the
 // bottom bar, catalogue and clients, administration, then the account's own settings.
@@ -45,9 +47,12 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   const active = !!account && (account.status ?? "active") === "active";
   const hasHome = active && (account?.role === "customer" ? can("client.home") : can("home.view"));
   const isAdmin = account?.role === "admin";
+  const [myPro, setMyPro] = useState<MyPro | null>(null);
+  useEffect(() => { if (account?.role === "customer") void fetchMyPro().then(setMyPro); }, [account?.role]);
   const pages: { key: AccountSheet; icon: TabDef["icon"]; title: string; detail: string; allowed: boolean }[] = [
     { key: "products", icon: "pricetags-outline", title: "Produits", detail: "Catalogue, prix, TVA, stock, nouveautés et origine.", allowed: active && can("products.manage") },
     { key: "clients", icon: "people-outline", title: "Clients", detail: "Fiches, points de livraison, QR codes, options.", allowed: active && can("clients.view") },
+    { key: "team", icon: "people-outline", title: "Mon équipe", detail: "Collaborateurs, rôles et droits de votre Pro.", allowed: active && account?.role === "customer" && !!myPro },
     { key: "profile", icon: "person-circle-outline", title: "Mon profil et mot de passe", detail: account?.client ? "Votre fiche, vos points de livraison, votre mot de passe." : "Vos informations et votre mot de passe.", allowed: true },
     { key: "notifications", icon: "notifications-outline", title: "Notifications", detail: "Alertes sur le téléphone et par e-mail.", allowed: active },
     { key: "display", icon: "text-outline", title: "Affichage et langue", detail: "Taille du texte, langue, présentation des produits.", allowed: true },
@@ -80,6 +85,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
     { title: "Pilotage", entries: sectionEntries("Pilotage") },
     { title: "Catalogue et clients", entries: [...entry("products"), ...entry("clients")] },
     { title: "Administration", entries: adminEntries },
+    { title: "Mon Pro", entries: entry("team") },
     { title: "Mon compte", entries: [...entry("profile"), ...entry("notifications"), ...entry("display"), ...entry("home"), ...entry("permissions")] },
   ];
   const needle = fold(query.trim());
@@ -90,6 +96,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   if (current) {
     const header = <ScreenHeader eyebrow="PLUS" title={current.title} right={<BackButton label="Plus" onPress={() => setPage(null)} />} />;
     if (current.key === "clients") return <View style={ui.screen}>{header}<StaffClientsScreen embedded /></View>;
+    if (current.key === "team") return <RolesManager header={header} />;
     return <View style={ui.screen}>
       {header}
       <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">

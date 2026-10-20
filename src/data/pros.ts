@@ -67,3 +67,14 @@ export const setTemplatePermission = (templateKey: string, permission: string, a
 
 export const fetchPlatformAccounts = (search: string) => call<PlatformAccount[]>("platform_accounts", { p_search: search });
 export const setPlatformAccountStatus = (userId: string, status: string) => call<void>("platform_set_account_status", { p_user_id: userId, p_status: status });
+
+// Spaces: one account may work in several Pros, as a supplier or a buyer (20261113).
+export type Space = { org_id: string; org_name: string; mode: "supplier" | "buyer"; status: string; current: boolean };
+export async function fetchMySpaces(): Promise<Space[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("my_spaces");
+  return error ? [] : (data ?? []) as Space[];
+}
+export const switchSpace = (orgId: string, mode: "supplier" | "buyer") => call<void>("switch_space", { p_org_id: orgId, p_mode: mode });
+export const addMember = (email: string, roleId: string) => call<string>("org_add_member", { p_email: email.trim(), p_role_id: roleId });
+export const removeMember = (userId: string) => call<void>("org_remove_member", { p_user_id: userId });

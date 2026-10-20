@@ -20,6 +20,7 @@ from (values
   (16, '20261109_roles.sql',                      to_regclass('public.org_roles') is not null),
   (17, '20261110_1_platform_profile.sql + 20261110_2_switch.sql', to_regprocedure('public.platform_pros()') is not null),
   (18, '20261111_isolation.sql',                  to_regprocedure('public.acting_supplier_org_id()') is not null),
-  (19, '20261112_pro_onboarding.sql',             to_regprocedure('public.register_pro(jsonb)') is not null)
+  (19, '20261112_pro_onboarding.sql',             to_regprocedure('public.register_pro(jsonb)') is not null),
+  (20, '20261113_directory.sql',                  to_regprocedure('public.pro_directory(text,text)') is not null)
 ) as checks(position, migration, installed)
 order by position;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Linking, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
+import { Animated, Linking, Modal, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
 import { Text } from "./src/ui/Text";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
@@ -20,7 +20,9 @@ import { AdminScreen } from "./src/screens/AdminScreen";
 import { PlatformTeamScreen, ProsScreen } from "./src/screens/PlatformScreens";
 import { PlatformSettingsScreen } from "./src/screens/PlatformAdmin";
 import { ProPendingCard, RegisterProCard } from "./src/screens/ProSignup";
-import { fetchMyPro, type MyPro } from "./src/data/pros";
+import { fetchMyPro, fetchMySpaces, switchSpace, type MyPro, type Space } from "./src/data/pros";
+import { NetworkScreen } from "./src/screens/NetworkScreen";
+import { fetchMySuppliers, switchSupplier, type MySupplier } from "./src/data/directory";
 import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -77,6 +79,7 @@ const TAB = {
   more: { key: "more", label: "Plus", icon: "grid-outline" },
   pros: { key: "pros", label: "Pros", icon: "business-outline", description: "Valider, suspendre ou réactiver les Pros." },
   platformTeam: { key: "platformTeam", label: "Équipe Appro+", icon: "people-circle-outline", description: "Les comptes de la plateforme et leurs rôles." },
+  network: { key: "network", label: "Réseau", icon: "git-network-outline", description: "Vos clients et fournisseurs, l’annuaire des Pros validés." },
   platformSettings: { key: "platformSettings", label: "Paramétrage", icon: "options-outline", description: "Comptes, modules, modèles de rôles, alertes et e-mails." },
 } satisfies Record<TabKey, TabDef>;
 
@@ -88,14 +91,16 @@ const TOP_KEYS: TabKey[] = ["messages", "alerts"];
 const HUB_KEYS: TabKey[] = ["orders", "planning", "production"];
 
 // Tabs follow the features the admin enabled for the account's role, most used first.
-function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" | "unlinked" | "team" | "platform"; tabs: TabDef[] } {
+function tabsFor(account: Account, modules: ModuleState = {}, pro: MyPro | null = null): { kind: "client" | "unlinked" | "team" | "platform"; tabs: TabDef[] } {
+  // Réseau: any member of an active Pro (clients and suppliers among validated Pros).
+  const network = pro?.status === "active" && (pro.is_supplier || pro.is_buyer);
   const on = (key: ModuleKey) => isModuleOn(modules, key);
   const has = (feature: string) => account.features.includes(feature);
   const add = (tabs: TabDef[], tab: TabDef, allowed: boolean) => { if (allowed && !tabs.includes(tab)) tabs.push(tab); };
   // The Appro+ team: its own console, separate from every Pro.
   if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformSettings, TAB.platformTeam, TAB.account] };
   if (account.role === "customer") {
-    if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
+    if (!account.client) return { kind: "unlinked", tabs: network ? [TAB.network, TAB.account] : [TAB.account] };
     const tabs: TabDef[] = [];
     add(tabs, TAB.home, has("client.home"));
     add(tabs, TAB.order, has("client.order"));
@@ -104,6 +109,7 @@ function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" 
     add(tabs, TAB.alerts, has("client.alerts"));
     add(tabs, TAB.invoices, has("client.invoices"));
     add(tabs, TAB.recurring, has("client.recurring"));
+    add(tabs, TAB.network, network);
     tabs.push(TAB.account);
     return { kind: "client", tabs };
   }
@@ -123,6 +129,7 @@ function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" 
   add(tabs, TAB.recurring, has("orders.create") && on("recurring"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
+  add(tabs, TAB.network, network);
   // Admin pages (accounts, settings, fleet, log, location): reached from Plus → Rubriques and from shortcuts.
   add(tabs, TAB.admin, account.role === "admin" || ["products.manage", "fleet.manage", "audit.view", "location.view"].some(has));
   tabs.push(TAB.account);
@@ -291,12 +298,22 @@ function Main({ session }: { session: Session }) {
 
   const [modules, setModules] = useState<ModuleState>({});
   const [myPro, setMyPro] = useState<MyPro | null>(null);
+  const [suppliers, setSuppliers] = useState<MySupplier[]>([]);
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spacePicker, setSpacePicker] = useState(false);
+  const spaceAsked = useRef(false);
+  const [choosing, setChoosing] = useState(false);
   const loadAccount = useCallback(async () => {
     setAccountError("");
     try {
       const [next, nextModules, nextPro] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro()]);
       setModules(nextModules);
       setMyPro(nextPro);
+      setSuppliers(next.role === "customer" ? await fetchMySuppliers() : []);
+      const nextSpaces = await fetchMySpaces();
+      setSpaces(nextSpaces);
+      // Several spaces: choose one when signing in (once per session).
+      if (nextSpaces.length > 1 && !spaceAsked.current) { spaceAsked.current = true; setSpacePicker(true); }
       setAccount(next);
       void loadCompanyProfile().catch(() => undefined);
     } catch (cause) {
@@ -312,7 +329,7 @@ function Main({ session }: { session: Session }) {
   // A module switched on or off changes the rights: reload both.
   useEffect(() => onModulesChanged(() => { void loadAccount(); }), [loadAccount]);
 
-  const { kind, tabs } = account ? tabsFor(account, modules) : { kind: null, tabs: [] as TabDef[] };
+  const { kind, tabs } = account ? tabsFor(account, modules, myPro) : { kind: null, tabs: [] as TabDef[] };
   const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)));
   // Commandes / Planning requested by a tile, an alert or a button open the matching sheet of "Production".
   const hub = kind === "team" && tabs.some((item) => item.key === "production");
@@ -440,6 +457,8 @@ function Main({ session }: { session: Session }) {
         return <PlatformTeamScreen />;
       case "platformSettings":
         return <PlatformSettingsScreen />;
+      case "network":
+        return <NetworkScreen onChanged={() => void loadAccount()} />;
       case "admin":
         return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
       default:
@@ -474,6 +493,47 @@ function Main({ session }: { session: Session }) {
         <Ionicons name="log-out-outline" size={22} color={colors.danger} />
       </Pressable>
     </View>
+    {/* Several spaces (Pros, supplier or buyer mode): menus, rights and data follow the chosen one. */}
+    {spaces.length > 1 ? <Pressable onPress={() => setSpacePicker(true)} style={styles.supplierBar}>
+      <Ionicons name={spaces.find((item) => item.current)?.mode === "buyer" ? "cart-outline" : "business-outline"} size={16} color={colors.primary} />
+      <Text style={styles.supplierText} numberOfLines={1}>{(() => { const space = spaces.find((item) => item.current); return space ? `${space.org_name} · ${space.mode === "buyer" ? "Acheteur" : "Fournisseur"}` : "Choisir un espace"; })()}</Text>
+      <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
+    </Pressable> : null}
+    <Modal visible={spacePicker} transparent animationType="fade" onRequestClose={() => setSpacePicker(false)}>
+      <Pressable style={styles.chooserBackdrop} onPress={() => setSpacePicker(false)}>
+        <View style={styles.chooser}>
+          <Text style={ui.strong}>Dans quel espace travaillez-vous ?</Text>
+          <Text style={ui.small}>Les menus, les droits et les données suivent l’espace choisi. Vous pouvez en changer à tout moment en haut de l’écran.</Text>
+          {spaces.map((item) => <Pressable key={`${item.org_id}-${item.mode}`} style={[styles.chooserRow, item.current && { backgroundColor: colors.primarySoft }]}
+            onPress={() => { setSpacePicker(false); if (item.current) return; void switchSpace(item.org_id, item.mode).then(() => { setTab(null); return loadAccount(); }).catch((cause: unknown) => notify("Espace", errorMessage(cause, "Impossible de changer d’espace."))); }}>
+            <Ionicons name={item.mode === "buyer" ? "cart-outline" : "business-outline"} size={18} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={ui.body}>{item.org_name}</Text>
+              <Text style={ui.small}>{item.mode === "buyer" ? "Acheteur : commander à ses fournisseurs" : "Fournisseur : vendre, préparer, livrer, facturer"}</Text>
+            </View>
+            {item.current ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+          </Pressable>)}
+        </View>
+      </Pressable>
+    </Modal>
+    {/* A buyer with several suppliers works with one at a time: orders, catalogue and invoices follow it. */}
+    {suppliers.length > 1 ? <Pressable onPress={() => setChoosing(true)} style={styles.supplierBar}>
+      <Ionicons name="storefront-outline" size={16} color={colors.primary} />
+      <Text style={styles.supplierText} numberOfLines={1}>Fournisseur : {suppliers.find((item) => item.current)?.name ?? "à choisir"}</Text>
+      <Ionicons name="chevron-down" size={16} color={colors.primary} />
+    </Pressable> : null}
+    <Modal visible={choosing} transparent animationType="fade" onRequestClose={() => setChoosing(false)}>
+      <Pressable style={styles.chooserBackdrop} onPress={() => setChoosing(false)}>
+        <View style={styles.chooser}>
+          <Text style={ui.strong}>Choisir le fournisseur</Text>
+          {suppliers.map((item) => <Pressable key={item.client_id} style={[styles.chooserRow, item.current && { backgroundColor: colors.primarySoft }]}
+            onPress={() => { setChoosing(false); void switchSupplier(item.client_id).then(() => { setTab(null); return loadAccount(); }).catch((cause: unknown) => notify("Fournisseur", errorMessage(cause, "Impossible de changer de fournisseur."))); }}>
+            <Text style={[ui.body, { flex: 1 }]}>{item.name}</Text>
+            {item.current ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+          </Pressable>)}
+        </View>
+      </Pressable>
+    </Modal>
     {nav.params?.back && nav.params.back !== current ? <Pressable onPress={() => setTab(nav.params!.back!)} style={styles.backBar}>
       <Ionicons name="chevron-back" size={16} color={colors.primary} />
       <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
@@ -545,6 +605,11 @@ function MessagesButton({ selected, unread, needsReply, onPress }: { selected: b
 }
 
 const styles = StyleSheet.create({
+  supplierBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: colors.primarySoft, borderBottomWidth: 1, borderBottomColor: colors.line },
+  supplierText: { flex: 1, color: colors.primary, fontSize: 12, fontWeight: "800" },
+  chooserBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 24 },
+  chooser: { backgroundColor: colors.white, borderRadius: 12, padding: 14, gap: 6 },
+  chooserRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.line },
   unavailable: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#fffbef", borderBottomWidth: 1, borderBottomColor: "#e3c46f" },
   unavailableText: { flex: 1, color: colors.text, fontSize: 12 },
   messagesButton: { width: 52, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },

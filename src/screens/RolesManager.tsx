@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../ui/Text";
 import {
-  createRole, fetchMemberPermissions, fetchRolesMatrix, setMemberRole, setRolePermission,
+  addMember, createRole, fetchMemberPermissions, fetchRolesMatrix, removeMember, setMemberRole, setRolePermission,
   type OrgMember, type OrgRole, type RolePermission, type RolesMatrix,
 } from "../data/pros";
 import { featureBlocks } from "../data/permissions";
@@ -110,7 +110,8 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
         </View>)}
       </View> : null}
     </ScrollView> : <ScrollView contentContainerStyle={ui.content}>
-      <Text style={[ui.small, styles.note]}>Une personne peut avoir plusieurs rôles : ses droits s’additionnent. Les modules désactivés restent masqués.</Text>
+      <Text style={[ui.small, styles.note]}>Une personne peut avoir plusieurs rôles : ses droits s’additionnent, dans la limite de ce qu’Appro+ a ouvert à votre Pro.</Text>
+      <AddMemberCard roles={matrix.roles} onAdded={() => void reload()} />
       {matrix.members.length ? <ListGroup>
         {matrix.members.map((member) => <View key={member.id} style={styles.member}>
           <View style={ui.row}>
@@ -119,6 +120,10 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
               <Text style={ui.small}>{member.email}{member.status !== "active" ? ` · ${member.status === "pending" ? "en attente" : "suspendu"}` : ""}</Text>
             </View>
             <Pressable onPress={() => setSeeing(member)} hitSlop={8} accessibilityLabel="Voir ses droits"><Ionicons name="eye-outline" size={20} color={colors.primary} /></Pressable>
+            <Pressable onPress={() => notify("Retirer de l’équipe", `${member.email} ne fera plus partie de votre Pro. Son compte est conservé.`, [
+              { text: "Annuler", style: "cancel" },
+              { text: "Retirer", style: "destructive", onPress: () => { void removeMember(member.id).then(() => reload()).catch((cause: unknown) => notify("Équipe", errorMessage(cause, "Le compte n’a pas pu être retiré."))); } },
+            ])} hitSlop={8} accessibilityLabel="Retirer de l’équipe"><Ionicons name="person-remove-outline" size={20} color={colors.danger} /></Pressable>
           </View>
           <View style={[ui.wrapRow, { marginTop: 6 }]}>
             {matrix.roles.map((item) => {
@@ -136,6 +141,27 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
       setRoleId(id);
     }} />
     <SeeAsModal member={seeing} onClose={() => setSeeing(null)} />
+  </View>;
+}
+
+// A collaborator: an account its owner created (and Appro+ validated), added with a role.
+function AddMemberCard({ roles, onAdded }: { roles: OrgRole[]; onAdded: () => void }) {
+  const [email, setEmail] = useState("");
+  const [roleId, setRoleId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const choices = roles.filter((role) => role.template_key !== "supplier_owner" && role.template_key !== "buyer_owner");
+  return <View style={ui.card}>
+    <Text style={ui.strong}>Ajouter un collaborateur</Text>
+    <Text style={ui.small}>La personne crée d’abord son compte avec son e-mail. Si elle travaille déjà ailleurs, elle aura simplement un espace de plus.</Text>
+    <Field label="E-mail" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+    <View style={[ui.wrapRow, { marginTop: 4 }]}>
+      {choices.map((role) => <Chip key={role.id} label={role.name} selected={roleId === role.id} onPress={() => setRoleId(role.id)} />)}
+    </View>
+    {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
+    <Button label="AJOUTER" disabled={!email.trim() || !roleId} style={{ marginTop: 10 }} onPress={async () => {
+      setError("");
+      try { await addMember(email, roleId!); setEmail(""); setRoleId(null); onAdded(); } catch (cause) { setError(errorMessage(cause, "Le collaborateur n’a pas pu être ajouté.")); }
+    }} />
   </View>;
 }
 
