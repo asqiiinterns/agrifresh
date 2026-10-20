@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { loadCompanyProfile } from "./src/data/company";
+import { confirmSignOut } from "./src/ui/signOut";
 import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
 import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
@@ -116,6 +117,9 @@ function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" 
   // Admin pages (accounts, settings, fleet, log, location): reached from Plus → Rubriques and from shortcuts.
   add(tabs, TAB.admin, account.role === "admin" || ["products.manage", "fleet.manage", "audit.view", "location.view"].some(has));
   tabs.push(TAB.account);
+  // What the profile does most comes first in the bottom bar.
+  const first: TabKey[] = account.role === "driver" ? ["deliveries"] : account.role === "production" ? ["production"] : [];
+  tabs.sort((a, b) => (first.includes(b.key) ? 1 : 0) - (first.includes(a.key) ? 1 : 0));
   return { kind: "team", tabs };
 }
 
@@ -491,18 +495,6 @@ export default function App() {
   </SafeAreaProvider></DisplayProvider>;
 }
 
-// Sign out from anywhere (top bar), after a confirmation.
-function confirmSignOut() {
-  notify("Se déconnecter", "Voulez-vous vous déconnecter d’Appro+ ?", [
-    { text: "Annuler", style: "cancel" },
-    { text: "Se déconnecter", style: "destructive", onPress: () => {
-      void (async () => {
-        await unregisterPush().catch(() => {});
-        await supabase?.auth.signOut();
-      })();
-    } },
-  ]);
-}
 
 // Messages: larger than the other icons, pulses (orange) while messages are unread,
 // and wears a red ring with "!" while a message waits for my answer.

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
-import { Text } from "../ui/Text";
+import { Text, TextInput } from "../ui/Text";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber, roleLabels, type Account } from "../data/account";
-import { Button, Chip, Field, ListGroup, ListRow, ScreenHeader, Sheets } from "../ui/components";
+import { BackButton, Button, Chip, Field, ListGroup, ListRow, ScreenHeader } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
@@ -20,10 +20,18 @@ import { PermissionsCard } from "./PermissionsCard";
 import { Switch } from "react-native";
 import { colors } from "../ui/theme";
 import { useModules } from "../data/modules";
+import { confirmSignOut } from "../ui/signOut";
 
 export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications" | "permissions";
 
-// "Compte": the other sections of the app (former "Plus") and every personal setting, as sheets.
+// "Plus": one page, grouped by what people look for — the sections that do not fit in the
+// bottom bar, catalogue and clients, administration, then the account's own settings.
+// Every entry opens its own page with a way back; a search filters the list.
+type Entry = { key: string; icon: TabDef["icon"]; title: string; detail?: string; onPress: () => void };
+
+const sectionTheme = (key: string) => ["calendar", "leaves", "incidents"].includes(key) ? "Équipe" : key === "stats" ? "Pilotage" : "Activité";
+const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
+
 export function AccountScreen({ session, account, sections = [], initialSheet, onLayoutChanged }: {
   session: Session;
   account: Account | null;
@@ -37,46 +45,75 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   const active = !!account && (account.status ?? "active") === "active";
   const hasHome = active && (account?.role === "customer" ? can("client.home") : can("home.view"));
   const isAdmin = account?.role === "admin";
-  const adminPages = !sections.some((item) => item.key === "admin") ? [] : [
-    { page: "accounts", icon: "person-outline", title: "Comptes", detail: "Validation des inscriptions, suspension, rôle, ajout d’un compte.", allowed: isAdmin },
-    { page: "settings", icon: "options-outline", title: "Paramétrage", detail: "Modules, droits par profil, options des clients, entreprise, numérotation, accueil.", allowed: isAdmin },
-    { page: "alerts", icon: "notifications-outline", title: "Alertes et e-mails", detail: "Événements notifiés et service d’envoi.", allowed: isAdmin },
-    { page: "fleet", icon: "car-outline", title: "Flotte", detail: "Véhicules proposés au livreur à l’expédition.", allowed: can("fleet.manage") },
-    { page: "audit", icon: "time-outline", title: "Journal des actions", detail: "Qui a fait quoi et quand, sur tout le système.", allowed: can("audit.view") },
-    { page: "location", icon: "location-outline", title: "Localisation", detail: "Dernière position des comptes qui la partagent.", allowed: can("location.view") },
-  ].filter((page) => page.allowed) as { page: string; icon: TabDef["icon"]; title: string; detail: string }[];
-  const sheets: { key: AccountSheet; label: string }[] = [
-    ...(sections.length ? [{ key: "sections" as const, label: "Rubriques" }] : []),
-    ...(hasHome && mod("home_custom") ? [{ key: "home" as const, label: "Personnaliser" }] : []),
-    { key: "profile", label: "Compte" },
-    { key: "display", label: "Affichage" },
-    ...(active ? [{ key: "notifications" as const, label: "Notifications" }] : []),
-    { key: "permissions", label: "Autorisations" },
-    ...(active && can("products.manage") ? [{ key: "products" as const, label: "Produits" }] : []),
-    ...(active && can("clients.view") ? [{ key: "clients" as const, label: "Clients" }] : []),
+  const pages: { key: AccountSheet; icon: TabDef["icon"]; title: string; detail: string; allowed: boolean }[] = [
+    { key: "products", icon: "pricetags-outline", title: "Produits", detail: "Catalogue, prix, TVA, stock, nouveautés et origine.", allowed: active && can("products.manage") },
+    { key: "clients", icon: "people-outline", title: "Clients", detail: "Fiches, points de livraison, QR codes, options.", allowed: active && can("clients.view") },
+    { key: "profile", icon: "person-circle-outline", title: "Mon profil et mot de passe", detail: account?.client ? "Votre fiche, vos points de livraison, votre mot de passe." : "Vos informations et votre mot de passe.", allowed: true },
+    { key: "notifications", icon: "notifications-outline", title: "Notifications", detail: "Alertes sur le téléphone et par e-mail.", allowed: active },
+    { key: "display", icon: "text-outline", title: "Affichage et langue", detail: "Taille du texte, langue, présentation des produits.", allowed: true },
+    { key: "home", icon: "options-outline", title: "Personnaliser l’accueil", detail: "Chiffres et raccourcis de votre page d’accueil.", allowed: hasHome && mod("home_custom") },
+    { key: "permissions", icon: "shield-checkmark-outline", title: "Autorisations du téléphone", detail: "Appareil photo, micro, position, notifications.", allowed: true },
   ];
-  const [sheet, setSheet] = useState<AccountSheet>(sheets.some((item) => item.key === initialSheet) ? initialSheet as AccountSheet : sheets[0].key);
+  const allowedPages = pages.filter((page) => page.allowed);
+  const startPage = allowedPages.some((page) => page.key === initialSheet) ? initialSheet as AccountSheet : null;
+  const [page, setPage] = useState<AccountSheet | null>(startPage);
+  const [productsVisible, setProductsVisible] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const open = (key: AccountSheet) => key === "products" ? setProductsVisible(true) : setPage(key);
+  const entry = (key: AccountSheet): Entry[] => allowedPages.filter((item) => item.key === key).map((item) => ({ key: item.key, icon: item.icon, title: item.title, detail: item.detail, onPress: () => open(item.key) }));
+  const adminEntries: Entry[] = !sections.some((item) => item.key === "admin") ? [] : [
+    { page: "accounts", icon: "person-outline" as const, title: "Comptes", detail: "Validation des inscriptions, suspension, rôle, ajout d’un compte.", allowed: isAdmin },
+    { page: "settings", icon: "options-outline" as const, title: "Paramétrage", detail: "Modules, droits par profil, options des clients, entreprise, numérotation, accueil.", allowed: isAdmin },
+    { page: "alerts", icon: "notifications-outline" as const, title: "Alertes et e-mails", detail: "Événements notifiés et service d’envoi.", allowed: isAdmin },
+    { page: "fleet", icon: "car-outline" as const, title: "Flotte", detail: "Véhicules proposés au livreur à l’expédition.", allowed: can("fleet.manage") },
+    { page: "audit", icon: "time-outline" as const, title: "Journal des actions", detail: "Qui a fait quoi et quand, sur tout le système.", allowed: can("audit.view") },
+    { page: "location", icon: "location-outline" as const, title: "Localisation", detail: "Dernière position des comptes qui la partagent.", allowed: can("location.view") },
+  ].filter((item) => item.allowed).map((item) => ({ key: `admin-${item.page}`, icon: item.icon, title: item.title, detail: item.detail, onPress: () => navigate("admin", { page: item.page }) }));
+  const sectionEntries = (theme: string): Entry[] => sections.filter((item) => item.key !== "admin" && sectionTheme(item.key) === theme)
+    .map((item) => ({ key: item.key, icon: item.icon, title: item.label, detail: item.description, onPress: () => navigate(item.key) }));
+
+  const groups: { title: string; entries: Entry[] }[] = [
+    { title: "Activité", entries: sectionEntries("Activité") },
+    { title: "Équipe", entries: sectionEntries("Équipe") },
+    { title: "Pilotage", entries: sectionEntries("Pilotage") },
+    { title: "Catalogue et clients", entries: [...entry("products"), ...entry("clients")] },
+    { title: "Administration", entries: adminEntries },
+    { title: "Mon compte", entries: [...entry("profile"), ...entry("notifications"), ...entry("display"), ...entry("home"), ...entry("permissions")] },
+  ];
+  const needle = fold(query.trim());
+  const shown = groups.map((group) => ({ ...group, entries: needle ? group.entries.filter((item) => fold(`${item.title} ${item.detail ?? ""}`).includes(needle)) : group.entries }))
+    .filter((group) => group.entries.length);
+
+  const current = allowedPages.find((item) => item.key === page);
+  if (current) {
+    const header = <ScreenHeader eyebrow="PLUS" title={current.title} right={<BackButton label="Plus" onPress={() => setPage(null)} />} />;
+    if (current.key === "clients") return <View style={ui.screen}>{header}<StaffClientsScreen embedded /></View>;
+    return <View style={ui.screen}>
+      {header}
+      <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+        {current.key === "profile" ? <><ProfileCard session={session} account={account} /><PasswordCard /></> : null}
+        {current.key === "permissions" ? <PermissionsCard /> : null}
+        {current.key === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
+        {current.key === "display" ? <DisplaySettingsCard showProducts={account?.role === "customer"} /> : null}
+        {current.key === "notifications" ? <><MyNotificationsCard />{account?.client && mod("reminders") ? <ReminderChoiceCard account={account} onChanged={onLayoutChanged ?? (() => {})} /> : null}</> : null}
+      </ScrollView>
+    </View>;
+  }
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={session.user.email?.toLocaleUpperCase("fr") ?? "VOTRE ESPACE"} title="Plus" />
-    <Sheets items={sheets} value={sheet} onChange={setSheet} />
-    {sheet === "clients" ? <StaffClientsScreen embedded /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
-      {sheet === "sections" ? <>
-        {sections.some((item) => item.key !== "admin") ? <ListGroup title="Rubriques">
-          {sections.filter((item) => item.key !== "admin").map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} detail={item.description} onPress={() => navigate(item.key)} />)}
-        </ListGroup> : null}
-        {/* Admin pages listed one by one, so none is reachable only through a home shortcut. */}
-        {adminPages.length ? <ListGroup title="Administration">
-          {adminPages.map((page) => <ListRow key={page.page} icon={page.icon} title={page.title} detail={page.detail} onPress={() => navigate("admin", { page: page.page })} />)}
-        </ListGroup> : null}
-      </> : null}
-      {sheet === "profile" ? <><ProfileCard session={session} account={account} /><PasswordCard /></> : null}
-      {sheet === "permissions" ? <PermissionsCard /> : null}
-      {sheet === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
-      {sheet === "display" ? <DisplaySettingsCard showProducts={account?.role === "customer"} /> : null}
-      {sheet === "products" ? <ProductsCard /> : null}
-      {sheet === "notifications" ? <><MyNotificationsCard />{account?.client && mod("reminders") ? <ReminderChoiceCard account={account} onChanged={onLayoutChanged ?? (() => {})} /> : null}</> : null}
-    </ScrollView>}
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      <TextInput value={query} onChangeText={setQuery} placeholder="Rechercher une rubrique ou un réglage" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 10 }]} clearButtonMode="while-editing" />
+      {shown.map((group) => <ListGroup key={group.title} title={group.title}>
+        {group.entries.map((item) => <ListRow key={item.key} icon={item.icon} title={item.title} detail={item.detail} onPress={item.onPress} />)}
+      </ListGroup>)}
+      {!shown.length ? <Text style={[ui.small, { marginTop: 14 }]}>Aucune rubrique ne correspond à « {query.trim()} ».</Text> : null}
+      <ListGroup>
+        <ListRow icon="log-out-outline" title="Se déconnecter" onPress={confirmSignOut} />
+      </ListGroup>
+    </ScrollView>
+    <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} />
   </View>;
 }
 
