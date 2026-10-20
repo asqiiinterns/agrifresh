@@ -16,6 +16,7 @@ import { Button, ListGroup, ListRow, Loading, ScreenHeader, toDayKey } from "../
 import { allowedFor, defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { useNav } from "../ui/navigation";
 import { colors, ui } from "../ui/theme";
+import { useModules } from "../data/modules";
 import { HomeEditor } from "./HomeEditor";
 import { appLocale } from "../ui/i18n";
 
@@ -27,6 +28,8 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
   onLayoutChanged: () => void;
 }) {
   const can = useCan();
+  const moduleOn = useModules();
+  const customOn = useModules()("home_custom");
   const { navigate } = useNav();
   const isAdmin = account.role === "admin";
   const audience = account.role === "customer" ? "customer" : "team";
@@ -35,8 +38,8 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const allowedTiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile.need, can, isAdmin));
-  const allowedShortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item.need, can, isAdmin));
+  const allowedTiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile, can, isAdmin, moduleOn));
+  const allowedShortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item, can, isAdmin, moduleOn));
   const layout = account.home_layout ?? defaultLayout(audience);
   const tiles = layout.tiles.map((key) => allowedTiles.find((tile) => tile.key === key)).filter((tile) => !!tile);
   const shortcuts = layout.shortcuts.map((key) => allowedShortcuts.find((item) => item.key === key)).filter((item) => !!item);
@@ -127,9 +130,9 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     <ScreenHeader
       eyebrow={today.toLocaleUpperCase("fr")}
       title={`${new Date().getHours() < 18 ? "Bonjour" : "Bonsoir"}${name ? ` ${name}` : ""}`}
-      right={<Pressable onPress={() => setEditing(true)} style={styles.gear} hitSlop={8} accessibilityLabel="Personnaliser l’accueil">
+      right={customOn ? <Pressable onPress={() => setEditing(true)} style={styles.gear} hitSlop={8} accessibilityLabel="Personnaliser l’accueil">
         <Ionicons name="settings-outline" size={20} color={colors.primary} />
-      </Pressable>}
+      </Pressable> : undefined}
     />
     {/* Gear next to the greeting: choose and order the figures and shortcuts shown here. */}
     <HomeEditor
@@ -171,12 +174,13 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
 // Compte → Accueil: choose and order the figures and shortcuts of one's home screen.
 export function HomeCustomizeCard({ account, onLayoutChanged }: { account: Account; onLayoutChanged: () => void }) {
   const can = useCan();
+  const moduleOn = useModules();
   const isAdmin = account.role === "admin";
   const audience = account.role === "customer" ? "customer" : "team";
   const [editing, setEditing] = useState(false);
   const layout = account.home_layout ?? defaultLayout(audience);
-  const tiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile.need, can, isAdmin)).map(({ key, label, icon }) => ({ key, label, icon }));
-  const shortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item.need, can, isAdmin)).map(({ key, label, icon }) => ({ key, label, icon }));
+  const tiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile, can, isAdmin, moduleOn)).map(({ key, label, icon }) => ({ key, label, icon }));
+  const shortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item, can, isAdmin, moduleOn)).map(({ key, label, icon }) => ({ key, label, icon }));
   return <View style={ui.card}>
     <Text style={ui.strong}>Mon accueil</Text>
     <Text style={ui.small}>{account.home_layout ? "Personnalisé" : account.role_home_layout ? "Accueil de votre profil" : "Accueil standard"} : {layout.tiles.length} chiffre(s), {layout.shortcuts.length} raccourci(s).</Text>

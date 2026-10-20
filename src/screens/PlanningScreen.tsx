@@ -8,6 +8,7 @@ import { notify } from "../ui/notify";
 import { CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDay } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { useModules } from "../data/modules";
 
 // The production queue in execution order: move an order up or down, or insert the
 // selected order before another one. Every move is saved at once.
@@ -19,6 +20,7 @@ function PlanningBoard({ queue, focusId, onChanged, header, refreshControl }: {
   refreshControl?: ReactElement<ComponentProps<typeof RefreshControl>>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const tagsOn = useModules()("order_tags");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const selected = selectedId ?? focusId;
@@ -83,10 +85,10 @@ function PlanningBoard({ queue, focusId, onChanged, header, refreshControl }: {
               {item.needs_reschedule ? <Text style={styles.reschedule}>↻ À reprogrammer</Text> : null}
             </View>
             <Text style={ui.small}>#{item.order_number} · {item.requested_delivery_date ? `Livraison ${formatDay(item.requested_delivery_date)}` : "Dès que possible"} · {item.order_items.length} produit(s)</Text>
-            <Pressable onPress={() => void toggleReschedule(item)} hitSlop={6} style={styles.flag}>
+            {tagsOn ? <Pressable onPress={() => void toggleReschedule(item)} hitSlop={6} style={styles.flag}>
               <Text style={[styles.flagBox, item.needs_reschedule && styles.flagBoxOn]}>{item.needs_reschedule ? "✓" : ""}</Text>
               <Text style={styles.flagText}>À reprogrammer</Text>
-            </Pressable>
+            </Pressable> : null}
             {selectedOrder && !isSelected ? <Pressable onPress={() => void place(selectedOrder.id, item.id)} disabled={busy} style={styles.insert}>
               <Text style={styles.insertText}>↳ Insérer #{selectedOrder.order_number} avant celle-ci</Text>
             </Pressable> : null}

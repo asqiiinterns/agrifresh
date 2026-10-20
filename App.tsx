@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import { fetchMyAccount, type Account } from "./src/data/account";
 import { loadCompanyProfile } from "./src/data/company";
+import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
 import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
@@ -79,7 +80,8 @@ const TOP_KEYS: TabKey[] = ["messages", "alerts"];
 const HUB_KEYS: TabKey[] = ["orders", "planning", "production"];
 
 // Tabs follow the features the admin enabled for the account's role, most used first.
-function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
+function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" | "unlinked" | "team"; tabs: TabDef[] } {
+  const on = (key: ModuleKey) => isModuleOn(modules, key);
   const has = (feature: string) => account.features.includes(feature);
   const add = (tabs: TabDef[], tab: TabDef, allowed: boolean) => { if (allowed && !tabs.includes(tab)) tabs.push(tab); };
   if (account.role === "customer") {
@@ -98,7 +100,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   // Main menu: Accueil, Production (Commandes · Production · Planning), Facturation, Livraisons; the rest in "Plus".
   const tabs: TabDef[] = [];
   add(tabs, TAB.home, has("home.view"));
-  add(tabs, TAB.decide, account.role === "admin" || ["orders.decide", "orders.plan", "claims.manage", "messages.manage", "team.messages", "invoices.manage", "returns.manage", "leave.manage", "incidents.manage"].some(has));
+  add(tabs, TAB.decide, on("decide") && (account.role === "admin" || ["orders.decide", "orders.plan", "claims.manage", "messages.manage", "team.messages", "invoices.manage", "returns.manage", "leave.manage", "incidents.manage"].some(has)));
   add(tabs, TAB.production, has("orders.view") || has("production.view") || has("orders.plan"));
   add(tabs, { ...TAB.invoices, label: "Facturation" }, has("invoices.manage"));
   add(tabs, TAB.deliveries, has("deliveries"));
@@ -108,7 +110,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   add(tabs, TAB.leaves, has("leave.request") || has("leave.manage"));
   add(tabs, TAB.incidents, has("incidents.report") || has("incidents.manage"));
   add(tabs, TAB.stats, has("stats.view"));
-  add(tabs, TAB.recurring, has("orders.create"));
+  add(tabs, TAB.recurring, has("orders.create") && on("recurring"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
   tabs.push(TAB.account);
@@ -272,10 +274,13 @@ function Main({ session }: { session: Session }) {
   const setTab = useCallback((next: TabKey | null) => setNav((state) => ({ tab: next, nonce: state.nonce })), []);
   const navValue = useMemo(() => ({ navigate }), [navigate]);
 
+  const [modules, setModules] = useState<ModuleState>({});
   const loadAccount = useCallback(async () => {
     setAccountError("");
     try {
-      setAccount(await fetchMyAccount());
+      const [next, nextModules] = await Promise.all([fetchMyAccount(), fetchModules()]);
+      setModules(nextModules);
+      setAccount(next);
       void loadCompanyProfile().catch(() => undefined);
     } catch (cause) {
       setAccountError(errorMessage(cause, "Impossible de charger votre profil."));
@@ -287,8 +292,10 @@ function Main({ session }: { session: Session }) {
     setTab(null);
     void loadAccount();
   }, [session.user.id, loadAccount]);
+  // A module switched on or off changes the rights: reload both.
+  useEffect(() => onModulesChanged(() => { void loadAccount(); }), [loadAccount]);
 
-  const { kind, tabs } = account ? tabsFor(account) : { kind: null, tabs: [] as TabDef[] };
+  const { kind, tabs } = account ? tabsFor(account, modules) : { kind: null, tabs: [] as TabDef[] };
   const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)));
   // Commandes / Planning requested by a tile, an alert or a button open the matching sheet of "Production".
   const hub = kind === "team" && tabs.some((item) => item.key === "production");
@@ -419,14 +426,14 @@ function Main({ session }: { session: Session }) {
   const badgeFor = (key: TabKey) => key === "messages" ? unread : key === "alerts" ? alerts.unread : key === "decide" ? decideCount : 0;
   const topTabs = tabs.filter((item) => TOP_KEYS.includes(item.key));
 
-  return <PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
+  return <ModulesContext.Provider value={modules}><PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
     <View style={styles.topBar}>
       <Text style={styles.brand}>Appro<Text style={styles.brandPlus}>+</Text></Text>
       <View style={{ flex: 1 }} />
       {topTabs.map((item) => {
         const selected = item.key === current;
         const badge = badgeFor(item.key);
-        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={needsReply} onPress={() => setTab(item.key)} />;
+        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={isModuleOn(modules, "needs_reply") ? needsReply : 0} onPress={() => setTab(item.key)} />;
         return <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
           <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.text} />
           {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
@@ -454,7 +461,7 @@ function Main({ session }: { session: Session }) {
         </Pressable>;
       })}
     </View> : null}
-  </NavContext.Provider></PermissionsContext.Provider>;
+  </NavContext.Provider></PermissionsContext.Provider></ModulesContext.Provider>;
 }
 
 export default function App() {

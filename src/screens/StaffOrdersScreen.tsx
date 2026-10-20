@@ -20,6 +20,7 @@ import { useNav } from "../ui/navigation";
 import { errorMessage, notify } from "../ui/notify";
 import { OrderTimeline } from "../ui/OrderTimeline";
 import { colors, ui } from "../ui/theme";
+import { useModules } from "../data/modules";
 
 type Section = "decide" | "queue" | "claims" | "done";
 const isSection = (value?: string): value is Section => value === "decide" || value === "queue" || value === "claims" || value === "done";
@@ -212,6 +213,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded || order.status === "pending");
   const can = useCan();
+  const mod = useModules();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -323,9 +325,9 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
       {claims.map((claim) => <Text key={claim.id} style={[ui.small, styles.claimLine]}>Réclamation n° {claim.claim_number} · {claimReasonLabel(claim.reason)} · {claimStatusStyle[claim.status].label}</Text>)}
       <OrderTimeline order={order} viewer="staff" />
       <View style={[ui.wrapRow, { marginTop: 8 }]}>
-        {can("orders.decide") || can("orders.plan") ? <Chip label={order.special_follow ? "★ Suivi spécial" : "☆ Suivi spécial"} selected={!!order.special_follow} onPress={() => void toggleFlag("special")} /> : null}
-        {can("orders.plan") && ["confirmed", "preparing", "ready"].includes(order.status) ? <Chip label="↻ À reprogrammer" selected={!!order.needs_reschedule} onPress={() => void toggleFlag("reschedule")} /> : null}
-        {can("orders.create") ? <Chip label="⟳ Répéter automatiquement" selected={false} onPress={() => setRepeating(true)} /> : null}
+        {mod("order_tags") && (can("orders.decide") || can("orders.plan")) ? <Chip label={order.special_follow ? "★ Suivi spécial" : "☆ Suivi spécial"} selected={!!order.special_follow} onPress={() => void toggleFlag("special")} /> : null}
+        {mod("order_tags") && can("orders.plan") && ["confirmed", "preparing", "ready"].includes(order.status) ? <Chip label="↻ À reprogrammer" selected={!!order.needs_reschedule} onPress={() => void toggleFlag("reschedule")} /> : null}
+        {mod("recurring") && can("orders.create") ? <Chip label="⟳ Répéter automatiquement" selected={false} onPress={() => setRepeating(true)} /> : null}
       </View>
 
       {needsReason ? <TextInput

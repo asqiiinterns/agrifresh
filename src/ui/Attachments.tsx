@@ -6,9 +6,11 @@ import { Text } from "./Text";
 import { attachmentUrl, formatSize, pickDocument, pickMedia, type Attachment, type LocalFile } from "../data/attachments";
 import { errorMessage, notify } from "./notify";
 import { colors } from "./theme";
+import { useModules } from "../data/modules";
 
 // Composer buttons: photo / video (camera), gallery, document, voice note.
 export function AttachmentPicker({ value, onChange, disabled, extra }: { value: LocalFile | null; onChange: (file: LocalFile | null) => void; disabled?: boolean; extra?: React.ReactNode }) {
+  const attachmentsOn = useModules()("attachments");
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -63,6 +65,7 @@ export function AttachmentPicker({ value, onChange, disabled, extra }: { value: 
       {extra}
     </View>;
   }
+  if (!attachmentsOn) return extra ? <View style={[styles.tools, { flexWrap: "wrap" }]}>{extra}</View> : null;
   return <View style={[styles.tools, { flexWrap: "wrap" }]}>
     {extra}
     {recording ? <Pressable onPress={() => void toggleRecording()} style={[styles.tool, styles.recording]} accessibilityLabel="Arrêter l’enregistrement">
@@ -79,6 +82,7 @@ export function AttachmentPicker({ value, onChange, disabled, extra }: { value: 
 
 // Red mark on a message waiting for an answer.
 export function NeedsReplyTag({ mine }: { mine: boolean }) {
+  if (!useModules()("needs_reply")) return null;
   return <View style={[styles.needsTag, mine && { backgroundColor: "#fde2dd" }]}>
     <Ionicons name="alert-circle" size={12} color={colors.danger} />
     <Text style={styles.needsTagText}>Réponse attendue</Text>
@@ -87,6 +91,7 @@ export function NeedsReplyTag({ mine }: { mine: boolean }) {
 
 // Composer switch: ask for an answer.
 export function NeedsReplyToggle({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) {
+  if (!useModules()("needs_reply")) return null;
   return <Pressable onPress={() => onChange(!value)} style={[styles.tool, value && { borderColor: colors.danger, backgroundColor: "#fdecea" }]} accessibilityLabel="Demander une réponse">
     <Ionicons name={value ? "alert-circle" : "alert-circle-outline"} size={18} color={value ? colors.danger : colors.muted} />
     <Text style={[styles.toolText, { color: value ? colors.danger : colors.muted }]}>Réponse attendue</Text>

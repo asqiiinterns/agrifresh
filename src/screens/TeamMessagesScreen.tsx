@@ -17,6 +17,7 @@ import { ReplyAction, ReplyBanner, ReplyQuote, messagePreview } from "../ui/Mess
 import type { IconName } from "../ui/navigation";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { useModules } from "../data/modules";
 
 const kindIcon: Record<TeamConversationKind, IconName> = { direct: "person-outline", group: "people-outline", role: "id-card-outline", all: "megaphone-outline" };
 
@@ -184,6 +185,7 @@ async function startFromChoice(choice: { all: boolean; ids: string[]; roles: Rol
 
 // Admins and supervisors (moderator) may mark any message "needs a reply"; others only their own.
 function TeamThread({ conversationId, onClose, onRead, moderator }: { conversationId: string; onClose: () => void; onRead: () => void; moderator?: boolean }) {
+  const needsReplyOn = useModules()("needs_reply");
   const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const list = useRef<FlatList<TeamMessage>>(null);
@@ -297,7 +299,7 @@ function TeamThread({ conversationId, onClose, onRead, moderator }: { conversati
         onScrollToIndexFailed={({ index }) => setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5 }), 250)}
         renderItem={({ item }) => {
           const mine = item.sender_id === me;
-          const canFlag = !!moderator || mine;
+          const canFlag = needsReplyOn && (!!moderator || mine);
           const original = item.reply_to ? messages.find((other) => other.id === item.reply_to) : undefined;
           return <Pressable onLongPress={() => setReplyTo(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && { borderWidth: 2, borderColor: colors.danger }, highlight === item.id && { borderWidth: 2, borderColor: colors.orange }]}>
             {item.needs_reply ? <NeedsReplyTag mine={mine} /> : null}

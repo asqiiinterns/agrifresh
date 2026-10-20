@@ -15,6 +15,7 @@ import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime 
 import { TeamMessagesList } from "./TeamMessagesScreen";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { useModules } from "../data/modules";
 
 // Client side: a single conversation with the supplier's team.
 export function ClientMessagesScreen({ clientId, onRead }: { clientId: string; onRead: () => void }) {
@@ -131,6 +132,7 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
 
 // Admins and supervisors (moderator) may mark any message "needs a reply"; others only their own.
 function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: string; viewerIsStaff: boolean; onRead: () => void; moderator?: boolean }) {
+  const needsReplyOn = useModules()("needs_reply");
   const [messages, setMessages] = useState<Message[]>([]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [me, setMe] = useState<string | null>(null);
@@ -234,7 +236,7 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
       onScrollToIndexFailed={({ index }) => setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5 }), 250)}
       renderItem={({ item }) => {
         const mine = item.from_staff === viewerIsStaff;
-        const canFlag = !!moderator || (!!me && item.sender_id === me);
+        const canFlag = needsReplyOn && (!!moderator || (!!me && item.sender_id === me));
         const original = item.reply_to ? messages.find((other) => other.id === item.reply_to) : undefined;
         return <Pressable onLongPress={() => setReplyTo(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && styles.waiting, highlight === item.id && styles.highlight]}>
           {item.needs_reply ? <NeedsReplyTag mine={mine} /> : null}

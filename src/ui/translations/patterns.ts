@@ -1,6 +1,7 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["{0} module(s) masqué(s)", "{0} module(s) hidden", "{0} وحدة مخفية"],
   [", {0} réponse(s) attendue(s)", ", {0} reply(ies) expected", "، {0} رد(ود) منتظرة"],
   ["\n\nEnsuite, scans pour : {0}.", "\n\nThen, scans for: {0}.", "\n\nبعد ذلك، المسح لـ: {0}."],
   [" ({0} HT)", " ({0} excl. VAT)", " ({0} دون أداءات)"],

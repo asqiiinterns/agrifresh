@@ -1,19 +1,20 @@
 import type { HomeLayout } from "../data/account";
 import type { Audience, Feature } from "../data/permissions";
 import type { IconName, NavParams, TabKey } from "./navigation";
+import { featureModule, type ModuleKey } from "../data/modules";
 
 // "admin" = administrators only; otherwise the feature the item needs.
 type Need = Feature | "admin" | null;
 
-export type HomeTileDef = { key: string; label: string; icon: IconName; audience: Audience; need: Need; tab: TabKey; params?: NavParams; tone?: "action" | "warn" };
-export type HomeShortcutDef = { key: string; label: string; icon: IconName; audience: Audience; need: Need; tab: TabKey; params?: NavParams };
+export type HomeTileDef = { key: string; label: string; icon: IconName; audience: Audience; need: Need; tab: TabKey; params?: NavParams; tone?: "action" | "warn"; module?: ModuleKey };
+export type HomeShortcutDef = { key: string; label: string; icon: IconName; audience: Audience; need: Need; tab: TabKey; params?: NavParams; module?: ModuleKey };
 
 export const homeTiles: HomeTileDef[] = [
   { key: "decide", label: "Commandes à décider", icon: "hourglass-outline", audience: "team", need: "orders.decide", tab: "orders", params: { section: "decide" }, tone: "action" },
-  { key: "pending", label: "Tout « À décider »", icon: "flag-outline", audience: "team", need: null, tab: "decide", tone: "action" },
-  { key: "special", label: "Suivis spéciaux", icon: "star-outline", audience: "team", need: "orders.view", tab: "decide", tone: "warn" },
-  { key: "reschedule", label: "À reprogrammer", icon: "refresh-circle-outline", audience: "team", need: "orders.plan", tab: "planning", tone: "warn" },
-  { key: "waitingReply", label: "Messages à répondre", icon: "alert-circle-outline", audience: "team", need: null, tab: "decide", tone: "warn" },
+  { module: "decide", key: "pending", label: "Tout « À décider »", icon: "flag-outline", audience: "team", need: null, tab: "decide", tone: "action" },
+  { module: "order_tags", key: "special", label: "Suivis spéciaux", icon: "star-outline", audience: "team", need: "orders.view", tab: "decide", tone: "warn" },
+  { module: "order_tags", key: "reschedule", label: "À reprogrammer", icon: "refresh-circle-outline", audience: "team", need: "orders.plan", tab: "planning", tone: "warn" },
+  { module: "needs_reply", key: "waitingReply", label: "Messages à répondre", icon: "alert-circle-outline", audience: "team", need: null, tab: "decide", tone: "warn" },
   { key: "invoicedMonth", label: "Facturé ce mois (TND)", icon: "trending-up-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
   { key: "collectedMonth", label: "Encaissé ce mois (TND)", icon: "cash-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
   { key: "outstanding", label: "Reste à encaisser (TND)", icon: "wallet-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
@@ -40,7 +41,7 @@ export const homeTiles: HomeTileDef[] = [
 ];
 
 export const homeShortcuts: HomeShortcutDef[] = [
-  { key: "decideAll", label: "À décider (tout ce qui est en suspens)", icon: "flag-outline", audience: "team", need: null, tab: "decide" },
+  { module: "decide", key: "decideAll", label: "À décider (tout ce qui est en suspens)", icon: "flag-outline", audience: "team", need: null, tab: "decide" },
   { key: "billingDashboard", label: "Tableau de bord de facturation", icon: "bar-chart-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
   { key: "staffOrder", label: "Commander pour un client", icon: "add-circle-outline", audience: "team", need: "orders.create", tab: "staffOrder" },
   { key: "planning", label: "Planifier la production", icon: "list-outline", audience: "team", need: "orders.plan", tab: "planning" },
@@ -75,8 +76,13 @@ export const defaultLayout = (audience: Audience): HomeLayout => audience === "t
   ? { tiles: ["pending", "decide", "placedToday", "queue", "prepare", "ready", "shipping", "claims", "accounts", "messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "team").map((item) => item.key) }
   : { tiles: ["c_progress", "c_reconfirm", "c_shipped", "c_invoices", "c_messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "customer").map((item) => item.key) };
 
-export function allowedFor(need: Need, can: (feature: Feature) => boolean, isAdmin: boolean) {
+// A module that is off hides its items, for administrators too.
+export function allowedFor(item: { need: Need; module?: ModuleKey }, can: (feature: Feature) => boolean, isAdmin: boolean, moduleOn: (key: ModuleKey) => boolean = () => true) {
+  const { need } = item;
+  if (item.module && !moduleOn(item.module)) return false;
   if (need === null) return true;
   if (need === "admin") return isAdmin;
+  const module = featureModule[need];
+  if (module && !moduleOn(module)) return false;
   return isAdmin || can(need);
 }

@@ -14,6 +14,7 @@ from (values
   (10, '20261103_location_reminders_leaves.sql',  to_regclass('public.incidents') is not null),
   (11, '20261104_recurring_signature.sql',        to_regclass('public.recurring_orders') is not null),
   (12, '20261105_message_replies.sql',            to_regprocedure('public.send_message_v3(uuid,text,jsonb,boolean,uuid)') is not null),
-  (13, '20261106_appro_plus.sql',                 to_regclass('public.company_profile') is not null)
+  (13, '20261106_appro_plus.sql',                 to_regclass('public.company_profile') is not null),
+  (14, '20261107_modules.sql',                    to_regclass('public.app_modules') is not null)
 ) as checks(position, migration, installed)
 order by position;

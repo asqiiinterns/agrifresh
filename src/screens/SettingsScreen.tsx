@@ -5,7 +5,7 @@ import { fetchRoleHomeLayouts, roleLabels, setRoleHomeLayout, type HomeLayout, t
 import { fetchAccounts, type AdminAccount } from "../data/admin";
 import { fetchClients, updateClientOptions, type ClientRecord } from "../data/clients";
 import {
-  boolToOption, clientOptionBlocks, configurableRoles, featureBlocks, fetchClientDefaults, fetchRolePermissions, fetchUserPermissions,
+  boolToOption, configurableRoles, fetchClientDefaults, fetchRolePermissions, fetchUserPermissions,
   optionToBool, setClientDefault, setRolePermission, setUserPermission,
   type ClientOptionKey, type Feature, type SettingsBlock,
 } from "../data/permissions";
@@ -16,13 +16,16 @@ import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { HomeEditor } from "./HomeEditor";
 import { CompanyPage } from "./CompanyPage";
+import { ModulesPage } from "./ModulesPage";
+import { useVisibleSettings } from "../data/modules";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import type { IconName } from "../ui/navigation";
 
-type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" };
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
+  const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
   const [page, setPage] = useState<Page>({ kind: "menu" });
   const [rolePerms, setRolePerms] = useState<Record<string, boolean>>({});
   const [userPerms, setUserPerms] = useState<Record<string, boolean>>({});
@@ -119,6 +122,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   if (page.kind === "home") return <HomeRolesPage header={back} />;
   if (page.kind === "numbering") return <NumberingPage header={back} />;
   if (page.kind === "company") return <CompanyPage header={back} />;
+  if (page.kind === "modules") return <ModulesPage header={back} />;
   if (page.kind === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
@@ -133,6 +137,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content}>
       {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
       <Text style={[ui.small, { marginTop: 8 }]}>Chaque thème se règle par profil, puis par utilisateur (exception). Les clients suivent un réglage commun, que chaque fiche peut adapter. L’administrateur garde tous les droits.</Text>
+      <ListGroup title="Fonctions de l’application">
+        <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction pour tout le monde (commandes récurrentes, retours, statistiques…)." onPress={() => setPage({ kind: "modules" })} />
+      </ListGroup>
       <ListGroup title="Onglets et droits de l’équipe">
         {featureBlocks.filter((block) => block.audience === "team").map((block) => {
           const count = exceptionCount(block);
@@ -265,6 +272,7 @@ function ClientOptionsPage({ theme, header, clients, defaults, setDefault, setCl
   setDefault: (key: ClientOptionKey, value: boolean) => void;
   setClientOption: (record: ClientRecord, key: ClientOptionKey, value: boolean | null) => void;
 }) {
+  const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
   const [sheet, setSheet] = useState<"all" | "client">("all");
   const [search, setSearch] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -301,6 +309,7 @@ export function ClientOptionsEditor({ record, defaults, onChange, disabled, them
   onChange: (key: ClientOptionKey, value: boolean | null) => void;
   disabled?: boolean;
 }) {
+  const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
   return <>
     {clientOptionBlocks.filter((block) => !theme || block.title === theme).map((block) => <View key={block.title} style={{ marginTop: 10 }}>
       <Text style={styles.groupTitle}>{block.title.toLocaleUpperCase("fr")}</Text>

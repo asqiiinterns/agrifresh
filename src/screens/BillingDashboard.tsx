@@ -8,6 +8,7 @@ import { invoicesCsv, paymentsCsv, salesJournalCsv, saveCsv } from "../data/expo
 import { presets, type DateFilterValue } from "../ui/dateFilter";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { useModules } from "../data/modules";
 import { appLocale } from "../ui/i18n";
 
 const monthKey = (value: string) => value.slice(0, 7);
@@ -16,6 +17,7 @@ const shortAmount = (value: number) => value >= 1000 ? `${(value / 1000).toFixed
 
 // Billing figures: headline tiles, then one single-series chart per question (no dual axis).
 export function BillingDashboard({ invoices, credits }: { invoices: InvoiceWithOrders[]; credits: CreditNote[] }) {
+  const exportsOn = useModules()("exports");
   const data = useMemo(() => {
     const valid = invoices.filter((invoice) => invoice.status === "issued" || invoice.status === "paid");
     const thisMonth = new Date().toISOString().slice(0, 7);
@@ -61,7 +63,7 @@ export function BillingDashboard({ invoices, credits }: { invoices: InvoiceWithO
     <ColumnChart title="Encaissé par mois" points={data.collected} />
     <BarList title="Encaissements par mode (90 jours)" points={data.methods} empty="Aucun règlement enregistré sur 90 jours." />
     <BarList title="Clients : reste à encaisser" points={data.clients} empty="Aucune facture à encaisser." />
-    <ExportsCard invoices={invoices} credits={credits} />
+    {exportsOn ? <ExportsCard invoices={invoices} credits={credits} /> : null}
   </ScrollView>;
 }
 

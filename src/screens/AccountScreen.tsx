@@ -19,6 +19,7 @@ import { StaffClientsScreen } from "./StaffClientsScreen";
 import { PermissionsCard } from "./PermissionsCard";
 import { Switch } from "react-native";
 import { colors } from "../ui/theme";
+import { useModules } from "../data/modules";
 
 export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications" | "permissions";
 
@@ -31,12 +32,13 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   onLayoutChanged?: () => void;
 }) {
   const can = useCan();
+  const mod = useModules();
   const { navigate } = useNav();
   const active = !!account && (account.status ?? "active") === "active";
   const hasHome = active && (account?.role === "customer" ? can("client.home") : can("home.view"));
   const sheets: { key: AccountSheet; label: string }[] = [
     ...(sections.length ? [{ key: "sections" as const, label: "Rubriques" }] : []),
-    ...(hasHome ? [{ key: "home" as const, label: "Personnaliser" }] : []),
+    ...(hasHome && mod("home_custom") ? [{ key: "home" as const, label: "Personnaliser" }] : []),
     { key: "profile", label: "Compte" },
     { key: "display", label: "Affichage" },
     ...(active ? [{ key: "notifications" as const, label: "Notifications" }] : []),
@@ -58,7 +60,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
       {sheet === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
       {sheet === "display" ? <DisplaySettingsCard showProducts={account?.role === "customer"} /> : null}
       {sheet === "products" ? <ProductsCard /> : null}
-      {sheet === "notifications" ? <><MyNotificationsCard />{account?.client ? <ReminderChoiceCard account={account} onChanged={onLayoutChanged ?? (() => {})} /> : null}</> : null}
+      {sheet === "notifications" ? <><MyNotificationsCard />{account?.client && mod("reminders") ? <ReminderChoiceCard account={account} onChanged={onLayoutChanged ?? (() => {})} /> : null}</> : null}
     </ScrollView>}
   </View>;
 }
@@ -164,14 +166,17 @@ function ProductsCard() {
 // Display preferences for this device: text size and product list layout.
 function DisplaySettingsCard({ showProducts }: { showProducts: boolean }) {
   const display = useDisplay();
+  const languagesOn = useModules()("languages");
   return <View style={ui.card}>
     <Text style={ui.strong}>Affichage</Text>
     <Text style={ui.small}>Réglages de cet appareil uniquement.</Text>
-    <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Langue</Text>
-    <View style={[ui.wrapRow, { marginTop: 6 }]}>
-      {languages.map((option) => <Chip key={option.value} label={option.label} selected={display.language === option.value} onPress={() => display.update({ language: option.value })} />)}
-    </View>
-    <Text style={[ui.small, { marginTop: 4 }]}>Les menus, boutons et libellés principaux sont traduits ; les autres textes restent en français pour l’instant.</Text>
+    {languagesOn ? <>
+      <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Langue</Text>
+      <View style={[ui.wrapRow, { marginTop: 6 }]}>
+        {languages.map((option) => <Chip key={option.value} label={option.label} selected={display.language === option.value} onPress={() => display.update({ language: option.value })} />)}
+      </View>
+      <Text style={[ui.small, { marginTop: 4 }]}>Les menus, boutons et libellés principaux sont traduits ; les autres textes restent en français pour l’instant.</Text>
+    </> : null}
     <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Taille du texte</Text>
     <View style={[ui.wrapRow, { marginTop: 6 }]}>
       {fontScales.map((option) => <Chip key={option.value} label={option.label} selected={display.fontScale === option.value} onPress={() => display.update({ fontScale: option.value })} />)}
