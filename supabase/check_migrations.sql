@@ -16,6 +16,7 @@ from (values
   (12, '20261105_message_replies.sql',            to_regprocedure('public.send_message_v3(uuid,text,jsonb,boolean,uuid)') is not null),
   (13, '20261106_appro_plus.sql',                 to_regclass('public.company_profile') is not null),
   (14, '20261107_modules.sql',                    to_regclass('public.app_modules') is not null),
-  (15, '20261108_pros_foundation.sql',            to_regclass('public.organizations') is not null)
+  (15, '20261108_pros_foundation.sql',            to_regclass('public.organizations') is not null),
+  (16, '20261109_roles.sql',                      to_regclass('public.org_roles') is not null)
 ) as checks(position, migration, installed)
 order by position;
