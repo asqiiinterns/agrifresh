@@ -8,7 +8,7 @@ import { errorMessage, notify } from "./notify";
 import { colors } from "./theme";
 
 // Composer buttons: photo / video (camera), gallery, document, voice note.
-export function AttachmentPicker({ value, onChange, disabled }: { value: LocalFile | null; onChange: (file: LocalFile | null) => void; disabled?: boolean }) {
+export function AttachmentPicker({ value, onChange, disabled, extra }: { value: LocalFile | null; onChange: (file: LocalFile | null) => void; disabled?: boolean; extra?: React.ReactNode }) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -54,9 +54,11 @@ export function AttachmentPicker({ value, onChange, disabled }: { value: LocalFi
       <Ionicons name={value.kind === "image" ? "image-outline" : value.kind === "video" ? "videocam-outline" : value.kind === "audio" ? "mic-outline" : "document-outline"} size={18} color={colors.green} />
       <Text style={styles.pendingText} numberOfLines={1}>{value.name}{value.size ? ` · ${formatSize(value.size)}` : ""}</Text>
       <Pressable onPress={() => onChange(null)} hitSlop={8} accessibilityLabel="Retirer la pièce jointe"><Ionicons name="close-circle" size={20} color={colors.muted} /></Pressable>
+      {extra}
     </View>;
   }
-  return <View style={styles.tools}>
+  return <View style={[styles.tools, { flexWrap: "wrap" }]}>
+    {extra}
     {recording ? <Pressable onPress={() => void toggleRecording()} style={[styles.tool, styles.recording]} accessibilityLabel="Arrêter l’enregistrement">
       <Ionicons name="stop" size={16} color={colors.white} />
       <Text style={styles.recordingText}>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} · Arrêter</Text>
@@ -67,6 +69,22 @@ export function AttachmentPicker({ value, onChange, disabled }: { value: LocalFi
       <Tool icon="mic-outline" label="Vocal" onPress={() => void toggleRecording()} disabled={disabled} />
     </>}
   </View>;
+}
+
+// Red mark on a message waiting for an answer.
+export function NeedsReplyTag({ mine }: { mine: boolean }) {
+  return <View style={[styles.needsTag, mine && { backgroundColor: "#fde2dd" }]}>
+    <Ionicons name="alert-circle" size={12} color={colors.danger} />
+    <Text style={styles.needsTagText}>Réponse attendue</Text>
+  </View>;
+}
+
+// Composer switch: ask for an answer.
+export function NeedsReplyToggle({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) {
+  return <Pressable onPress={() => onChange(!value)} style={[styles.tool, value && { borderColor: colors.danger, backgroundColor: "#fdecea" }]} accessibilityLabel="Demander une réponse">
+    <Ionicons name={value ? "alert-circle" : "alert-circle-outline"} size={18} color={value ? colors.danger : colors.muted} />
+    <Text style={[styles.toolText, { color: value ? colors.danger : colors.muted }]}>Réponse attendue</Text>
+  </Pressable>;
 }
 
 function Tool({ icon, label, onPress, disabled }: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; onPress: () => void; disabled?: boolean }) {
@@ -122,6 +140,8 @@ function VoiceNote({ url, mine }: { url: string; mine: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  needsTag: { flexDirection: "row", alignItems: "center", gap: 3, alignSelf: "flex-start", backgroundColor: "#fdecea", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginBottom: 3 },
+  needsTagText: { color: colors.danger, fontSize: 10, fontWeight: "800" },
   tools: { flexDirection: "row", gap: 6, paddingHorizontal: 10, paddingTop: 6 },
   tool: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
   toolText: { color: colors.green, fontSize: 11, fontWeight: "700" },

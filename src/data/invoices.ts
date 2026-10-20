@@ -17,11 +17,32 @@ export type Invoice = {
   total_vat: number | string;
   stamp_duty: number | string;
   total_ttc: number | string;
+  // Payments (20261031_billing_decisions.sql).
+  amount_paid?: number | string;
+  due_date?: string | null;
+  last_reminder_at?: string | null;
+  reminder_count?: number;
+  invoice_payments?: Payment[];
 };
+
+export type PaymentMethod = "cash" | "check" | "transfer" | "card" | "credit_note" | "other";
+export type Payment = { id: string; amount: number | string; method: PaymentMethod; paid_on: string; reference: string | null; credit_note_id: string | null; created_at: string };
+export const paymentMethods: { key: PaymentMethod; label: string }[] = [
+  { key: "transfer", label: "Virement" },
+  { key: "check", label: "Chèque" },
+  { key: "cash", label: "Espèces" },
+  { key: "card", label: "Carte" },
+  { key: "credit_note", label: "Avoir" },
+  { key: "other", label: "Autre" },
+];
+export const paymentMethodLabel = (method: string) => paymentMethods.find((item) => item.key === method)?.label ?? method;
+export const balanceOf = (invoice: Pick<Invoice, "total_ttc" | "amount_paid">) => Math.max(0, Number(invoice.total_ttc) - Number(invoice.amount_paid ?? 0));
+export const isOverdue = (invoice: Pick<Invoice, "status" | "due_date" | "total_ttc" | "amount_paid">) =>
+  invoice.status === "issued" && !!invoice.due_date && invoice.due_date.slice(0, 10) < new Date().toISOString().slice(0, 10) && balanceOf(invoice) > 0.0005;
 
 export type InvoiceWithOrders = Invoice & { orders: Order[] };
 
-const INVOICE_FIELDS = "id, invoice_number, client_id, status, issued_at, paid_at, client_snapshot, total_ht, vat_breakdown, total_vat, stamp_duty, total_ttc";
+const INVOICE_FIELDS = "*, invoice_payments(id, amount, method, paid_on, reference, credit_note_id, created_at)";
 
 function client() {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
@@ -49,6 +70,36 @@ export async function fetchUninvoicedOrders(clientId: string, draftId?: string):
     .order("created_at");
   if (error) throw error;
   return (data ?? []) as unknown as Order[];
+}
+
+export async function addPayment(invoiceId: string, payment: { amount: number; method: PaymentMethod; paidOn: string; reference: string; creditNoteId?: string | null }): Promise<void> {
+  const { error } = await client().rpc("staff_add_payment", {
+    p_invoice_id: invoiceId, p_amount: payment.amount, p_method: payment.method, p_paid_on: payment.paidOn || null,
+    p_reference: payment.reference.trim() || null, p_credit_note_id: payment.creditNoteId ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function deletePayment(paymentId: string): Promise<void> {
+  const { error } = await client().rpc("staff_delete_payment", { p_payment_id: paymentId });
+  if (error) throw error;
+}
+
+// Sends the due reminders (one per overdue invoice, at most once per interval unless forced).
+export async function sendReminders(clientId: string | null = null, force = false): Promise<number> {
+  const { data, error } = await client().rpc("staff_send_payment_reminders", { p_client_id: clientId, p_force: force });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export type BillingBoard = {
+  due: { client_id: string; business_name: string; frequency: string; every_days: number; month_day: number; next_date: string; orders: number; amount: number }[];
+  overdue: { invoice_id: string; invoice_number: string; client_id: string; business_name: string; balance: number; due_date: string; days_late: number; reminder_count: number; last_reminder_at: string | null; reminders: boolean }[];
+};
+export async function fetchBillingBoard(): Promise<BillingBoard> {
+  const { data, error } = await client().rpc("billing_board");
+  if (error) throw error;
+  return data as BillingBoard;
 }
 
 export const invoiceLabel = (invoice: Pick<Invoice, "invoice_number">) => invoice.invoice_number ?? "Brouillon";

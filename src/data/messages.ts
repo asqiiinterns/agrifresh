@@ -40,9 +40,9 @@ export async function fetchMessages(clientId: string): Promise<Message[]> {
 }
 
 // The database decides the sender side (staff or client) from the caller's role.
-export async function sendMessage(clientId: string, body: string, attachment: Attachment | null = null): Promise<Message> {
-  const { data, error } = attachment
-    ? await client().rpc("send_message_v2", { p_client_id: clientId, p_body: body.trim(), p_attachment: attachment })
+export async function sendMessage(clientId: string, body: string, attachment: Attachment | null = null, needsReply = false): Promise<Message> {
+  const { data, error } = attachment || needsReply
+    ? await client().rpc("send_message_v2", { p_client_id: clientId, p_body: body.trim(), p_attachment: attachment, p_needs_reply: needsReply })
     : await client().rpc("send_message", { p_client_id: clientId, p_body: body.trim() });
   if (error) throw error;
   return data as Message;

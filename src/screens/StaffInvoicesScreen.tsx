@@ -4,9 +4,12 @@ import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatClientNumber } from "../data/account";
 import { fetchClients, type ClientRecord } from "../data/clients";
-import { createInvoice, deleteInvoiceDraft, fetchInvoices, fetchUninvoicedOrders, invoiceLabel, invoiceTotals, issueInvoice, setInvoiceStatus, shareInvoice, updateInvoiceDraft, type InvoiceWithOrders } from "../data/invoices";
+import { addPayment, balanceOf, createInvoice, deleteInvoiceDraft, deletePayment, fetchInvoices, fetchUninvoicedOrders, invoiceLabel, invoiceTotals, isOverdue, issueInvoice, paymentMethodLabel, paymentMethods, sendReminders, setInvoiceStatus, shareInvoice, updateInvoiceDraft, type InvoiceWithOrders, type PaymentMethod } from "../data/invoices";
+import { fetchCreditNotes, type CreditNote } from "../data/returns";
+import { CreditsList } from "./ReturnsScreen";
+import { BillingDashboard } from "./BillingDashboard";
 import { deliveryNoteNumber, type Order } from "../data/orders";
-import { Button, Chip, CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDay, formatPrice } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, Sheets, StatusBadge, formatDay, formatPrice, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { DocumentViewerHost } from "../ui/DocumentViewer";
@@ -17,6 +20,7 @@ const statusFilters = [
   { key: "all", label: "Toutes" },
   { key: "draft", label: "Brouillons" },
   { key: "issued", label: "À encaisser" },
+  { key: "overdue", label: "En retard" },
   { key: "paid", label: "Payées" },
   { key: "cancelled", label: "Annulées" },
 ] as const;
@@ -35,7 +39,18 @@ export function InvoiceBadge({ status }: { status: InvoiceWithOrders["status"] }
 
 type Editor = { mode: "new" } | { mode: "edit"; invoice: InvoiceWithOrders };
 
+const sorts = [
+  { key: "issued_desc", label: "Émission (récentes d’abord)" },
+  { key: "issued_asc", label: "Émission (anciennes d’abord)" },
+  { key: "number", label: "Numéro de facture" },
+  { key: "due", label: "Échéance" },
+  { key: "paid", label: "Date de règlement" },
+  { key: "amount", label: "Montant restant" },
+] as const;
+
 export function StaffInvoicesScreen() {
+  // Facturation: invoices, credit notes and figures, as sheets.
+  const [sheet, setSheet] = useState<"invoices" | "credits" | "dashboard">("invoices");
   const [invoices, setInvoices] = useState<InvoiceWithOrders[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +58,9 @@ export function StaffInvoicesScreen() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [issued, setIssued] = useState<DateFilterValue>(null);
+  const [paidOn, setPaidOn] = useState<DateFilterValue>(null);
+  const [sort, setSort] = useState<string>("issued_desc");
+  const [credits, setCredits] = useState<CreditNote[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
 
@@ -51,7 +69,9 @@ export function StaffInvoicesScreen() {
     if (mode === "refresh") setRefreshing(true);
     setError("");
     try {
-      setInvoices(await fetchInvoices());
+      const [nextInvoices, nextCredits] = await Promise.all([fetchInvoices(), fetchCreditNotes().catch(() => [] as CreditNote[])]);
+      setInvoices(nextInvoices);
+      setCredits(nextCredits);
     } catch (cause) {
       setError(errorMessage(cause, "Impossible de charger les factures."));
     } finally {
@@ -64,21 +84,53 @@ export function StaffInvoicesScreen() {
 
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
-    return invoices.filter((invoice) => (filter === "all" || invoice.status === filter)
+    const list = invoices.filter((invoice) => (filter === "all" || (filter === "overdue" ? isOverdue(invoice) : invoice.status === filter))
       && matchesDate(invoice.issued_at, issued)
+      && (!paidOn || matchesDate(invoice.paid_at, paidOn))
       && `${invoice.invoice_number ?? "brouillon"} ${invoice.client_snapshot.business_name}`.toLocaleLowerCase("fr").includes(term));
-  }, [invoices, search, filter, issued]);
+    const text = (value: string | null | undefined, missing = "9999") => value ?? missing;
+    return [...list].sort((a, b) => sort === "issued_asc" ? a.issued_at.localeCompare(b.issued_at)
+      : sort === "number" ? text(a.invoice_number, "~").localeCompare(text(b.invoice_number, "~"), "fr", { numeric: true })
+      : sort === "due" ? text(a.due_date).localeCompare(text(b.due_date))
+      : sort === "paid" ? text(b.paid_at, "").localeCompare(text(a.paid_at, ""))
+      : sort === "amount" ? balanceOf(b) - balanceOf(a)
+      : b.issued_at.localeCompare(a.issued_at));
+  }, [invoices, search, filter, issued, paidOn, sort]);
   const listFilters: Filter[] = [
-    { kind: "choice", title: "Statut", options: statusFilters.map((item) => ({ key: item.key, label: item.label, count: item.key === "all" ? invoices.length : invoices.filter((invoice) => invoice.status === item.key).length })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "choice", title: "Statut", options: statusFilters.map((item) => ({ key: item.key, label: item.label, count: item.key === "all" ? invoices.length : item.key === "overdue" ? invoices.filter(isOverdue).length : invoices.filter((invoice) => invoice.status === item.key).length })), value: filter, defaultValue: "all", onChange: setFilter },
+    { kind: "choice", title: "Trier par", options: sorts.map((item) => ({ key: item.key, label: item.label })), value: sort, defaultValue: "issued_desc", onChange: setSort },
     { kind: "date", title: "Émise le", presets: [presets.today, presets.yesterday, presets.last7, presets.thisMonth, presets.lastMonth], value: issued, onChange: setIssued },
+    { kind: "date", title: "Réglée le", presets: [presets.today, presets.last7, presets.thisMonth, presets.lastMonth], value: paidOn, onChange: setPaidOn },
   ];
-  const outstanding = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
+  const outstanding = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + balanceOf(invoice), 0);
+  const overdueCount = invoices.filter(isOverdue).length;
+  const [reminding, setReminding] = useState(false);
+  async function remindAll() {
+    setReminding(true);
+    try {
+      const count = await sendReminders();
+      notify("Relances", count ? `${count} relance(s) envoyée(s) aux clients concernés.` : "Aucune relance à envoyer : les clients en retard ont déjà été relancés récemment, ou leurs relances sont désactivées.");
+      void reload("silent");
+    } catch (cause) {
+      notify("Relances", errorMessage(cause, "Les relances n’ont pas pu être envoyées. La migration 20261031 est-elle exécutée ?"));
+    } finally {
+      setReminding(false);
+    }
+  }
   const drafts = invoices.filter((invoice) => invoice.status === "draft").length;
   const opened = invoices.find((invoice) => invoice.id === openId) ?? null;
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow={`À ENCAISSER : ${formatPrice(outstanding)}${drafts ? ` · ${drafts} BROUILLON(S)` : ""}`} title="Factures" right={<Button label="+ FACTURER" onPress={() => setEditor({ mode: "new" })} />} />
+    <ScreenHeader eyebrow={`À ENCAISSER : ${formatPrice(outstanding)}${drafts ? ` · ${drafts} BROUILLON(S)` : ""}`} title="Facturation" right={sheet === "invoices" ? <Button label="+ FACTURER" onPress={() => setEditor({ mode: "new" })} /> : undefined} />
+    <Sheets items={[{ key: "invoices", label: "Factures", count: overdueCount || undefined }, { key: "credits", label: "Avoirs" }, { key: "dashboard", label: "Tableau de bord" }]} value={sheet} onChange={setSheet} />
+    {sheet === "credits" ? <CreditsList credits={credits} manage refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.green} />} onChanged={() => void reload("silent")} />
+      : sheet === "dashboard" ? (loading ? <Loading /> : <BillingDashboard invoices={invoices} credits={credits} />)
+      : <>
     <FilterBar search={search} onSearch={setSearch} placeholder="Client ou numéro de facture" filters={listFilters} />
+    {overdueCount ? <View style={[ui.row, { paddingHorizontal: 14, marginTop: 6 }]}>
+      <Text style={[ui.small, { flex: 1, color: colors.danger, fontWeight: "800" }]}>{overdueCount} facture(s) en retard de paiement</Text>
+      <Button label="ENVOYER LES RELANCES" variant="secondary" onPress={() => void remindAll()} busy={reminding} />
+    </View> : null}
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(invoice) => invoice.id}
@@ -93,11 +145,14 @@ export function StaffInvoicesScreen() {
         </View>
         <Text style={ui.body}>{item.client_snapshot.business_name}</Text>
         <View style={ui.row}>
-          <Text style={ui.small}>{formatDay(item.issued_at, { day: "numeric", month: "short", year: "numeric" })} · {item.orders.length} bon(s) de livraison</Text>
+          <Text style={ui.small}>{formatDay(item.issued_at, { day: "numeric", month: "short", year: "numeric" })} · {item.orders.length} BL{item.due_date && item.status === "issued" ? ` · échéance ${formatDay(item.due_date, { day: "numeric", month: "short" })}` : ""}</Text>
           <Text style={ui.amount}>{formatPrice(item.total_ttc)}</Text>
         </View>
+        {item.status === "issued" && Number(item.amount_paid ?? 0) > 0 ? <Text style={[ui.small, { color: colors.text }]}>Payé {formatPrice(item.amount_paid ?? 0)} · reste <Text style={{ fontWeight: "800" }}>{formatPrice(balanceOf(item))}</Text></Text> : null}
+        {isOverdue(item) ? <Text style={[ui.small, { color: colors.danger, fontWeight: "800" }]}>En retard{item.reminder_count ? ` · ${item.reminder_count} relance(s)` : ""}</Text> : null}
       </Pressable>}
     />}
+    </>}
 
     <InvoiceDetail
       invoice={opened}
@@ -205,8 +260,12 @@ function InvoiceDetail({ invoice, onClose, onChanged, onEdit }: {
             <Button label="MODIFIER LES BONS" variant="secondary" onPress={() => onEdit(invoice)} style={{ marginTop: 10 }} />
             <Button label="SUPPRIMER LE BROUILLON" variant="danger" onPress={remove} busy={busy === "delete"} style={{ marginTop: 10 }} />
           </> : null}
-          {invoice.status === "issued" ? <Button label="MARQUER PAYÉE" variant="secondary" onPress={() => changeStatus("paid")} busy={busy === "paid"} style={{ marginTop: 10 }} /> : null}
-          {invoice.status === "paid" ? <Button label="REMETTRE À ENCAISSER" variant="secondary" onPress={() => changeStatus("issued")} busy={busy === "issued"} style={{ marginTop: 10 }} /> : null}
+          {invoice.status === "issued" || invoice.status === "paid" ? <PaymentsCard invoice={invoice} onChanged={onChanged} /> : null}
+          {isOverdue(invoice) ? <Button label="RELANCER LE CLIENT" variant="secondary" onPress={() => void run("remind", async () => {
+            const count = await sendReminders(invoice.client_id, true);
+            notify("Relance", count ? "Rappel envoyé au client." : "Les relances sont désactivées pour ce client.");
+            onChanged();
+          })} busy={busy === "remind"} style={{ marginTop: 10 }} /> : null}
           {invoice.status === "issued" || invoice.status === "paid" ? <Button label="ANNULER LA FACTURE" variant="danger" onPress={confirmCancel} busy={busy === "cancelled"} style={{ marginTop: 10 }} /> : null}
         </ScrollView>
       </> : null}
@@ -343,6 +402,97 @@ function InvoiceEditor({ editor, onClose, onSaved }: { editor: Editor | null; on
       </ScrollView>}
     </SafeAreaView>
   </Modal>;
+}
+
+// Payments of an invoice: partial, several methods, credit notes deducted.
+function PaymentsCard({ invoice, onChanged }: { invoice: InvoiceWithOrders; onChanged: () => void }) {
+  const balance = balanceOf(invoice);
+  const [adding, setAdding] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("transfer");
+  const [paidOn, setPaidOn] = useState(toDayKey(new Date()));
+  const [reference, setReference] = useState("");
+  const [creditId, setCreditId] = useState<string | null>(null);
+  const [credits, setCredits] = useState<CreditNote[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!adding) return;
+    setAmount(balance.toFixed(3));
+    setError("");
+    void fetchCreditNotes().then((list) => setCredits(list.filter((credit) => credit.client_id === invoice.client_id && credit.status === "issued"))).catch(() => setCredits([]));
+  }, [adding]);
+
+  async function save() {
+    const value = Number(amount.replace(",", "."));
+    if (!value || value <= 0) {
+      setError("Indiquez le montant reçu.");
+      return;
+    }
+    if (method === "credit_note" && !creditId) {
+      setError("Choisissez l’avoir à déduire.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await addPayment(invoice.id, { amount: value, method, paidOn, reference, creditNoteId: creditId });
+      setAdding(false);
+      setReference("");
+      onChanged();
+    } catch (cause) {
+      setError(errorMessage(cause, "Le règlement n’a pas pu être enregistré. La migration 20261031 est-elle exécutée ?"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function remove(paymentId: string) {
+    notify("Supprimer le règlement", "Le montant redeviendra à encaisser.", [
+      { text: "Retour", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: () => void deletePayment(paymentId).then(onChanged).catch((cause: unknown) => notify("Règlement", errorMessage(cause, "Suppression impossible."))) },
+    ]);
+  }
+
+  const payments = [...(invoice.invoice_payments ?? [])].sort((a, b) => a.paid_on.localeCompare(b.paid_on));
+  return <View style={ui.card}>
+    <View style={ui.row}>
+      <Text style={ui.strong}>Règlements</Text>
+      <Text style={ui.small}>Payé {formatPrice(invoice.amount_paid ?? 0)} · reste <Text style={{ fontWeight: "800", color: balance > 0 ? colors.danger : colors.green }}>{formatPrice(balance)}</Text></Text>
+    </View>
+    {invoice.due_date ? <Text style={ui.small}>Échéance : {formatDay(invoice.due_date, { day: "numeric", month: "long", year: "numeric" })}{invoice.reminder_count ? ` · ${invoice.reminder_count} relance(s)` : ""}</Text> : null}
+    {payments.map((payment) => <View key={payment.id} style={[ui.row, ui.divider]}>
+      <View style={{ flex: 1 }}>
+        <Text style={ui.body}>{paymentMethodLabel(payment.method)} · {formatDay(payment.paid_on, { day: "numeric", month: "short", year: "numeric" })}</Text>
+        {payment.reference ? <Text style={ui.small}>{payment.reference}</Text> : null}
+      </View>
+      <Text style={[ui.body, { fontWeight: "800" }]}>{formatPrice(payment.amount)}</Text>
+      <Pressable onPress={() => remove(payment.id)} hitSlop={8} accessibilityLabel="Supprimer le règlement"><Text style={{ color: colors.danger, fontSize: 18 }}>×</Text></Pressable>
+    </View>)}
+    {balance > 0.0005 && !adding ? <Button label="+ ENREGISTRER UN RÈGLEMENT" onPress={() => setAdding(true)} style={{ marginTop: 10 }} /> : null}
+    {adding ? <View style={ui.divider}>
+      <Text style={ui.fieldLabel}>Mode de règlement</Text>
+      <View style={[ui.wrapRow, { marginTop: 6 }]}>
+        {paymentMethods.map((item) => <Chip key={item.key} label={item.label} selected={method === item.key} onPress={() => setMethod(item.key)} />)}
+      </View>
+      {method === "credit_note" ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
+        {credits.length ? credits.map((credit) => <Chip key={credit.id} label={`${credit.credit_number} · ${formatPrice(credit.total_ttc)}`} selected={creditId === credit.id} onPress={() => { setCreditId(credit.id); setAmount(Math.min(balance, Number(credit.total_ttc)).toFixed(3)); }} />)
+          : <Text style={ui.small}>Aucun avoir émis disponible pour ce client.</Text>}
+      </View> : null}
+      <View style={ui.row}>
+        <View style={{ flex: 1 }}><Field label="Montant (TND)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" /></View>
+        <View style={{ flex: 1 }}><Field label="Date (AAAA-MM-JJ)" value={paidOn} onChangeText={setPaidOn} /></View>
+      </View>
+      <Field label="Référence (n° de chèque, virement…)" value={reference} onChangeText={setReference} />
+      <Text style={[ui.small, { marginTop: 6 }]}>Un montant inférieur au reste enregistre un règlement partiel ; complétez ensuite avec d’autres moyens de paiement.</Text>
+      {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
+      <View style={[ui.wrapRow, { marginTop: 10 }]}>
+        <Button label="ENREGISTRER" onPress={() => void save()} busy={busy} />
+        <Button label="ANNULER" variant="secondary" onPress={() => setAdding(false)} disabled={busy} />
+      </View>
+    </View> : null}
+  </View>;
 }
 
 const styles = StyleSheet.create({
