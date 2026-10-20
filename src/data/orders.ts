@@ -74,6 +74,23 @@ export async function placeClientOrder(params: {
   return data as { id: string; order_number: number; total: number };
 }
 
+// One cart, several suppliers: one order per supplier, all sent or none (20261115).
+export type MultiOrderResult = { id: string; order_number: number; total: number; client_id: string; supplier_name: string };
+export async function placeMultiOrder(params: {
+  orders: { client_id: string; items: OrderDraftLine[]; delivery_point_id: string | null }[];
+  requestedDate: string | null;
+  note: string;
+}): Promise<MultiOrderResult[]> {
+  if (!supabase) throw new Error("La connexion au service de commande n’est pas configurée.");
+  const { data, error } = await supabase.rpc("place_multi_order", {
+    p_orders: params.orders,
+    p_requested_date: params.requestedDate,
+    p_note: params.note.trim() || null,
+  });
+  if (error) throw error;
+  return data as MultiOrderResult[];
+}
+
 // Team order for a client (phone order): same rules as the client's own order.
 export async function staffPlaceOrder(clientId: string, params: {
   items: OrderDraftLine[];

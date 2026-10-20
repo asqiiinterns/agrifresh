@@ -1,6 +1,14 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["{0} fournisseurs", "{0} suppliers", "{0} مورّدين"],
+  ["Aucun point de livraison n’est configuré chez {0}. Contactez ce fournisseur.", "No delivery point is set up with {0}. Contact this supplier.", "لا توجد نقطة تسليم مهيأة لدى {0}. اتصل بهذا المورّد."],
+  ["Choisissez le point de livraison pour {0}.", "Choose the delivery point for {0}.", "اختر نقطة التسليم لـ {0}."],
+  ["{0} commandes transmises : {1}. Chaque fournisseur vous informera de son acceptation.", "{0} orders sent: {1}. Each supplier will let you know when it accepts.", "تم إرسال {0} طلبات: {1}. سيعلمك كل مورّد بقبوله."],
+  ["Commande #{0} transmise à {1}. Vous serez informé de son acceptation.", "Order #{0} sent to {1}. You will be told when it is accepted.", "تم إرسال الطلب #{0} إلى {1}. سيتم إعلامك بقبوله."],
+  ["{0} commandes séparées, une par fournisseur.", "{0} separate orders, one per supplier.", "{0} طلبات منفصلة، واحد لكل مورّد."],
+  ["Livraison : {0}", "Delivery: {0}", "التسليم: {0}"],
+  ["ENVOYER LES {0} COMMANDES", "SEND THE {0} ORDERS", "إرسال الطلبات الـ {0}"],
   ["À régler {0} · acompte {1}", "To pay {0} · deposit {1}", "للتسديد {0} · عربون {1}"],
   ["À régler {0} · acompte {1} · encours autorisé {2}", "To pay {0} · deposit {1} · credit limit {2}", "للتسديد {0} · عربون {1} · سقف الدين {2}"],
   ["Acompte imputé sur {0}", "Deposit applied to {0}", "عربون مخصوم من {0}"],

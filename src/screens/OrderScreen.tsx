@@ -5,8 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Category, Product } from "../types/product";
 import type { ClientSummary } from "../data/account";
-import { fetchCatalog } from "../data/catalog";
-import { fetchMyOrders, formatOrigin, placeClientOrder, type Order } from "../data/orders";
+import { fetchBuyerCatalog, fetchCatalog, type BuyerSupplier } from "../data/catalog";
+import { fetchMyOrders, formatOrigin, placeClientOrder, placeMultiOrder, type Order } from "../data/orders";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ProductImage, ScreenHeader, formatDay, formatPrice, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -15,6 +15,9 @@ import { useDisplay } from "../ui/display";
 type Filter = Category | "Nouveautés";
 const categories: Category[] = ["Tous", "Jus frais", "Fruits", "Légumes", "Épicerie"];
 const draftKey = (clientId: string) => `agrifresh-order-draft-${clientId}`;
+// One cart for all the suppliers of the buyer's Pro.
+const cartKey = (buyerOrgId: string) => `appro-cart-${buyerOrgId}`;
+type DisplayRules = Pick<ClientSummary, "show_prices" | "show_stock" | "show_origin">;
 
 const parseQuantity = (value: string) => {
   const quantity = Number(value.replace(",", ".").trim());
@@ -52,11 +55,23 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
   const [reviewVisible, setReviewVisible] = useState(false);
   const [repeatVisible, setRepeatVisible] = useState(false);
   const { compactProducts } = useDisplay();
+  // Buyer side: every supplier of the Pro on the same screen (empty: single-supplier catalogue).
+  const [suppliers, setSuppliers] = useState<BuyerSupplier[]>([]);
+  const [buyerOrgId, setBuyerOrgId] = useState<string | null>(null);
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
 
   async function loadCatalog() {
     setLoading(true);
     setLoadError("");
     try {
+      const buyer = staffFor ? null : await fetchBuyerCatalog();
+      if (buyer && buyer.suppliers.length && buyer.buyerOrgId) {
+        setSuppliers(buyer.suppliers);
+        setBuyerOrgId(buyer.buyerOrgId);
+        setCatalog(buyer.products);
+        return;
+      }
+      setSuppliers([]);
       setCatalog(await fetchCatalog());
     } catch (cause) {
       setLoadError(errorMessage(cause, "Impossible de charger les produits."));
@@ -67,9 +82,12 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
 
   useEffect(() => { void loadCatalog(); }, []);
 
+  const storageKey = suppliers.length && buyerOrgId ? cartKey(buyerOrgId) : draftKey(client.id);
   useEffect(() => {
+    if (loading) return;
     let active = true;
-    void AsyncStorage.getItem(draftKey(client.id))
+    setDraftLoaded(false);
+    void AsyncStorage.getItem(storageKey)
       .then((stored) => {
         if (!active || !stored) return;
         const parsed = JSON.parse(stored) as Record<string, string>;
@@ -78,25 +96,34 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
       .catch(() => {})
       .finally(() => { if (active) setDraftLoaded(true); });
     return () => { active = false; };
-  }, [client.id]);
+  }, [storageKey, loading]);
 
   useEffect(() => {
     if (!draftLoaded) return;
-    void AsyncStorage.setItem(draftKey(client.id), JSON.stringify(quantities)).catch(() => {});
-  }, [quantities, draftLoaded, client.id]);
+    void AsyncStorage.setItem(storageKey, JSON.stringify(quantities)).catch(() => {});
+  }, [quantities, draftLoaded, storageKey]);
+
+  const multi = suppliers.length > 1;
+  const supplierById = useMemo(() => new Map(suppliers.map((supplier) => [supplier.client_id, supplier])), [suppliers]);
+  // What each supplier lets this client see (prices, stock, origin).
+  const rulesOf = (product: Product): DisplayRules => (product.supplierId ? supplierById.get(product.supplierId) : undefined) ?? client;
 
   const lines = useMemo(() => catalog
     .map((product) => ({ product, quantity: parseQuantity(quantities[product.id] ?? "") }))
     .filter((line) => line.quantity > 0), [catalog, quantities]);
   const total = lines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+  const priced = lines.every((line) => rulesOf(line.product).show_prices);
+  const cartSuppliers = new Set(lines.map((line) => line.product.supplierId)).size;
+  const inCart = (supplierId: string) => lines.filter((line) => line.product.supplierId === supplierId).length;
 
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
-    const matches = catalog.filter((product) => (category === "Tous" || product.category === category || (category === "Nouveautés" && product.isNew))
+    const matches = catalog.filter((product) => (supplierFilter === "all" || product.supplierId === supplierFilter)
+      && (category === "Tous" || product.category === category || (category === "Nouveautés" && product.isNew))
       && `${product.name} ${product.description}`.toLocaleLowerCase("fr").includes(term));
     // New arrivals come first so clients discover them while ordering.
     return [...matches].sort((a, b) => Number(Boolean(b.isNew)) - Number(Boolean(a.isNew)));
-  }, [catalog, category, search]);
+  }, [catalog, category, search, supplierFilter]);
 
   function setQuantity(productId: string, value: string) {
     setQuantities((current) => {
@@ -132,13 +159,17 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
     <ScreenHeader
       eyebrow={staffFor ? "COMMANDE POUR LE CLIENT" : client.business_name.toLocaleUpperCase("fr")}
       title={staffFor ? client.business_name : "Commander"}
-      subtitle="Saisissez les quantités souhaitées pour chaque produit."
+      subtitle={multi ? "Tous vos fournisseurs dans un seul panier : chacun reçoit sa propre commande." : "Saisissez les quantités souhaitées pour chaque produit."}
       right={staffFor ? <Button label="‹ CLIENTS" variant="secondary" onPress={staffFor.onBack} /> : undefined}
     />
     <View style={styles.toolbar}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un produit" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
       <Button label="REPRENDRE" variant="secondary" onPress={() => setRepeatVisible(true)} disabled={loading} />
     </View>
+    {multi ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suppliers} style={{ flexGrow: 0 }}>
+      <Chip label="Tous les fournisseurs" selected={supplierFilter === "all"} onPress={() => setSupplierFilter("all")} />
+      {suppliers.map((supplier) => <Chip key={supplier.client_id} label={inCart(supplier.client_id) ? `${supplier.name} (${inCart(supplier.client_id)})` : supplier.name} selected={supplierFilter === supplier.client_id} onPress={() => setSupplierFilter(supplier.client_id)} />)}
+    </ScrollView> : null}
     <View style={styles.categories}>
       {catalog.some((product) => product.isNew) ? <Chip label="✦ Nouveautés" selected={category === "Nouveautés"} onPress={() => setCategory("Nouveautés")} /> : null}
       {categories.map((item) => <Chip key={item} label={item} selected={category === item} onPress={() => setCategory(item)} />)}
@@ -153,15 +184,17 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
       renderItem={({ item }) => {
         const value = quantities[item.id] ?? "";
         const selected = parseQuantity(value) > 0;
+        const rules = rulesOf(item);
         return <View style={[styles.productRow, compactProducts && styles.productRowCompact, selected && styles.productRowSelected]}>
           {compactProducts ? null : <ProductImage uri={item.image} style={styles.productImage} />}
           <View style={{ flex: 1 }}>
             {item.isNew ? <Text style={styles.newBadge}>✦ NOUVEAU</Text> : null}
             <Text style={ui.strong} numberOfLines={2}>{item.name}</Text>
+            {multi && item.supplierId ? <Text style={styles.supplierName} numberOfLines={1}>{supplierById.get(item.supplierId)?.name}</Text> : null}
             {item.isNew && item.description ? <Text style={ui.small} numberOfLines={2}>{item.description}</Text> : null}
-            {client.show_origin && item.origin ? <Text style={styles.origin} numberOfLines={2}>Origine : {[formatOrigin(item.origin), item.origin.label].filter(Boolean).join(" · ")}{item.origin.note ? ` — ${item.origin.note}` : ""}</Text> : null}
-            <Text style={ui.small}>{client.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
-            {client.show_stock && item.stock !== undefined ? <Text style={[ui.small, { color: item.stock > 0 ? colors.primary : colors.danger, fontWeight: "700" }]}>{item.stock > 0 ? `Stock : ${formatQuantity(item.stock)} ${item.unit}` : "Rupture de stock"}</Text> : null}
+            {rules.show_origin && item.origin ? <Text style={styles.origin} numberOfLines={2}>Origine : {[formatOrigin(item.origin), item.origin.label].filter(Boolean).join(" · ")}{item.origin.note ? ` — ${item.origin.note}` : ""}</Text> : null}
+            <Text style={ui.small}>{rules.show_prices ? `${formatPrice(item.price)} HT / ${item.unit}` : item.unit}</Text>
+            {rules.show_stock && item.stock !== undefined ? <Text style={[ui.small, { color: item.stock > 0 ? colors.primary : colors.danger, fontWeight: "700" }]}>{item.stock > 0 ? `Stock : ${formatQuantity(item.stock)} ${item.unit}` : "Rupture de stock"}</Text> : null}
           </View>
           <View style={styles.stepper}>
             <Pressable onPress={() => step(item.id, -1)} style={styles.stepButton} accessibilityLabel={`Retirer une unité de ${item.name}`}><Text style={styles.stepText}>−</Text></Pressable>
@@ -184,13 +217,25 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
     <View style={styles.footer}>
       <View style={{ flex: 1 }}>
         <Text style={ui.small}>{lines.length} produit{lines.length > 1 ? "s" : ""}</Text>
-        {client.show_prices ? <Text style={ui.amount}>{formatPrice(total)} HT</Text> : null}
+        {cartSuppliers > 1 ? <Text style={ui.small}>{`${cartSuppliers} fournisseurs`}</Text> : null}
+        {priced && lines.length ? <Text style={ui.amount}>{formatPrice(total)} HT</Text> : null}
       </View>
       {lines.length ? <Pressable onPress={() => setQuantities({})} style={{ padding: 8 }}><Text style={[ui.small, { textDecorationLine: "underline" }]}>Vider</Text></Pressable> : null}
       <Button label="VÉRIFIER ET ENVOYER" onPress={() => setReviewVisible(true)} disabled={!lines.length} />
     </View>
 
-    <ReviewModal
+    {suppliers.length ? <CartReviewModal
+      visible={reviewVisible}
+      suppliers={suppliers}
+      lines={lines}
+      onClose={() => setReviewVisible(false)}
+      onPlaced={() => {
+        void AsyncStorage.removeItem(storageKey).catch(() => {});
+        setQuantities({});
+        setReviewVisible(false);
+        onPlaced();
+      }}
+    /> : <ReviewModal
       visible={reviewVisible}
       client={client}
       lines={lines}
@@ -200,12 +245,12 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
       onClose={() => setReviewVisible(false)}
       onPlaced={() => {
         // Clear the saved cart right away: the screen unmounts when switching to the orders tab.
-        void AsyncStorage.removeItem(draftKey(client.id)).catch(() => {});
+        void AsyncStorage.removeItem(storageKey).catch(() => {});
         setQuantities({});
         setReviewVisible(false);
         onPlaced();
       }}
-    />
+    />}
 
     <RepeatModal
       visible={repeatVisible}
@@ -314,6 +359,114 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
   </Modal>;
 }
 
+// Buyer cart: one block per supplier (its own delivery point), a shared date and note, all sent at once.
+function CartReviewModal({ visible, suppliers, lines, onClose, onPlaced }: {
+  visible: boolean;
+  suppliers: BuyerSupplier[];
+  lines: { product: Product; quantity: number }[];
+  onClose: () => void;
+  onPlaced: () => void;
+}) {
+  const groups = useMemo(() => suppliers
+    .map((supplier) => ({ supplier, lines: lines.filter((line) => line.product.supplierId === supplier.client_id) }))
+    .filter((group) => group.lines.length), [suppliers, lines]);
+  const days = useMemo(() => nextDays(14), [visible]);
+  const [points, setPoints] = useState<Record<string, string | null>>({});
+  const [day, setDay] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!visible) return;
+    setPoints(Object.fromEntries(groups.map((group) => [group.supplier.client_id, group.supplier.delivery_points.length === 1 ? group.supplier.delivery_points[0].id : null])));
+    setError("");
+  }, [visible]);
+
+  async function submit() {
+    // A quick double tap must not send the orders twice.
+    if (sending.current) return;
+    const none = groups.find((group) => group.supplier.delivery_points.length === 0);
+    if (none) {
+      setError(`Aucun point de livraison n’est configuré chez ${none.supplier.name}. Contactez ce fournisseur.`);
+      return;
+    }
+    const missing = groups.find((group) => !points[group.supplier.client_id]);
+    if (missing) {
+      setError(`Choisissez le point de livraison pour ${missing.supplier.name}.`);
+      return;
+    }
+    sending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const placed = await placeMultiOrder({
+        orders: groups.map((group) => ({
+          client_id: group.supplier.client_id,
+          delivery_point_id: points[group.supplier.client_id] ?? null,
+          items: group.lines.map((line) => ({ product_id: line.product.id, quantity: line.quantity })),
+        })),
+        requestedDate: day,
+        note,
+      });
+      setNote("");
+      setDay(null);
+      if (placed.length > 1) notify("Commandes envoyées", `${placed.length} commandes transmises : ${placed.map((order) => `#${order.order_number} ${order.supplier_name}`).join(", ")}. Chaque fournisseur vous informera de son acceptation.`);
+      else notify("Commande envoyée", `Commande #${placed[0].order_number} transmise à ${placed[0].supplier_name}. Vous serez informé de son acceptation.`);
+      onPlaced();
+    } catch (cause) {
+      setError(errorMessage(cause, "La commande n’a pas pu être envoyée."));
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  }
+
+  return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SafeAreaView style={ui.modalSafe}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScreenHeader eyebrow="RÉCAPITULATIF" title="Mon panier" subtitle={groups.length > 1 ? `${groups.length} commandes séparées, une par fournisseur.` : undefined} right={<CloseButton onPress={onClose} />} />
+        <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+          {groups.map(({ supplier, lines: supplierLines }) => {
+            const subtotal = supplierLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+            const chosen = points[supplier.client_id] ?? null;
+            return <View key={supplier.client_id} style={ui.card}>
+              <Text style={ui.strong}>{supplier.name}</Text>
+              {supplierLines.map((line) => <View key={line.product.id} style={[ui.row, { paddingVertical: 5 }]}>
+                <Text style={[ui.body, { flex: 1 }]}>{formatQuantity(line.quantity)} {line.product.unit} · {line.product.name}</Text>
+                {supplier.show_prices ? <Text style={ui.body}>{formatPrice(line.product.price * line.quantity)}</Text> : null}
+              </View>)}
+              {supplier.show_prices ? <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Total estimé HT</Text><Text style={ui.amount}>{formatPrice(subtotal)}</Text></View> : null}
+              {supplier.delivery_points.length > 1 ? <View style={{ gap: 8, marginTop: 10 }}>
+                <Text style={ui.fieldLabel}>Point de livraison</Text>
+                {supplier.delivery_points.map((point) => <Pressable key={point.id} onPress={() => setPoints((current) => ({ ...current, [supplier.client_id]: point.id }))} style={[styles.pointOption, chosen === point.id && styles.pointOptionSelected]}>
+                  <Text style={[ui.strong, chosen === point.id && { color: colors.primary }]}>{point.label}</Text>
+                  <Text style={ui.small}>{point.address_line}, {point.city}</Text>
+                </Pressable>)}
+              </View> : supplier.delivery_points[0] ? <Text style={[ui.small, { marginTop: 6 }]}>{`Livraison : ${supplier.delivery_points[0].label}`}</Text> : null}
+            </View>;
+          })}
+          <Text style={[ui.small, { marginTop: 6 }]}>Les prix et le stock sont confirmés par chaque fournisseur à la réception.</Text>
+
+          <View style={ui.card}>
+            <Text style={ui.strong}>Livraison souhaitée</Text>
+            <View style={[ui.wrapRow, { marginTop: 10 }]}>
+              <Chip label="Dès que possible" selected={day === null} onPress={() => setDay(null)} />
+              {days.map((key, index) => <Chip key={key} label={index === 0 ? "Aujourd’hui" : index === 1 ? "Demain" : formatDay(key)} selected={day === key} onPress={() => setDay(key)} />)}
+            </View>
+            <Field label="Remarque (facultatif)" value={note} onChangeText={setNote} multiline placeholder="Horaires, consignes…" />
+            {groups.length > 1 ? <Text style={ui.small}>La date et la remarque valent pour toutes les commandes du panier.</Text> : null}
+          </View>
+
+          {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
+          <Button label={groups.length > 1 ? `ENVOYER LES ${groups.length} COMMANDES` : "ENVOYER LA COMMANDE"} onPress={() => submit()} busy={busy} style={{ marginTop: 16 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  </Modal>;
+}
+
 function RepeatModal({ visible, showPrices, loadHistory, onClose, onFill }: { visible: boolean; showPrices: boolean; loadHistory: () => Promise<Order[]>; onClose: () => void; onFill: (orders: Order[]) => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -366,6 +519,8 @@ const styles = StyleSheet.create({
   checkmark: { color: colors.white, fontWeight: "800" },
   toolbar: { flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingTop: 12, alignItems: "center" },
   categories: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
+  suppliers: { flexDirection: "row", paddingHorizontal: 18, paddingTop: 10, gap: 7 },
+  supplierName: { color: colors.textSoft, fontSize: 11, fontWeight: "700" },
   productRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginTop: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   productRowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   productImage: { width: 54, height: 54, borderRadius: 8 },

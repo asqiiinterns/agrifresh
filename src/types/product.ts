@@ -13,4 +13,6 @@ export type Product = {
   isNew?: boolean;
   stock?: number;
   origin?: { producer?: string; region?: string; label?: string; note?: string } | null;
+  // Buyer cart across several suppliers: the supplier relation (client record) the product comes from.
+  supplierId?: string;
 };
