@@ -8,6 +8,8 @@ import {
 import { Button, Chip, EmptyState, Field, ListGroup, Loading, ScreenHeader, formatDay } from "../ui/components";
 import { FilterBar } from "../ui/FilterBar";
 import { errorMessage, notify } from "../ui/notify";
+import { ProDetailModal } from "./PlatformAdmin";
+import { Pressable } from "react-native";
 import { colors, ui } from "../ui/theme";
 
 const statusStyle: Record<ProStatus, { label: string; color: string; background: string }> = {
@@ -26,6 +28,7 @@ export function ProsScreen() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ProStatus | "all">("all");
   const [kind, setKind] = useState("all");
+  const [opened, setOpened] = useState<string | null | undefined>(undefined);
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
@@ -58,7 +61,8 @@ export function ProsScreen() {
     && (!needle || `${pro.name} ${pro.email} ${pro.phone}`.toLocaleLowerCase("fr").includes(needle)));
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow="APPRO+" title="Pros" subtitle={counts.pending ? `${counts.pending} Pro(s) à valider` : `${pros.length} Pro(s) sur la plateforme`} />
+    <ScreenHeader eyebrow="APPRO+" title="Pros" subtitle={counts.pending ? `${counts.pending} Pro(s) à valider` : `${pros.length} Pro(s) sur la plateforme`}
+      right={<Button label="+ NOUVEAU" variant="secondary" onPress={() => setOpened(null)} />} />
     <FilterBar search={search} onSearch={setSearch} placeholder="Nom, e-mail ou téléphone" filters={[
       { kind: "choice", title: "Statut", value: status, defaultValue: "all", onChange: (value) => setStatus(value as ProStatus | "all"), options: [
         { key: "all", label: "Tous" }, { key: "pending", label: "À valider" }, { key: "active", label: "Actifs" }, { key: "suspended", label: "Suspendus" }, { key: "refused", label: "Refusés" },
@@ -76,7 +80,7 @@ export function ProsScreen() {
       ListEmptyComponent={<EmptyState title="Aucun Pro" body="Aucun Pro ne correspond à ces filtres." />}
       renderItem={({ item }) => {
         const style = statusStyle[item.status];
-        return <View style={ui.card}>
+        return <Pressable style={ui.card} onPress={() => setOpened(item.id)}>
           <View style={ui.row}>
             <Text style={[ui.strong, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
             <View style={[ui.badge, { backgroundColor: style.background }]}><Text style={[ui.badgeText, { color: style.color }]}>{style.label}</Text></View>
@@ -91,9 +95,10 @@ export function ProsScreen() {
             {item.status === "active" ? <Button label="SUSPENDRE" variant="danger" onPress={() => decide(item, "suspended")} /> : null}
             {item.status === "pending" ? <Button label="REFUSER" variant="danger" onPress={() => decide(item, "refused")} /> : null}
           </View>
-        </View>;
+        </Pressable>;
       }}
     />}
+    <ProDetailModal orgId={opened ?? null} visible={opened !== undefined} onClose={() => setOpened(undefined)} onChanged={() => void reload()} />
   </View>;
 }
 

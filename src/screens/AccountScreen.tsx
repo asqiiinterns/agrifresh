@@ -63,7 +63,8 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   const open = (key: AccountSheet) => key === "products" ? setProductsVisible(true) : setPage(key);
   const entry = (key: AccountSheet): Entry[] => allowedPages.filter((item) => item.key === key).map((item) => ({ key: item.key, icon: item.icon, title: item.title, detail: item.detail, onPress: () => open(item.key) }));
   const adminEntries: Entry[] = !sections.some((item) => item.key === "admin") ? [] : [
-    { page: "accounts", icon: "person-outline" as const, title: "Comptes", detail: "Validation des inscriptions, suspension, rôle, ajout d’un compte.", allowed: isAdmin },
+    { page: "accounts", icon: "person-outline" as const, title: "Comptes", detail: "Comptes de vos clients et de votre équipe : validation, suspension, ajout.", allowed: isAdmin },
+    { page: "roles", icon: "key-outline" as const, title: "Rôles et accès", detail: "Qui a quel rôle, ce que chaque rôle permet, voir les droits d’une personne.", allowed: isAdmin },
     { page: "settings", icon: "options-outline" as const, title: "Paramétrage", detail: "Modules, droits par profil, options des clients, entreprise, numérotation, accueil.", allowed: isAdmin },
     { page: "alerts", icon: "notifications-outline" as const, title: "Alertes et e-mails", detail: "Événements notifiés et service d’envoi.", allowed: isAdmin },
     { page: "fleet", icon: "car-outline" as const, title: "Flotte", detail: "Véhicules proposés au livreur à l’expédition.", allowed: can("fleet.manage") },

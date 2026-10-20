@@ -722,3 +722,99 @@ begin
   return new;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- A Pro never manages another Pro's accounts: only Appro+ creates, validates and manages
+-- Pros and their accounts. A Pro manages its own team only.
+-- ---------------------------------------------------------------------------
+create or replace function public.profiles_org_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_acting uuid;
+begin
+  if (select auth.uid()) is null or new.id = (select auth.uid()) or public.platform_role() is not null then
+    return new;
+  end if;
+  v_acting := public.current_org_id();
+  -- Only its own team: a member of its Pro, or a free account it adds to its own team.
+  if v_acting is null then
+    raise exception using errcode = '42501', message = 'Ce compte n’appartient pas à votre équipe : il est géré par Appro+.';
+  end if;
+  if not (coalesce(old.org_id = v_acting, false) or (old.org_id is null and old.client_id is null and old.role <> 'platform')) then
+    raise exception using errcode = '42501', message = 'Ce compte n’appartient pas à votre équipe : il est géré par Appro+.';
+  end if;
+  if not coalesce(new.org_id = v_acting, false) or new.client_id is not null then
+    raise exception using errcode = '42501', message = 'Ce compte n’appartient pas à votre équipe : il est géré par Appro+.';
+  end if;
+  return new;
+end;
+$$;
+
+-- "Comptes" of a Pro: its own team only.
+DO $$
+DECLARE
+  v_def text := pg_get_functiondef('public.admin_list_accounts()'::regprocedure);
+BEGIN
+  v_def := replace(v_def, 'and (public.org_visible(pr.org_id) or public.org_visible(public.client_org(pr.client_id))', 'and (public.org_visible(pr.org_id)');
+  v_def := replace(v_def, 'or public.org_visible(public.client_org(pr.client_id))', '');
+  EXECUTE v_def;
+END;
+$$;
+
+-- Every new account waiting for validation is Appro+'s to handle.
+create or replace function public.alert_on_new_account()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_email text;
+begin
+  if new.account_status = 'pending' and new.role <> 'platform' then
+    select u.email into v_email from auth.users u where u.id = new.id;
+    perform public.notify(array(select pm.user_id from public.platform_members pm
+        where pm.active and pm.role in ('superadmin', 'verification', 'account_manager')),
+      'account.pending', 'Nouvelle inscription', format('%s attend une validation (Appro+ → Paramétrage → Comptes).', coalesce(v_email, 'Un utilisateur')));
+  end if;
+  return new;
+end;
+$$;
+
+-- A client record created by a supplier creates its buyer Pro waiting for Appro+.
+create or replace function public.clients_fill_orgs()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.supplier_org_id is null then
+    new.supplier_org_id := coalesce(public.current_org_id(), public.legacy_org_id());
+  end if;
+  if new.buyer_org_id is null then
+    insert into public.organizations (name, is_supplier, is_buyer, status, phone, email, created_by)
+    values (new.business_name, false, true,
+            case when (select auth.uid()) is null or public.platform_role() is not null then (case when new.active then 'active' else 'suspended' end) else 'pending' end,
+            coalesce(new.phone, ''), coalesce(new.email, ''), (select auth.uid()))
+    returning id into new.buyer_org_id;
+  end if;
+  return new;
+end;
+$$;
+
+-- Validating a Pro activates its waiting accounts (Responsable and client accounts).
+DO $$
+DECLARE
+  v_def text := pg_get_functiondef('public.platform_set_pro_status(uuid, text)'::regprocedure);
+BEGIN
+  IF v_def not like '%role in (''admin'', ''customer'')%' THEN
+    EXECUTE replace(v_def, 'where org_id = p_org_id and role = ''admin'' and account_status = ''pending'';',
+      'where org_id = p_org_id and role in (''admin'', ''customer'') and account_status = ''pending'';');
+  END IF;
+END;
+$$;

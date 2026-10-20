@@ -1,6 +1,15 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" avec {0} différence(s)", " with {0} difference(s)", " مع {0} اختلاف(ات)"],
+  [" · dernière connexion le {0}", " · last sign-in on {0}", " · آخر دخول في {0}"],
+  ["Comptes ({0})", "Accounts ({0})", "الحسابات ({0})"],
+  ["Personnes ({0})", "People ({0})", "الأشخاص ({0})"],
+  ["Suit le modèle « {0} »{1}.", "Follows the “{0}” template{1}.", "يتبع النموذج «{0}»{1}."],
+  ["{0} ce compte", "{0} this account", "{0} هذا الحساب"],
+  ["{0} est créé.", "{0} is created.", "تم إنشاء {0}."],
+  ["{0} est créé. {1} en devient Responsable dès la création de son compte (ou tout de suite s’il existe).", "{0} is created. {1} becomes its manager once they create their account (or right away if it exists).", "تم إنشاء {0}. يصبح {1} مسؤوله بمجرد إنشاء حسابه (أو فورا إن وُجد)."],
+  ["{0} · {1} produit(s) · {2} client(s) · {3} fournisseur(s)", "{0} · {1} product(s) · {2} client(s) · {3} supplier(s)", "{0} · {1} منتج · {2} حريف · {3} مورّد"],
   ["{0} Pro(s) sur la plateforme", "{0} Pro(s) on the platform", "{0} محترف(ين) على المنصة"],
   ["{0} Pro(s) à valider", "{0} Pro(s) to validate", "{0} محترف(ين) للمصادقة"],
   ["{0} n’aura plus accès à la console Appro+.", "{0} will no longer have access to the Appro+ console.", "لن يكون لـ {0} وصول إلى لوحة Appro+."],

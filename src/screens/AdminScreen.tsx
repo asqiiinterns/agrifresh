@@ -8,6 +8,7 @@ import type { AccountStatus } from "../data/account";
 import { assignableRoles } from "../data/team";
 import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime } from "../ui/components";
 import { useCan } from "../data/permissions";
+import { RolesManager } from "./RolesManager";
 import { SettingsScreen } from "./SettingsScreen";
 import { AuditPage, FleetPage, LocationPage } from "./FleetAuditScreens";
 import { FilterBar, type Filter } from "../ui/FilterBar";
@@ -16,8 +17,8 @@ import { colors, ui } from "../ui/theme";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import { StaffProductsModal } from "./StaffProductsScreen";
 
-type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "location";
-const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location"];
+type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "location" | "roles";
+const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location", "roles"];
 
 // Administration home: each button opens its own page.
 export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean; initialPage?: string } = {}) {
@@ -34,12 +35,14 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
   if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
   if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
   if (page === "location") return <LocationPage onBack={() => setPage("menu")} />;
+  if (page === "roles") return <RolesManager header={<ScreenHeader eyebrow="ADMINISTRATION" title="Rôles et accès" right={<BackButton onPress={() => setPage("menu")} />} />} />;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Admin" />
     <ScrollView contentContainerStyle={ui.content}>
       {isAdmin ? <ListGroup title="Comptes et réglages">
-        <ListRow icon="person-outline" title="Comptes" detail="Validation des inscriptions, suspension, rôle, ajout d’un compte." onPress={() => setPage("accounts")} />
+        <ListRow icon="person-outline" title="Comptes" detail="Validation des comptes de vos clients, suspension, rôle, ajout d’un membre de l’équipe." onPress={() => setPage("accounts")} />
+        <ListRow icon="key-outline" title="Rôles et accès" detail="Qui a quel rôle, ce que chaque rôle permet, voir les droits d’une personne." onPress={() => setPage("roles")} />
         <ListRow icon="options-outline" title="Paramétrage" detail="Onglets et droits par thème, profil et utilisateur ; options des clients ; accueil." onPress={() => setPage("settings")} />
         <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés et service d’envoi." onPress={() => setPage("alerts")} />
       </ListGroup> : null}

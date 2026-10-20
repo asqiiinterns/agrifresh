@@ -18,6 +18,9 @@ import { decisionCount, fetchDecisionBoard } from "./src/data/decisions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { PlatformTeamScreen, ProsScreen } from "./src/screens/PlatformScreens";
+import { PlatformSettingsScreen } from "./src/screens/PlatformAdmin";
+import { ProPendingCard, RegisterProCard } from "./src/screens/ProSignup";
+import { fetchMyPro, type MyPro } from "./src/data/pros";
 import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -74,6 +77,7 @@ const TAB = {
   more: { key: "more", label: "Plus", icon: "grid-outline" },
   pros: { key: "pros", label: "Pros", icon: "business-outline", description: "Valider, suspendre ou réactiver les Pros." },
   platformTeam: { key: "platformTeam", label: "Équipe Appro+", icon: "people-circle-outline", description: "Les comptes de la plateforme et leurs rôles." },
+  platformSettings: { key: "platformSettings", label: "Paramétrage", icon: "options-outline", description: "Comptes, modules, modèles de rôles, alertes et e-mails." },
 } satisfies Record<TabKey, TabDef>;
 
 // Bottom bar: at most five entries, the rest goes into "Plus".
@@ -89,7 +93,7 @@ function tabsFor(account: Account, modules: ModuleState = {}): { kind: "client" 
   const has = (feature: string) => account.features.includes(feature);
   const add = (tabs: TabDef[], tab: TabDef, allowed: boolean) => { if (allowed && !tabs.includes(tab)) tabs.push(tab); };
   // The Appro+ team: its own console, separate from every Pro.
-  if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformTeam, TAB.account] };
+  if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformSettings, TAB.platformTeam, TAB.account] };
   if (account.role === "customer") {
     if (!account.client) return { kind: "unlinked", tabs: [TAB.account] };
     const tabs: TabDef[] = [];
@@ -286,11 +290,13 @@ function Main({ session }: { session: Session }) {
   const navValue = useMemo(() => ({ navigate }), [navigate]);
 
   const [modules, setModules] = useState<ModuleState>({});
+  const [myPro, setMyPro] = useState<MyPro | null>(null);
   const loadAccount = useCallback(async () => {
     setAccountError("");
     try {
-      const [next, nextModules] = await Promise.all([fetchMyAccount(), fetchModules()]);
+      const [next, nextModules, nextPro] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro()]);
       setModules(nextModules);
+      setMyPro(nextPro);
       setAccount(next);
       void loadCompanyProfile().catch(() => undefined);
     } catch (cause) {
@@ -379,8 +385,14 @@ function Main({ session }: { session: Session }) {
       refused: { title: "Demande refusée", body: "L’administrateur n’a pas validé ce compte. Contactez-le si vous pensez qu’il s’agit d’une erreur." },
       suspended: { title: "Compte suspendu", body: "Votre accès est suspendu. Contactez l’administrateur pour le réactiver." },
     }[status];
+    // A free sign-up (no Pro, no client record) can create its Pro; a Pro waiting for Appro+ says so.
+    const free = !myPro && !account.client && account.role !== "platform";
     return <View style={{ flex: 1 }}>
-      <EmptyState title={message.title} body={message.body} action={<Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} />} />
+      <EmptyState title={myPro ? "Espace Pro en attente" : message.title} body={myPro ? "" : free ? "Votre compte est créé. Si vous êtes une entreprise, créez votre espace Pro ci-dessous ; sinon, attendez la validation d’Appro+." : message.body}
+        action={<Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} />} />
+      <View style={{ paddingHorizontal: 14 }}>
+        {myPro ? <ProPendingCard pro={myPro} /> : free && status === "pending" ? <RegisterProCard onDone={() => void loadAccount()} /> : null}
+      </View>
       <AccountScreen session={session} account={account} />
     </View>;
   }
@@ -426,6 +438,8 @@ function Main({ session }: { session: Session }) {
         return <ProsScreen />;
       case "platformTeam":
         return <PlatformTeamScreen />;
+      case "platformSettings":
+        return <PlatformSettingsScreen />;
       case "admin":
         return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
       default:
