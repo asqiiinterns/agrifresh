@@ -8,6 +8,7 @@ import { addPayment, balanceOf, createInvoice, deleteInvoiceDraft, deletePayment
 import { fetchCreditNotes, type CreditNote } from "../data/returns";
 import { CreditsList } from "./ReturnsScreen";
 import { BillingDashboard } from "./BillingDashboard";
+import { AccountsList } from "./AccountsScreens";
 import { deliveryNoteNumber, type Order } from "../data/orders";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, Sheets, StatusBadge, formatDay, formatPrice, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
@@ -50,7 +51,7 @@ const sorts = [
 
 export function StaffInvoicesScreen() {
   // Facturation: invoices, credit notes and figures, as sheets.
-  const [sheet, setSheet] = useState<"invoices" | "credits" | "dashboard">("invoices");
+  const [sheet, setSheet] = useState<"invoices" | "credits" | "accounts" | "dashboard">("invoices");
   const [invoices, setInvoices] = useState<InvoiceWithOrders[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -122,8 +123,9 @@ export function StaffInvoicesScreen() {
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`À ENCAISSER : ${formatPrice(outstanding)}${drafts ? ` · ${drafts} BROUILLON(S)` : ""}`} title="Facturation" right={sheet === "invoices" ? <Button label="+ FACTURER" onPress={() => setEditor({ mode: "new" })} /> : undefined} />
-    <Sheets items={[{ key: "invoices", label: "Factures", count: overdueCount || undefined }, { key: "credits", label: "Avoirs" }, { key: "dashboard", label: "Tableau de bord" }]} value={sheet} onChange={setSheet} />
+    <Sheets items={[{ key: "invoices", label: "Factures", count: overdueCount || undefined }, { key: "credits", label: "Avoirs" }, { key: "accounts", label: "Comptes clients" }, { key: "dashboard", label: "Tableau de bord" }]} value={sheet} onChange={setSheet} />
     {sheet === "credits" ? <CreditsList credits={credits} manage refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />} onChanged={() => void reload("silent")} />
+      : sheet === "accounts" ? <AccountsList />
       : sheet === "dashboard" ? (loading ? <Loading /> : <BillingDashboard invoices={invoices} credits={credits} />)
       : <>
     <FilterBar search={search} onSearch={setSearch} placeholder="Client ou numéro de facture" filters={listFilters} />

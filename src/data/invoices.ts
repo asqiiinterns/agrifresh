@@ -35,7 +35,7 @@ export const paymentMethods: { key: PaymentMethod; label: string }[] = [
   { key: "credit_note", label: "Avoir" },
   { key: "other", label: "Autre" },
 ];
-export const paymentMethodLabel = (method: string) => paymentMethods.find((item) => item.key === method)?.label ?? method;
+export const paymentMethodLabel = (method: string) => method === "deposit" ? "Acompte" : paymentMethods.find((item) => item.key === method)?.label ?? method;
 export const balanceOf = (invoice: Pick<Invoice, "total_ttc" | "amount_paid">) => Math.max(0, Number(invoice.total_ttc) - Number(invoice.amount_paid ?? 0));
 export const isOverdue = (invoice: Pick<Invoice, "status" | "due_date" | "total_ttc" | "amount_paid">) =>
   invoice.status === "issued" && !!invoice.due_date && invoice.due_date.slice(0, 10) < new Date().toISOString().slice(0, 10) && balanceOf(invoice) > 0.0005;

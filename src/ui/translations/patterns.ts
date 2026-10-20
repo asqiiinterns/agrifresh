@@ -1,6 +1,22 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["À régler {0} · acompte {1}", "To pay {0} · deposit {1}", "للتسديد {0} · عربون {1}"],
+  ["À régler {0} · acompte {1} · encours autorisé {2}", "To pay {0} · deposit {1} · credit limit {2}", "للتسديد {0} · عربون {1} · سقف الدين {2}"],
+  ["Acompte imputé sur {0}", "Deposit applied to {0}", "عربون مخصوم من {0}"],
+  ["Acompte reçu · {0}", "Deposit received · {0}", "عربون مستلم · {0}"],
+  ["Acompte remboursé · {0}", "Deposit paid back · {0}", "عربون مُسترجع · {0}"],
+  ["Acomptes détenus : {0}", "Deposits held: {0}", "العرابين المحتفظ بها: {0}"],
+  ["Encours autorisé : {0}", "Credit limit: {0}", "سقف الدين: {0}"],
+  ["Impossible de charger ce compte. {0}", "Unable to load this account. {0}", "تعذّر تحميل هذا الحساب. {0}"],
+  ["Impossible de charger les comptes clients. {0}", "Unable to load client accounts. {0}", "تعذّر تحميل حسابات الحرفاء. {0}"],
+  ["Impossible de charger votre compte. {0}", "Unable to load your account. {0}", "تعذّر تحميل حسابك. {0}"],
+  ["Règlement {0}", "Payment {0}", "تسديد {0}"],
+  ["Règlement {0} · {1}", "Payment {0} · {1}", "تسديد {0} · {1}"],
+  ["Remboursement (disponible {0})", "Pay back (available {0})", "إرجاع (المتاح {0})"],
+  ["Solde {0}", "Balance {0}", "الرصيد {0}"],
+  ["Votre compte chez {0}", "Your account with {0}", "حسابك لدى {0}"],
+  ["{0} · reste {1}", "{0} · {1} left", "{0} · المتبقي {1}"],
   ["Demande envoyée à {0}.", "Request sent to {0}.", "تم إرسال الطلب إلى {0}."],
   ["Demander à {0} de devenir votre fournisseur ?", "Ask {0} to become your supplier?", "هل تطلب من {0} أن يصبح مورّدك؟"],
   ["Proposer à {0} de devenir votre client ?", "Offer {0} to become your client?", "هل تقترح على {0} أن يصبح حريفك؟"],

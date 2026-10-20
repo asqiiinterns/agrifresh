@@ -11,6 +11,7 @@ import { useCan } from "../data/permissions";
 import { fetchCreditNotes, fetchReturns, type CreditNote, type ProductReturn } from "../data/returns";
 import { ClientReturnsList, CreditsList } from "./ReturnsScreen";
 import { InvoiceBadge } from "./StaffInvoicesScreen";
+import { ClientAccountSheet } from "./AccountsScreens";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 
@@ -93,8 +94,8 @@ function InvoiceList() {
 // Mes factures: invoices, credit notes and returns, as sheets.
 export function ClientInvoicesScreen({ initialSheet }: { initialSheet?: string } = {}) {
   const canReturns = useCan()("client.returns");
-  type Sheet = "invoices" | "credits" | "returns";
-  const [sheet, setSheet] = useState<Sheet>(initialSheet === "credits" || (initialSheet === "returns" && canReturns) ? initialSheet as Sheet : "invoices");
+  type Sheet = "invoices" | "account" | "credits" | "returns";
+  const [sheet, setSheet] = useState<Sheet>(initialSheet === "credits" || initialSheet === "account" || (initialSheet === "returns" && canReturns) ? initialSheet as Sheet : "invoices");
   const [credits, setCredits] = useState<CreditNote[]>([]);
   const [returns, setReturns] = useState<ProductReturn[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -115,11 +116,11 @@ export function ClientInvoicesScreen({ initialSheet }: { initialSheet?: string }
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="VOS DOCUMENTS" title="Mes factures" />
     <Sheets
-      items={[{ key: "invoices", label: "Factures" }, { key: "credits", label: "Avoirs", count: credits.length || undefined }, ...(canReturns ? [{ key: "returns" as const, label: "Retours", count: returns.filter((item) => item.status !== "credited" && item.status !== "refused").length || undefined }] : [])]}
+      items={[{ key: "invoices", label: "Factures" }, { key: "account", label: "Mon compte" }, { key: "credits", label: "Avoirs", count: credits.length || undefined }, ...(canReturns ? [{ key: "returns" as const, label: "Retours", count: returns.filter((item) => item.status !== "credited" && item.status !== "refused").length || undefined }] : [])]}
       value={sheet}
       onChange={setSheet}
     />
-    {sheet === "invoices" ? <InvoiceList /> : sheet === "credits" ? <CreditsList credits={credits} refreshControl={refresh} onChanged={() => void reloadDocuments()} /> : <ClientReturnsList returns={returns} refreshControl={refresh} />}
+    {sheet === "invoices" ? <InvoiceList /> : sheet === "account" ? <ClientAccountSheet /> : sheet === "credits" ? <CreditsList credits={credits} refreshControl={refresh} onChanged={() => void reloadDocuments()} /> : <ClientReturnsList returns={returns} refreshControl={refresh} />}
   </View>;
 }
 

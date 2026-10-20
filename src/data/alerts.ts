@@ -33,6 +33,7 @@ export const alertKinds: Record<string, string> = {
   "return.new": "Retours",
   "return.update": "Retours",
   "credit.issued": "Avoirs",
+  "account.deposit": "Acomptes",
 };
 
 // Where an alert leads: the order itself, the conversation, the invoices or the account to validate.
@@ -51,6 +52,7 @@ export function alertTarget(event: string | undefined, orderId: string | null | 
     case "return.new": return { tab: "returns", params: order };
     case "return.update": return team ? { tab: "returns", params: order } : { tab: "invoices", params: { section: "returns", ...order } };
     case "credit.issued": return team ? { tab: "returns", params: { section: "credits" } } : { tab: "invoices", params: { section: "credits" } };
+    case "account.deposit": return { tab: "invoices", params: { section: "account" } };
     default: return { tab: "alerts" };
   }
 }
