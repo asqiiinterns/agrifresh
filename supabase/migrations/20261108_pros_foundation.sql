@@ -80,7 +80,10 @@ REVOKE ALL ON FUNCTION public.current_org_id() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.current_org_id() TO authenticated;
 
 -- The current administrator(s) become the platform's super-admin (same e-mail, same account).
-update public.profiles set is_superadmin = true where role = 'admin' and not is_superadmin;
+-- Only the first time: later administrators of a Pro (e.g. its Responsable) are not platform owners.
+update public.profiles set is_superadmin = true
+where role = 'admin' and not is_superadmin and org_id is null
+  and not exists (select 1 from public.profiles other where other.is_superadmin);
 
 -- ---------------------------------------------------------------------------
 -- Client records become relations: supplier Pro -> buyer Pro.

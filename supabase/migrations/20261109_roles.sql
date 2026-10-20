@@ -236,7 +236,7 @@ $$;
 -- keeps running the original supplier as its Responsable until its owner account is named
 -- (transitional: removed when the owner takes over).
 insert into public.member_roles (user_id, role_id, transitional)
-select pr.id, r.id, pr.role = 'admin'
+select pr.id, r.id, pr.is_superadmin
 from public.profiles pr
 join public.org_roles r on r.org_id = coalesce(pr.org_id, case when pr.role = 'admin' then public.legacy_org_id() end)
 join public.role_templates t on t.id = r.template_id
@@ -251,6 +251,46 @@ from public.user_permissions up
 join public.profiles pr on pr.id = up.user_id
 where pr.org_id is not null and exists (select 1 from public.permissions p where p.key = up.feature)
 on conflict (user_id, org_id, permission) do update set allowed = excluded.allowed;
+
+-- Until the role screens replace them, today's profile (supervisor, driver…) keeps giving the
+-- matching role in the account's Pro: a new or changed account is never left without rights.
+create or replace function public.legacy_role_template(p_role text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_role when 'admin' then 'supplier_owner' when 'supervisor' then 'supplier_supervisor' when 'staff' then 'supplier_supervisor'
+    when 'production' then 'supplier_production' when 'driver' then 'supplier_driver' when 'customer' then 'buyer_purchaser' end;
+$$;
+
+create or replace function public.profiles_sync_roles()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'UPDATE' and (old.role is distinct from new.role or old.org_id is distinct from new.org_id) then
+    delete from public.member_roles mr
+    using public.org_roles r join public.role_templates t on t.id = r.template_id
+    where mr.role_id = r.id and mr.user_id = new.id and not mr.transitional
+      and (r.org_id is distinct from new.org_id or t.key = public.legacy_role_template(old.role::text));
+  end if;
+  if new.is_superadmin or new.org_id is null then
+    return new;
+  end if;
+  perform public.org_install_roles(new.org_id);
+  insert into public.member_roles (user_id, role_id)
+  select new.id, r.id from public.org_roles r join public.role_templates t on t.id = r.template_id
+  where r.org_id = new.org_id and t.key = public.legacy_role_template(new.role::text)
+  on conflict (user_id, role_id) do nothing;
+  return new;
+end;
+$$;
+drop trigger if exists profiles_sync_roles on public.profiles;
+create trigger profiles_sync_roles after insert or update of role, org_id, is_superadmin on public.profiles
+  for each row execute function public.profiles_sync_roles();
 
 -- ---------------------------------------------------------------------------
 -- The new engine (not used by the app yet).
