@@ -24,7 +24,9 @@ function Badge({ style }: { style: { label: string; color: string; background: s
 }
 
 // Team: returns (request → acceptance → goods received → credit note) and credit notes.
-export function ReturnsScreen({ initialSheet }: { initialSheet?: string }) {
+export function ReturnsScreen({ initialSheet, initialOrderId }: { initialSheet?: string; initialOrderId?: string }) {
+  // Opened from an alert: the return(s) of that order only, until "Voir tous".
+  const [focusOrder, setFocusOrder] = useState<string | null>(initialOrderId ?? null);
   const [sheet, setSheet] = useState<"returns" | "credits">(initialSheet === "credits" ? "credits" : "returns");
   const [returns, setReturns] = useState<ProductReturn[]>([]);
   const [credits, setCredits] = useState<CreditNote[]>([]);
@@ -71,15 +73,15 @@ export function ReturnsScreen({ initialSheet }: { initialSheet?: string }) {
     <Sheets items={[{ key: "returns", label: "Retours", count: pending || undefined }, { key: "credits", label: "Avoirs", count: openCredits || undefined }]} value={sheet} onChange={setSheet} />
     {error ? <Text style={[ui.error, { paddingHorizontal: 14, marginTop: 8 }]}>{error}</Text> : null}
     {loading ? <Loading /> : sheet === "returns"
-      ? <ReturnsList returns={returns} refreshControl={refresh} onChanged={() => void reload()} />
+      ? <ReturnsList returns={focusOrder ? returns.filter((item) => item.order_id === focusOrder) : returns} focused={!!focusOrder} onShowAll={() => setFocusOrder(null)} refreshControl={refresh} onChanged={() => void reload()} />
       : <CreditsList credits={credits} refreshControl={refresh} onChanged={() => void reload()} manage />}
     <ReturnFormModal mode="staff" visible={creating === "return"} onClose={() => setCreating(null)} onSaved={() => { setCreating(null); void reload(); }} />
     <CreditFormModal visible={creating === "credit"} onClose={() => setCreating(null)} onSaved={() => { setCreating(null); setSheet("credits"); void reload(); }} />
   </View>;
 }
 
-function ReturnsList({ returns, refreshControl, onChanged }: { returns: ProductReturn[]; refreshControl: React.ReactElement<React.ComponentProps<typeof RefreshControl>>; onChanged: () => void }) {
-  const [state, setState] = useState("todo");
+function ReturnsList({ returns, refreshControl, onChanged, focused, onShowAll }: { returns: ProductReturn[]; refreshControl: React.ReactElement<React.ComponentProps<typeof RefreshControl>>; onChanged: () => void; focused?: boolean; onShowAll?: () => void }) {
+  const [state, setState] = useState(focused ? "all" : "todo");
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<DateFilterValue>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -108,7 +110,10 @@ function ReturnsList({ returns, refreshControl, onChanged }: { returns: ProductR
   }
 
   return <View style={{ flex: 1 }}>
-    <FilterBar search={search} onSearch={setSearch} placeholder="N°, client ou produit" filters={filters} />
+    {focused ? <View style={[ui.row, styles.focusBar]}>
+      <Text style={[ui.small, { flex: 1, color: colors.text }]}>Retour ouvert depuis une alerte.</Text>
+      <Button label="VOIR TOUS" variant="secondary" onPress={() => { setState("todo"); onShowAll?.(); }} />
+    </View> : <FilterBar search={search} onSearch={setSearch} placeholder="N°, client ou produit" filters={filters} />}
     <FlatList
       data={visible}
       keyExtractor={(item) => item.id}
@@ -143,17 +148,17 @@ function ReturnsList({ returns, refreshControl, onChanged }: { returns: ProductR
           </View> : null}
           <View style={[ui.wrapRow, { marginTop: 8 }]}>
             {item.status === "requested" ? <>
-              <Button label="ACCEPTER" onPress={() => void run(item, () => updateReturn(item.id, "approve", notes[item.id]))} busy={busy} style={{ flexGrow: 1 }} />
-              <Button label="REFUSER" variant="danger" onPress={() => void run(item, () => updateReturn(item.id, "refuse", notes[item.id]))} disabled={busy} />
+              <Button label="ACCEPTER" onPress={() => run(item, () => updateReturn(item.id, "approve", notes[item.id]))} busy={busy} style={{ flexGrow: 1 }} />
+              <Button label="REFUSER" variant="danger" onPress={() => run(item, () => updateReturn(item.id, "refuse", notes[item.id]))} disabled={busy} />
             </> : null}
             {item.status === "approved" ? <>
-              <Button label="MARCHANDISE REÇUE" onPress={() => void run(item, () => updateReturn(item.id, "receive", notes[item.id], restock[item.id] ?? true))} busy={busy} style={{ flexGrow: 1 }} />
-              <Button label="AVOIR SANS RETOUR" variant="secondary" onPress={() => void run(item, () => creditReturn(item.id, false), "Avoir créé en brouillon (onglet Avoirs).")} disabled={busy} />
-              <Button label="REFUSER" variant="danger" onPress={() => void run(item, () => updateReturn(item.id, "refuse", notes[item.id]))} disabled={busy} />
+              <Button label="MARCHANDISE REÇUE" onPress={() => run(item, () => updateReturn(item.id, "receive", notes[item.id], restock[item.id] ?? true))} busy={busy} style={{ flexGrow: 1 }} />
+              <Button label="AVOIR SANS RETOUR" variant="secondary" onPress={() => run(item, () => creditReturn(item.id, false), "Avoir créé en brouillon (onglet Avoirs).")} disabled={busy} />
+              <Button label="REFUSER" variant="danger" onPress={() => run(item, () => updateReturn(item.id, "refuse", notes[item.id]))} disabled={busy} />
             </> : null}
             {item.status === "received" ? <>
-              <Button label="ÉMETTRE L’AVOIR" onPress={() => void run(item, () => creditReturn(item.id, true), "Avoir émis et envoyé au client.")} busy={busy} style={{ flexGrow: 1 }} />
-              <Button label="AVOIR EN BROUILLON" variant="secondary" onPress={() => void run(item, () => creditReturn(item.id, false), "Avoir créé en brouillon (onglet Avoirs).")} disabled={busy} />
+              <Button label="ÉMETTRE L’AVOIR" onPress={() => run(item, () => creditReturn(item.id, true), "Avoir émis et envoyé au client.")} busy={busy} style={{ flexGrow: 1 }} />
+              <Button label="AVOIR EN BROUILLON" variant="secondary" onPress={() => run(item, () => creditReturn(item.id, false), "Avoir créé en brouillon (onglet Avoirs).")} disabled={busy} />
             </> : null}
           </View>
         </View>;
@@ -217,14 +222,14 @@ export function CreditsList({ credits, refreshControl, onChanged, manage }: { cr
             <Text style={ui.amount}>{formatPrice(item.total_ttc)}</Text>
           </View>
           <View style={[ui.wrapRow, { marginTop: 8 }]}>
-            <Button label="PDF" variant="secondary" onPress={() => void shareCreditNote(item).catch((cause: unknown) => notify("Avoir", errorMessage(cause, "Impossible de générer le PDF.")))} />
+            <Button label="PDF" variant="secondary" onPress={() => shareCreditNote(item).catch((cause: unknown) => notify("Avoir", errorMessage(cause, "Impossible de générer le PDF.")))} />
             {manage && item.status === "draft" ? <>
-              <Button label="ÉMETTRE" onPress={() => void run(item, "issue")} busy={busy} style={{ flexGrow: 1 }} />
+              <Button label="ÉMETTRE" onPress={() => run(item, "issue")} busy={busy} style={{ flexGrow: 1 }} />
               <Button label="SUPPRIMER" variant="danger" onPress={() => confirm(item, "delete")} disabled={busy} />
             </> : null}
             {manage && item.status === "issued" ? <>
-              <Button label="REMBOURSÉ" onPress={() => void run(item, "refunded")} busy={busy} />
-              <Button label="DÉDUIT D’UNE FACTURE" variant="secondary" onPress={() => void run(item, "deducted")} disabled={busy} />
+              <Button label="REMBOURSÉ" onPress={() => run(item, "refunded")} busy={busy} />
+              <Button label="DÉDUIT D’UNE FACTURE" variant="secondary" onPress={() => run(item, "deducted")} disabled={busy} />
             </> : null}
             {manage && ["issued", "refunded", "deducted"].includes(item.status) ? <Button label="ANNULER" variant="danger" onPress={() => confirm(item, "cancelled")} disabled={busy} /> : null}
           </View>
@@ -332,7 +337,7 @@ export function ReturnFormModal({ mode, visible, order, onClose, onSaved }: { mo
           </View>
           <Field label="Précisions (facultatif)" value={description} onChangeText={setDescription} multiline />
           {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-          <Button label={mode === "client" ? "ENVOYER LA DEMANDE" : "CRÉER LE RETOUR"} onPress={() => void save()} busy={busy} style={{ marginTop: 14 }} />
+          <Button label={mode === "client" ? "ENVOYER LA DEMANDE" : "CRÉER LE RETOUR"} onPress={() => save()} busy={busy} style={{ marginTop: 14 }} />
         </>}
       </ScrollView>
     </SafeAreaView>
@@ -432,8 +437,8 @@ function CreditFormModal({ visible, onClose, onSaved }: { visible: boolean; onCl
           <Text style={[ui.amount, { textAlign: "right", marginTop: 10 }]}>Total TTC : {formatPrice(total)}</Text>
           {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
           <View style={[ui.wrapRow, { marginTop: 12 }]}>
-            <Button label="ÉMETTRE L’AVOIR" onPress={() => void save(true)} busy={busy} style={{ flexGrow: 1 }} />
-            <Button label="BROUILLON" variant="secondary" onPress={() => void save(false)} disabled={busy} />
+            <Button label="ÉMETTRE L’AVOIR" onPress={() => save(true)} busy={busy} style={{ flexGrow: 1 }} />
+            <Button label="BROUILLON" variant="secondary" onPress={() => save(false)} disabled={busy} />
           </View>
         </>}
       </ScrollView>
@@ -463,5 +468,6 @@ export function ClientReturnsList({ refreshControl, returns }: { returns: Produc
 }
 
 const styles = StyleSheet.create({
+  focusBar: { marginHorizontal: 14, marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: "#f3f8f1", borderWidth: 1, borderColor: colors.green },
   link: { color: colors.green, fontSize: 12, fontWeight: "800" },
 });

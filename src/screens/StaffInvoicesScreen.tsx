@@ -129,7 +129,7 @@ export function StaffInvoicesScreen() {
     <FilterBar search={search} onSearch={setSearch} placeholder="Client ou numéro de facture" filters={listFilters} />
     {overdueCount ? <View style={[ui.row, { paddingHorizontal: 14, marginTop: 6 }]}>
       <Text style={[ui.small, { flex: 1, color: colors.danger, fontWeight: "800" }]}>{overdueCount} facture(s) en retard de paiement</Text>
-      <Button label="ENVOYER LES RELANCES" variant="secondary" onPress={() => void remindAll()} busy={reminding} />
+      <Button label="ENVOYER LES RELANCES" variant="secondary" onPress={() => remindAll()} busy={reminding} />
     </View> : null}
     {loading ? <Loading /> : <FlatList
       data={visible}
@@ -254,14 +254,14 @@ function InvoiceDetail({ invoice, onClose, onChanged, onEdit }: {
               <View style={[ui.row, ui.divider]}><Text style={ui.strong}>Net à payer TTC</Text><Text style={ui.amount}>{formatPrice(invoice.total_ttc)}</Text></View>
             </View>
           </View>
-          <Button label="VOIR LA FACTURE" onPress={() => void run("pdf", () => shareInvoice(invoice))} busy={busy === "pdf"} style={{ marginTop: 14 }} />
+          <Button label="VOIR LA FACTURE" onPress={() => run("pdf", () => shareInvoice(invoice))} busy={busy === "pdf"} style={{ marginTop: 14 }} />
           {invoice.status === "draft" ? <>
             <Button label="VALIDER LA FACTURE" onPress={issue} busy={busy === "issue"} disabled={invoice.orders.length === 0} style={{ marginTop: 10 }} />
             <Button label="MODIFIER LES BONS" variant="secondary" onPress={() => onEdit(invoice)} style={{ marginTop: 10 }} />
             <Button label="SUPPRIMER LE BROUILLON" variant="danger" onPress={remove} busy={busy === "delete"} style={{ marginTop: 10 }} />
           </> : null}
           {invoice.status === "issued" || invoice.status === "paid" ? <PaymentsCard invoice={invoice} onChanged={onChanged} /> : null}
-          {isOverdue(invoice) ? <Button label="RELANCER LE CLIENT" variant="secondary" onPress={() => void run("remind", async () => {
+          {isOverdue(invoice) ? <Button label="RELANCER LE CLIENT" variant="secondary" onPress={() => run("remind", async () => {
             const count = await sendReminders(invoice.client_id, true);
             notify("Relance", count ? "Rappel envoyé au client." : "Les relances sont désactivées pour ce client.");
             onChanged();
@@ -396,7 +396,7 @@ function InvoiceEditor({ editor, onClose, onSaved }: { editor: Editor | null; on
         </>}
         {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
         {orders.length ? <>
-          <Button label={draft ? "ENREGISTRER LE BROUILLON" : "ENREGISTRER EN BROUILLON"} variant="secondary" onPress={() => void save(false)} busy={busy === "draft"} disabled={selected.length === 0 || busy !== null} style={{ marginTop: 16 }} />
+          <Button label={draft ? "ENREGISTRER LE BROUILLON" : "ENREGISTRER EN BROUILLON"} variant="secondary" onPress={() => save(false)} busy={busy === "draft"} disabled={selected.length === 0 || busy !== null} style={{ marginTop: 16 }} />
           <Button label={`${draft ? "ENREGISTRER ET VALIDER" : "CRÉER ET VALIDER"} (${selected.length} BON${selected.length > 1 ? "S" : ""})`} onPress={() => void save(true)} busy={busy === "issue"} disabled={selected.length === 0 || busy !== null} style={{ marginTop: 10 }} />
         </> : null}
       </ScrollView>}
@@ -488,7 +488,7 @@ function PaymentsCard({ invoice, onChanged }: { invoice: InvoiceWithOrders; onCh
       <Text style={[ui.small, { marginTop: 6 }]}>Un montant inférieur au reste enregistre un règlement partiel ; complétez ensuite avec d’autres moyens de paiement.</Text>
       {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
       <View style={[ui.wrapRow, { marginTop: 10 }]}>
-        <Button label="ENREGISTRER" onPress={() => void save()} busy={busy} />
+        <Button label="ENREGISTRER" onPress={() => save()} busy={busy} />
         <Button label="ANNULER" variant="secondary" onPress={() => setAdding(false)} disabled={busy} />
       </View>
     </View> : null}

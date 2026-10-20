@@ -89,7 +89,7 @@ function ProfileCard({ session, account }: { session: Session; account: Account 
       </View> : null}
     </View>
     {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
-    <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 14 }} />
+    <Button label="SE DÉCONNECTER" onPress={() => signOut()} busy={busy} style={{ marginTop: 14 }} />
   </>;
 }
 
@@ -146,7 +146,7 @@ function PasswordCard() {
     <View style={{ marginTop: 10, gap: 8 }}>
       {message ? <Text style={ui.success}>{message}</Text> : null}
       {error ? <Text style={ui.error}>{error}</Text> : null}
-      <Button label="ENREGISTRER" onPress={() => void changePassword()} busy={busy} />
+      <Button label="ENREGISTRER" onPress={() => changePassword()} busy={busy} />
     </View>
   </View>;
 }

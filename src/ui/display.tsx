@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Per-device display preferences, set in Compte → Affichage.
-import type { Language } from "./i18n";
+import { setCurrentLanguage, type Language } from "./i18n";
 
 export type DisplaySettings = { fontScale: number; compactProducts: boolean; language: Language };
 
@@ -29,6 +29,7 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
+  setCurrentLanguage(settings.language);
   const value = useMemo<DisplayContextValue>(() => {
     const save = (next: DisplaySettings) => {
       setSettings(next);

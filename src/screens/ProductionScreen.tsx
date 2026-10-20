@@ -81,11 +81,11 @@ export function ProductionScreen() {
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`${toPrepare.length} COMMANDE(S) À PRÉPARER`} title="Production" />
     <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+      <View style={styles.tabs}>
         <Chip label="À préparer (totaux)" selected={tab === "totals"} onPress={() => setTab("totals")} />
         <Chip label={`File d’exécution (${queue.length})`} selected={tab === "queue"} onPress={() => setTab("queue")} />
         <Chip label="Historique" selected={tab === "history"} onPress={() => setTab("history")} />
-      </ScrollView>
+      </View>
     </View>
     <FilterBar search={search} onSearch={setSearch} placeholder="Produit, client ou n° de commande" filters={filters} />
     {error ? <Text style={[ui.error, { paddingHorizontal: 18, marginTop: 8 }]}>{error}</Text> : null}
@@ -226,13 +226,13 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
       </View>
       {item.customer_note ? <Text style={[ui.small, { color: colors.orange, marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
       {item.status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.green, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
-        : !canUpdate ? null : <Button label={item.status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => void advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
+        : !canUpdate ? null : <Button label={item.status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
     </View>}
   />;
 }
 
 const styles = StyleSheet.create({
-  tabs: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
+  tabs: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
   clientName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   totalBlock: { borderBottomWidth: 1, borderBottomColor: colors.line },
   clientList: { paddingLeft: 34, paddingBottom: 8, gap: 2 },

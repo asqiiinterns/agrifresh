@@ -45,7 +45,7 @@ export function FilterBar({ search, onSearch, placeholder, filters }: {
 
   return <View style={styles.wrap}>
     {onSearch ? <TextInput value={search} onChangeText={onSearch} placeholder={placeholder ?? "Rechercher"} placeholderTextColor={colors.muted} style={ui.input} clearButtonMode="while-editing" /> : null}
-    {filters.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.buttons} keyboardShouldPersistTaps="handled">
+    {filters.length ? <View style={styles.buttons}>
       {filters.map((filter, index) => {
         const active = isActive(filter);
         return <View key={filter.title} style={[styles.button, active && styles.buttonActive]}>
@@ -58,7 +58,7 @@ export function FilterBar({ search, onSearch, placeholder, filters }: {
         </View>;
       })}
       {activeCount > 1 ? <Pressable onPress={() => filters.forEach(reset)} style={styles.resetAll}><Text style={styles.resetText}>Tout effacer</Text></Pressable> : null}
-    </ScrollView> : null}
+    </View> : null}
     <FilterSheet filter={open === null ? null : filters.at(open) ?? null} onClose={() => setOpen(null)} />
   </View>;
 }
@@ -119,7 +119,7 @@ function FilterSheet({ filter, onClose }: { filter: Filter | null; onClose: () =
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 18, paddingTop: 10, gap: 8 },
-  buttons: { gap: 8, paddingVertical: 2 },
+  buttons: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 2 },
   button: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 20, backgroundColor: colors.white, maxWidth: 300 },
   buttonActive: { borderColor: colors.green, backgroundColor: "#eef5ec" },
   buttonMain: { flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 12, paddingRight: 10, paddingVertical: 8, flexShrink: 1 },

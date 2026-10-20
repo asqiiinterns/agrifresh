@@ -71,7 +71,7 @@ function OfflineBanner({ onSynced }: { onSynced: () => void }) {
   return <View style={[styles.offline, online && { backgroundColor: "#fffbef", borderColor: "#e3c46f" }]}>
     <Ionicons name={online ? "cloud-upload-outline" : "cloud-offline-outline"} size={18} color={online ? colors.amber : colors.danger} />
     <Text style={[ui.small, { flex: 1, color: colors.text }]}>{online ? `${pending} action(s) enregistrée(s) hors ligne à envoyer.` : `Hors ligne : vous pouvez continuer, ${pending ? `${pending} action(s) en attente` : "les actions seront envoyées au retour du réseau"}.`}</Text>
-    {online && pending ? <Button label="ENVOYER" variant="secondary" onPress={() => void sync()} busy={busy} /> : null}
+    {online && pending ? <Button label="ENVOYER" variant="secondary" onPress={() => sync()} busy={busy} /> : null}
   </View>;
 }
 
@@ -485,8 +485,8 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
         title="Accès à la caméra"
         body="La caméra sert uniquement à lire les QR codes des bons de livraison et des clients."
         action={permission.canAskAgain
-          ? <Button label="AUTORISER LA CAMÉRA" onPress={() => void requestPermission()} />
-          : <Button label="OUVRIR LES RÉGLAGES DU TÉLÉPHONE" onPress={() => void Linking.openSettings()} />}
+          ? <Button label="AUTORISER LA CAMÉRA" onPress={() => requestPermission()} />
+          : <Button label="OUVRIR LES RÉGLAGES DU TÉLÉPHONE" onPress={() => Linking.openSettings()} />}
       /> : <View style={{ flex: 1 }}>
         <View style={styles.cameraFrame}>
           <CameraView
@@ -501,7 +501,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
           <Text style={[ui.strong, { marginTop: 10, textAlign: "center" }]}>{busy ? "Vérification…" : instruction}</Text>
           {message && !error ? <Text style={[ui.success, { textAlign: "center", marginTop: 4 }]}>{message}</Text> : null}
           {error ? <Text style={[ui.error, { textAlign: "center", marginTop: 4 }]}>{error}</Text> : null}
-          {readyForClient && !rules?.qr ? <Button label="CONFIRMER LA REMISE" onPress={() => void deliver(null)} busy={busy} style={{ marginTop: 10 }} /> : null}
+          {readyForClient && !rules?.qr ? <Button label="CONFIRMER LA REMISE" onPress={() => deliver(null)} busy={busy} style={{ marginTop: 10 }} /> : null}
           {orderIds.length ? <Button label={signature?.value ? "✓ SIGNÉ · REFAIRE LA SIGNATURE" : needsSignature ? "FAIRE SIGNER (OBLIGATOIRE)" : "FAIRE SIGNER (FACULTATIF)"} variant="secondary" onPress={() => setSigning({ clientQr: null })} style={{ marginTop: 8 }} /> : null}
           {[...chosen.map((item) => ({ id: item.id, number: item.order_number, label: item.point_label })), ...notes.filter((note) => !chosen.some((item) => item.id === note.id)).map((note) => ({ id: note.id, number: note.order_number, label: note.point_label }))].map((line) => {
             const scanned = notes.some((note) => note.id === line.id);

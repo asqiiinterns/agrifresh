@@ -39,8 +39,8 @@ export function DocumentViewerHost() {
       <ScreenHeader eyebrow="APERÇU" title={document?.title ?? ""} right={<CloseButton onPress={() => setDocument(null)} />} />
       <View style={{ flex: 1 }}>{document ? <DocumentFrame html={document.html} /> : null}</View>
       <View style={[ui.row, { padding: 12, gap: 10 }]}>
-        <Button label={web ? "TÉLÉCHARGER LE PDF" : "IMPRIMER / PDF"} onPress={() => void run(web ? "download" : "print")} busy={busy === (web ? "download" : "print")} disabled={busy !== null} style={{ flex: 1 }} />
-        <Button label={web ? "IMPRIMER" : "PARTAGER"} variant="secondary" onPress={() => void run(web ? "print" : "share")} busy={busy === (web ? "print" : "share")} disabled={busy !== null} style={{ flex: 1 }} />
+        <Button label={web ? "TÉLÉCHARGER LE PDF" : "IMPRIMER / PDF"} onPress={() => run(web ? "download" : "print")} busy={busy === (web ? "download" : "print")} disabled={busy !== null} style={{ flex: 1 }} />
+        <Button label={web ? "IMPRIMER" : "PARTAGER"} variant="secondary" onPress={() => run(web ? "print" : "share")} busy={busy === (web ? "print" : "share")} disabled={busy !== null} style={{ flex: 1 }} />
       </View>
     </SafeAreaView>
   </Modal>;

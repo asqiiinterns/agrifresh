@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { KeyboardSpacer } from "../ui/KeyboardSpacer";
 import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
@@ -180,9 +181,12 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
     };
   }, [clientId, viewerIsStaff]);
 
+  const sendLock = useRef(false);
   async function send() {
     const body = draft.trim();
     if (!body && !file) return;
+    if (sendLock.current) return;
+    sendLock.current = true;
     setSending(true);
     setError("");
     try {
@@ -195,6 +199,7 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
     } catch (cause) {
       setError(errorMessage(cause, "Le message n’a pas pu être envoyé."));
     } finally {
+      sendLock.current = false;
       setSending(false);
     }
   }
@@ -231,6 +236,7 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
         <Text style={styles.sendText}>{sending ? "…" : "➤"}</Text>
       </Pressable>
     </View>
+    <KeyboardSpacer />
   </KeyboardAvoidingView>;
 }
 

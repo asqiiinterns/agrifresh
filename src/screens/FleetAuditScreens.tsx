@@ -70,7 +70,7 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
           <Switch value={form.values.active} onValueChange={set("active")} trackColor={{ true: colors.green, false: colors.line }} />
         </View>
         <View style={[ui.wrapRow, { marginTop: 10 }]}>
-          <Button label="ENREGISTRER" onPress={() => void save()} busy={busy} />
+          <Button label="ENREGISTRER" onPress={() => save()} busy={busy} />
           <Button label="ANNULER" variant="secondary" onPress={() => setForm(null)} disabled={busy} />
         </View>
       </View> : <Button label="+ AJOUTER UN VÉHICULE" onPress={() => setForm({ id: null, values: emptyVehicle })} style={{ marginTop: 10 }} />}
@@ -124,7 +124,7 @@ export function LocationPage({ onBack }: { onBack: () => void }) {
           <Text style={ui.strong}>{item.name}</Text>
           <Text style={ui.small}>{roleLabels[item.role as Role] ?? item.role} · {item.latitude !== null && item.updated_at ? `vu ${ago(item.updated_at)}${item.accuracy ? ` · ±${Math.round(item.accuracy)} m` : ""}` : item.consent ? "accord donné, pas encore de position" : "ne partage pas sa position"}</Text>
         </View>
-        {item.latitude !== null && item.longitude !== null ? <Button label="CARTE" variant="secondary" onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)} /> : null}
+        {item.latitude !== null && item.longitude !== null ? <Button label="CARTE" variant="secondary" onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)} /> : null}
       </View>}
     />}
   </View>;

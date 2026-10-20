@@ -48,8 +48,8 @@ export function alertTarget(event: string | undefined, orderId: string | null | 
     case "team.message": return { tab: "messages", params: { section: "team", page: conversationId ?? undefined } };
     case "invoice.issued": return { tab: "invoices" };
     case "account.pending": return { tab: "admin", params: { page: "accounts" } };
-    case "return.new": return { tab: "returns" };
-    case "return.update": return team ? { tab: "returns" } : { tab: "invoices", params: { section: "returns" } };
+    case "return.new": return { tab: "returns", params: order };
+    case "return.update": return team ? { tab: "returns", params: order } : { tab: "invoices", params: { section: "returns", ...order } };
     case "credit.issued": return team ? { tab: "returns", params: { section: "credits" } } : { tab: "invoices", params: { section: "credits" } };
     default: return { tab: "alerts" };
   }

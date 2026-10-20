@@ -95,11 +95,11 @@ export function LeavesScreen({ isAdmin }: { isAdmin: boolean }) {
         {sheet === "validate" ? <>
           <TextInput value={notes[item.id] ?? ""} onChangeText={(text) => setNotes({ ...notes, [item.id]: text })} placeholder="Commentaire (facultatif)" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 8 }]} />
           <View style={[ui.wrapRow, { marginTop: 8 }]}>
-            <Button label="ACCEPTER" onPress={() => void act(item, "approve")} style={{ flexGrow: 1 }} />
-            <Button label="REFUSER" variant="danger" onPress={() => void act(item, "refuse")} />
+            <Button label="ACCEPTER" onPress={() => act(item, "approve")} style={{ flexGrow: 1 }} />
+            <Button label="REFUSER" variant="danger" onPress={() => act(item, "refuse")} />
           </View>
         </> : null}
-        {item.mine && (item.status === "pending" || (item.status === "approved" && item.start_date > today)) ? <Button label="ANNULER LA DEMANDE" variant="secondary" onPress={() => void act(item, "cancel")} style={{ marginTop: 8, alignSelf: "flex-start" }} /> : null}
+        {item.mine && (item.status === "pending" || (item.status === "approved" && item.start_date > today)) ? <Button label="ANNULER LA DEMANDE" variant="secondary" onPress={() => act(item, "cancel")} style={{ marginTop: 8, alignSelf: "flex-start" }} /> : null}
       </View>}
     />}
   </View>;
@@ -140,7 +140,7 @@ function LeaveForm({ onSaved }: { onSaved: () => void }) {
     </View>
     <Field label="Motif / commentaire (facultatif)" value={note} onChangeText={setNote} multiline />
     {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-    <Button label="ENVOYER LA DEMANDE" onPress={() => void save()} busy={busy} style={{ marginTop: 14 }} />
+    <Button label="ENVOYER LA DEMANDE" onPress={() => save()} busy={busy} style={{ marginTop: 14 }} />
   </ScrollView>;
 }
 
@@ -196,7 +196,7 @@ export function IncidentsScreen() {
         {item.resolution ? <Text style={[ui.small, { color: colors.green }]}>Réglé : {item.resolution}</Text> : null}
         {manage && item.status === "open" ? <>
           <TextInput value={resolutions[item.id] ?? ""} onChangeText={(text) => setResolutions({ ...resolutions, [item.id]: text })} placeholder="Solution apportée" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 8 }]} />
-          <Button label="CLÔTURER" onPress={() => void resolve(item)} style={{ marginTop: 8, alignSelf: "flex-start" }} />
+          <Button label="CLÔTURER" onPress={() => resolve(item)} style={{ marginTop: 8, alignSelf: "flex-start" }} />
         </> : null}
       </View>}
     />}
@@ -246,6 +246,6 @@ function IncidentForm({ onSaved }: { onSaved: () => void }) {
     </> : null}
     <Field label="Description (lieu, client, ce qui s’est passé)" value={description} onChangeText={setDescription} multiline />
     {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-    <Button label="SIGNALER" onPress={() => void save()} busy={busy} style={{ marginTop: 14 }} />
+    <Button label="SIGNALER" onPress={() => save()} busy={busy} style={{ marginTop: 14 }} />
   </ScrollView>;
 }

@@ -340,7 +340,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     <View style={styles.actions}>
       {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
       {position && can("orders.plan") ? <Button label="PLANIFIER" variant="secondary" onPress={() => onPlan("move")} /> : null}
-      {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => void printDeliveryNote()} /> : null}
+      {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => printDeliveryNote()} /> : null}
     </View>
     {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En route : en attente de la remise au client par le livreur.</Text> : null}
     {order.status === "awaiting_client" ? <Text style={[ui.small, { marginTop: 6, color: "#9a4f0f" }]}>En attente de la reconfirmation du client.</Text> : null}
@@ -400,9 +400,9 @@ function ClaimsView({ claims, refreshControl, onChanged }: { claims: Claim[]; re
             multiline
           />
           <View style={styles.actions}>
-            {item.status === "open" ? <Button label="PRENDRE EN CHARGE" variant="secondary" onPress={() => void change(item, "in_progress")} disabled={busyId === item.id} /> : null}
-            <Button label="RÉSOUDRE" onPress={() => void change(item, "resolved")} busy={busyId === item.id} style={{ flexGrow: 1 }} />
-            <Button label="REJETER" variant="danger" onPress={() => void change(item, "rejected")} disabled={busyId === item.id} />
+            {item.status === "open" ? <Button label="PRENDRE EN CHARGE" variant="secondary" onPress={() => change(item, "in_progress")} disabled={busyId === item.id} /> : null}
+            <Button label="RÉSOUDRE" onPress={() => change(item, "resolved")} busy={busyId === item.id} style={{ flexGrow: 1 }} />
+            <Button label="REJETER" variant="danger" onPress={() => change(item, "rejected")} disabled={busyId === item.id} />
           </View>
         </> : null}
       </View>;

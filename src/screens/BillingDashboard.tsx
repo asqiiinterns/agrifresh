@@ -8,9 +8,10 @@ import { invoicesCsv, paymentsCsv, salesJournalCsv, saveCsv } from "../data/expo
 import { presets, type DateFilterValue } from "../ui/dateFilter";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { appLocale } from "../ui/i18n";
 
 const monthKey = (value: string) => value.slice(0, 7);
-const monthLabel = (key: string) => new Date(`${key}-15T12:00:00`).toLocaleDateString("fr-TN", { month: "short" });
+const monthLabel = (key: string) => new Date(`${key}-15T12:00:00`).toLocaleDateString(appLocale(), { month: "short" });
 const shortAmount = (value: number) => value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)} k` : value.toFixed(0);
 
 // Billing figures: headline tiles, then one single-series chart per question (no dual axis).
@@ -88,9 +89,9 @@ function ExportsCard({ invoices, credits }: { invoices: InvoiceWithOrders[]; cre
       <Chip label="Tout" selected={period === null} onPress={() => setPeriod(null)} />
     </View>
     <View style={[ui.wrapRow, { marginTop: 8 }]}>
-      <Button label="FACTURES" variant="secondary" busy={busy === "invoices"} onPress={() => void run("invoices", "factures", () => invoicesCsv(invoices, from, to))} />
-      <Button label="RÈGLEMENTS" variant="secondary" busy={busy === "payments"} onPress={() => void run("payments", "reglements", () => paymentsCsv(invoices, from, to))} />
-      <Button label="JOURNAL DES VENTES" variant="secondary" busy={busy === "journal"} onPress={() => void run("journal", "journal-ventes", () => salesJournalCsv(invoices, credits, from, to))} />
+      <Button label="FACTURES" variant="secondary" busy={busy === "invoices"} onPress={() => run("invoices", "factures", () => invoicesCsv(invoices, from, to))} />
+      <Button label="RÈGLEMENTS" variant="secondary" busy={busy === "payments"} onPress={() => run("payments", "reglements", () => paymentsCsv(invoices, from, to))} />
+      <Button label="JOURNAL DES VENTES" variant="secondary" busy={busy === "journal"} onPress={() => run("journal", "journal-ventes", () => salesJournalCsv(invoices, credits, from, to))} />
     </View>
     <Text style={[ui.small, { marginTop: 6 }]}>Journal : 411 clients, 706 ventes, 4457 TVA collectée, 4458 timbre, 709 avoirs. À faire valider par votre comptable.</Text>
   </View>;

@@ -397,7 +397,7 @@ function NumberingPage({ header }: { header: React.ReactNode }) {
           <Text style={[ui.body, { flex: 1 }]}>Repartir à 1 chaque année</Text>
           <Switch value={item.yearly_reset} onValueChange={(value) => patch(item.doc_type, { yearly_reset: value })} trackColor={{ true: colors.green, false: colors.line }} />
         </View>
-        <Button label="ENREGISTRER" variant="secondary" onPress={() => void save(item)} busy={busy === item.doc_type} style={{ marginTop: 8, alignSelf: "flex-start" }} />
+        <Button label="ENREGISTRER" variant="secondary" onPress={() => save(item)} busy={busy === item.doc_type} style={{ marginTop: 8, alignSelf: "flex-start" }} />
       </View>)}
     </ScrollView>}
   </View>;

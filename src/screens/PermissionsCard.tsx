@@ -77,8 +77,8 @@ export function PermissionsCard() {
           <Text style={ui.small}>{access.use}</Text>
         </View>
         {state === "granted" || state === "blocked"
-          ? <Button label="RÉGLAGES" variant="secondary" onPress={() => void Linking.openSettings()} />
-          : <Button label="AUTORISER" variant="secondary" onPress={() => void access.ask().finally(() => void refresh())} />}
+          ? <Button label="RÉGLAGES" variant="secondary" onPress={() => Linking.openSettings()} />
+          : <Button label="AUTORISER" variant="secondary" onPress={() => access.ask().finally(() => void refresh())} />}
       </View>;
     })}
   </View></View>;

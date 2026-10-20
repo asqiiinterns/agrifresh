@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Text } from "./Text";
 import { toDayKey } from "./components";
 import { colors, ui } from "./theme";
+import { appLocale } from "./i18n";
 
 const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
 
@@ -37,7 +38,7 @@ export function Calendar({ from, to, onChange }: { from?: string; to?: string; o
     onChange(a, b);
   }
 
-  const title = month.toLocaleDateString("fr-TN", { month: "long", year: "numeric" });
+  const title = month.toLocaleDateString(appLocale(), { month: "long", year: "numeric" });
   const rows = Array.from({ length: days.length / 7 }, (_, index) => days.slice(index * 7, index * 7 + 7));
 
   return <View>

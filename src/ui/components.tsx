@@ -1,23 +1,24 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, TextInput } from "./Text";
 import { colors, ui } from "./theme";
+import { appLocale } from "./i18n";
 
 export const formatPrice = (amount: number | string) =>
-  `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(amount))} TND`;
+  `${new Intl.NumberFormat(appLocale(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(amount))} TND`;
 
 export const formatQuantity = (quantity: number | string) =>
-  new Intl.NumberFormat("fr-TN", { maximumFractionDigits: 3 }).format(Number(quantity));
+  new Intl.NumberFormat(appLocale(), { maximumFractionDigits: 3 }).format(Number(quantity));
 
 // Dates without a time part ("2026-10-18") are calendar days, not UTC instants.
 export function formatDay(value: string | Date, options: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" }) {
   const date = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
-  return date.toLocaleDateString("fr-TN", options);
+  return date.toLocaleDateString(appLocale(), options);
 }
 
 export const formatDateTime = (value: string) =>
-  new Date(value).toLocaleString("fr-TN", { dateStyle: "medium", timeStyle: "short" });
+  new Date(value).toLocaleString(appLocale(), { dateStyle: "medium", timeStyle: "short" });
 
 export const toDayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -98,21 +99,40 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
   </Pressable>;
 }
 
+// Anti double-submit: while the action returned by onPress runs (or for a short moment after a
+// synchronous one), further taps are ignored and the button shows a spinner.
 export function Button({ label, onPress, variant = "primary", busy, disabled, style }: {
   label: string;
-  onPress: () => void;
+  onPress: () => unknown;
   variant?: "primary" | "secondary" | "danger";
   busy?: boolean;
   disabled?: boolean;
   style?: ComponentProps<typeof View>["style"];
 }) {
   const primary = variant === "primary";
+  const locked = useRef(false);
+  const [running, setRunning] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+  function press() {
+    if (locked.current || busy || disabled) return;
+    locked.current = true;
+    let result: unknown;
+    try { result = onPress(); } catch (cause) { locked.current = false; throw cause; }
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      setRunning(true);
+      void Promise.resolve(result).catch(() => undefined).finally(() => { locked.current = false; if (mounted.current) setRunning(false); });
+    } else {
+      setTimeout(() => { locked.current = false; }, 600);
+    }
+  }
+  const waiting = busy || running;
   return <Pressable
-    onPress={onPress}
-    disabled={disabled || busy}
-    style={[primary ? ui.primaryButton : ui.secondaryButton, variant === "danger" && ui.dangerButton, (disabled || busy) && ui.disabled, style]}
+    onPress={press}
+    disabled={disabled || waiting}
+    style={[primary ? ui.primaryButton : ui.secondaryButton, variant === "danger" && ui.dangerButton, (disabled || waiting) && ui.disabled, style]}
   >
-    {busy ? <ActivityIndicator color={primary ? colors.white : colors.green} /> : <Text style={[primary ? ui.primaryButtonText : ui.secondaryButtonText, variant === "danger" && ui.dangerButtonText]}>{label}</Text>}
+    {waiting ? <ActivityIndicator color={primary ? colors.white : colors.green} /> : <Text style={[primary ? ui.primaryButtonText : ui.secondaryButtonText, variant === "danger" && ui.dangerButtonText]}>{label}</Text>}
   </Pressable>;
 }
 
@@ -131,7 +151,7 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
 // Sheets at the top of a screen (e.g. "En cours" / "Clôturées"), as a segmented control.
 export function Sheets<K extends string>({ items, value, onChange }: { items: { key: K; label: string; count?: number }[]; value: K; onChange: (key: K) => void }) {
   return <View style={local.sheetsWrap}>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={local.sheets}>
+    <View style={local.sheets}>
       {items.map((item) => {
         const selected = item.key === value;
         return <Pressable key={item.key} onPress={() => onChange(item.key)} style={[local.sheet, selected && local.sheetSelected]} accessibilityRole="tab" accessibilityState={{ selected }}>
@@ -139,7 +159,7 @@ export function Sheets<K extends string>({ items, value, onChange }: { items: { 
           {item.count !== undefined ? <View style={[local.sheetCount, selected && local.sheetCountSelected]}><Text style={[local.sheetCountText, selected && { color: colors.green }]}>{item.count}</Text></View> : null}
         </Pressable>;
       })}
-    </ScrollView>
+    </View>
   </View>;
 }
 
@@ -201,7 +221,7 @@ const local = StyleSheet.create({
   progressBar: { height: 4, borderRadius: 2 },
   progressLabel: { color: colors.muted, fontSize: 9, marginTop: 3, textAlign: "center" },
   sheetsWrap: { borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.paper },
-  sheets: { paddingHorizontal: 14, paddingVertical: 6, gap: 6 },
+  sheets: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 14, paddingVertical: 6, gap: 6 },
   sheet: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   sheetSelected: { backgroundColor: colors.green },
   sheetText: { color: "#5f685d", fontSize: 12, fontWeight: "700" },

@@ -159,7 +159,7 @@ function ProductEditor({ product, visible, categories, onClose, onSaved }: {
           </View>
 
           {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-          <Button label="ENREGISTRER" onPress={() => void save()} busy={busy} style={{ marginTop: 16 }} />
+          <Button label="ENREGISTRER" onPress={() => save()} busy={busy} style={{ marginTop: 16 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

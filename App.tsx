@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Linking, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
 import { Text } from "./src/ui/Text";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
@@ -9,7 +9,7 @@ import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
-import { askPushOnce, hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
+import { askPushOnce, hasPushToken, onAlertTapped, registerForPush, showLocalAlert, unregisterPush } from "./src/notifications";
 import { DecideScreen } from "./src/screens/DecideScreen";
 import { decisionCount, fetchDecisionBoard } from "./src/data/decisions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
@@ -25,6 +25,7 @@ import { StaffClientsScreen } from "./src/screens/StaffClientsScreen";
 import { StaffInvoicesScreen } from "./src/screens/StaffInvoicesScreen";
 import { ClientInvoicesScreen } from "./src/screens/ClientInvoicesScreen";
 import { DocumentViewerHost } from "./src/ui/DocumentViewer";
+import { DialogHost } from "./src/ui/DialogHost";
 import { DriverScreen } from "./src/screens/DriverScreen";
 import { ClientMessagesScreen, StaffMessagesScreen } from "./src/screens/MessagesScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -333,14 +334,14 @@ function Main({ session }: { session: Session }) {
       if (data.id) void markAlertsRead([data.id]).then(alerts.refresh).catch(() => {});
       void (data.event === "team.message" && data.id ? fetchAlertConversation(data.id).catch(() => null) : Promise.resolve(null)).then((conversationId) => {
         const target = alertTarget(data.event, data.order_id, account?.role !== "customer", conversationId);
-        navigate(target.tab, target.params);
+        navigate(target.tab, { ...target.params, back: "alerts" });
       });
     });
   }, [isActive, session.user.id, navigate, account?.role]);
 
   if (!account) {
     return accountError
-      ? <EmptyState title="Profil indisponible" body={accountError} action={<Button label="RÉESSAYER" onPress={() => void loadAccount()} />} />
+      ? <EmptyState title="Profil indisponible" body={accountError} action={<Button label="RÉESSAYER" onPress={() => loadAccount()} />} />
       : <Loading label="Chargement de votre espace…" />;
   }
 
@@ -353,7 +354,7 @@ function Main({ session }: { session: Session }) {
       suspended: { title: "Compte suspendu", body: "Votre accès est suspendu par AgriFresh. Contactez l’administrateur pour le réactiver." },
     }[status];
     return <View style={{ flex: 1 }}>
-      <EmptyState title={message.title} body={message.body} action={<Button label="ACTUALISER" variant="secondary" onPress={() => void loadAccount()} />} />
+      <EmptyState title={message.title} body={message.body} action={<Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} />} />
       <AccountScreen session={session} account={account} />
     </View>;
   }
@@ -390,7 +391,7 @@ function Main({ session }: { session: Session }) {
       case "stats":
         return <StatsScreen />;
       case "returns":
-        return <ReturnsScreen initialSheet={nav.params?.section} />;
+        return <ReturnsScreen initialSheet={nav.params?.section} initialOrderId={nav.params?.orderId} />;
       case "deliveries":
         return <DriverScreen />;
       case "alerts":
@@ -402,7 +403,7 @@ function Main({ session }: { session: Session }) {
           {kind === "unlinked" ? <View style={[ui.card, { marginHorizontal: 18, marginTop: 18 }]}>
             <Text style={ui.strong}>Compte non rattaché</Text>
             <Text style={[ui.body, { marginTop: 6 }]}>Aucune fiche client active ne correspond à {session.user.email}. Demandez à AgriFresh de créer ou d’activer votre fiche avec cette adresse, puis touchez « Actualiser ».</Text>
-            <Button label="ACTUALISER" variant="secondary" onPress={() => void loadAccount()} style={{ marginTop: 12 }} />
+            <Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} style={{ marginTop: 12 }} />
           </View> : null}
           <AccountScreen session={session} account={account} sections={overflow} initialSheet={accountSheet} onLayoutChanged={() => void loadAccount()} />
         </View>;
@@ -413,18 +414,22 @@ function Main({ session }: { session: Session }) {
   const topTabs = tabs.filter((item) => TOP_KEYS.includes(item.key));
 
   return <PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
-    {topTabs.length ? <View style={styles.topBar}>
+    <View style={styles.topBar}>
       <Text style={styles.brand}>AgriFresh</Text>
       <View style={{ flex: 1 }} />
       {topTabs.map((item) => {
         const selected = item.key === current;
         const badge = badgeFor(item.key);
+        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} onPress={() => setTab(item.key)} />;
         return <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
           <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.green : colors.text} />
           {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
         </Pressable>;
       })}
-    </View> : null}
+      <Pressable onPress={confirmSignOut} style={styles.topIcon} accessibilityLabel="Se déconnecter" hitSlop={6}>
+        <Ionicons name="log-out-outline" size={22} color={colors.danger} />
+      </Pressable>
+    </View>
     {nav.params?.back && nav.params.back !== current ? <Pressable onPress={() => setTab(nav.params!.back!)} style={styles.backBar}>
       <Ionicons name="chevron-back" size={16} color={colors.green} />
       <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
@@ -459,11 +464,50 @@ export default function App() {
         : session ? <Main session={session} />
         : <AuthScreen />}
       <DocumentViewerHost />
+      <DialogHost />
     </SafeAreaView>
   </SafeAreaProvider></DisplayProvider>;
 }
 
+// Sign out from anywhere (top bar), after a confirmation.
+function confirmSignOut() {
+  notify("Se déconnecter", "Voulez-vous vous déconnecter de AgriFresh ?", [
+    { text: "Annuler", style: "cancel" },
+    { text: "Se déconnecter", style: "destructive", onPress: () => {
+      void (async () => {
+        await unregisterPush().catch(() => {});
+        await supabase?.auth.signOut();
+      })();
+    } },
+  ]);
+}
+
+// Messages: larger than the other icons, and pulses (orange) while messages are unread.
+function MessagesButton({ selected, unread, onPress }: { selected: boolean; unread: number; onPress: () => void }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!unread) { pulse.setValue(0); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(pulse, { toValue: 0, duration: 650, useNativeDriver: Platform.OS !== "web" }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [unread > 0]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
+  return <Pressable onPress={onPress} style={[styles.messagesButton, selected && styles.tabPillActive]} accessibilityLabel={`Messages${unread ? `, ${unread} non lu(s)` : ""}`} hitSlop={6}>
+    {unread ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.messagesGlow, { opacity: glow }]} /> : null}
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Ionicons name={selected || unread ? "chatbubbles" : "chatbubbles-outline"} size={28} color={unread ? colors.white : selected ? colors.green : colors.text} />
+    </Animated.View>
+    {unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
+  </Pressable>;
+}
+
 const styles = StyleSheet.create({
+  messagesButton: { width: 52, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  messagesGlow: { borderRadius: 20, backgroundColor: colors.orange },
   backBar: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#f3f8f1", borderBottomWidth: 1, borderBottomColor: colors.line },
   backText: { color: colors.green, fontSize: 12, fontWeight: "800" },
   topBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },

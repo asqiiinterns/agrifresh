@@ -95,7 +95,7 @@ export function DecideScreen({ isAdmin, onCount }: { isAdmin: boolean; onCount: 
         <ListGroup title={`Factures en retard (${board.billing.overdue.length})`}>
           {board.billing.overdue.map((item) => <ListRow key={item.invoice_id} icon="time-outline" title={`${item.business_name} · ${item.invoice_number}`} detail={`Reste ${formatPrice(item.balance)} · ${item.days_late} j de retard${item.reminder_count ? ` · ${item.reminder_count} relance(s)` : ""}${item.reminders ? "" : " · relances désactivées"}`} onPress={() => navigate("invoices", { back: "decide" })} />)}
         </ListGroup>
-        <Button label="ENVOYER LES RELANCES" variant="secondary" onPress={() => void remind()} busy={reminding} style={{ marginTop: 8, alignSelf: "flex-start" }} />
+        <Button label="ENVOYER LES RELANCES" variant="secondary" onPress={() => remind()} busy={reminding} style={{ marginTop: 8, alignSelf: "flex-start" }} />
       </> : null}
 
       {board.returns.length ? <ListGroup title={`Retours à traiter (${board.returns.length})`}>

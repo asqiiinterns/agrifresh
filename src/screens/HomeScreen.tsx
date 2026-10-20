@@ -17,6 +17,7 @@ import { allowedFor, defaultLayout, homeShortcuts, homeTiles } from "../ui/homeC
 import { useNav } from "../ui/navigation";
 import { colors, ui } from "../ui/theme";
 import { HomeEditor } from "./HomeEditor";
+import { appLocale } from "../ui/i18n";
 
 // Home: the figures that need attention and the user's shortcuts, both configurable.
 export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChanged }: {
@@ -118,7 +119,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     : key === "alerts" || key === "c_alerts" ? unreadAlerts
     : values[key] ?? 0;
 
-  const today = new Date().toLocaleDateString("fr-TN", { weekday: "long", day: "numeric", month: "long" });
+  const today = new Date().toLocaleDateString(appLocale(), { weekday: "long", day: "numeric", month: "long" });
   const name = audience === "customer" ? account.client?.business_name : account.full_name?.split(" ")[0];
 
   return <View style={ui.screen}>

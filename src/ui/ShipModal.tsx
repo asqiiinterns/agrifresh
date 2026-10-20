@@ -79,7 +79,7 @@ export function ShipModal({ orders, onClose, onShipped }: {
         <Text style={[ui.fieldLabel, { marginTop: 14 }]}>Commandes</Text>
         <Text style={ui.body}>{(orders ?? []).map((order) => `#${order.order_number} ${order.business_name}`).join("\n")}</Text>
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-        <Button label={`EXPÉDIER ${orders?.length ?? 0} COMMANDE(S)`} onPress={() => void ship()} busy={busy} style={{ marginTop: 14 }} />
+        <Button label={`EXPÉDIER ${orders?.length ?? 0} COMMANDE(S)`} onPress={() => ship()} busy={busy} style={{ marginTop: 14 }} />
       </ScrollView>}
     </SafeAreaView>
   </Modal>;

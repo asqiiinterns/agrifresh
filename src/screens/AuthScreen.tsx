@@ -78,7 +78,7 @@ export function AuthScreen() {
       <View style={{ marginTop: 16, gap: 10 }}>
         {message ? <Text style={ui.success}>{message}</Text> : null}
         {error ? <Text style={ui.error}>{error}</Text> : null}
-        <Button label={mode === "signin" ? "SE CONNECTER" : mode === "activate" ? "CRÉER MON COMPTE" : "ENVOYER LE LIEN"} onPress={() => void submit()} busy={busy} />
+        <Button label={mode === "signin" ? "SE CONNECTER" : mode === "activate" ? "CRÉER MON COMPTE" : "ENVOYER LE LIEN"} onPress={() => submit()} busy={busy} />
         {mode === "signin" ? <Button label="Mot de passe oublié ?" variant="secondary" onPress={() => switchMode("reset")} />
           : mode === "reset" ? <Button label="Retour à la connexion" variant="secondary" onPress={() => switchMode("signin")} /> : null}
       </View>

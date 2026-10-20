@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -139,12 +139,12 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un produit" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
       <Button label="REPRENDRE" variant="secondary" onPress={() => setRepeatVisible(true)} disabled={loading} />
     </View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
+    <View style={styles.categories}>
       {catalog.some((product) => product.isNew) ? <Chip label="✦ Nouveautés" selected={category === "Nouveautés"} onPress={() => setCategory("Nouveautés")} /> : null}
       {categories.map((item) => <Chip key={item} label={item} selected={category === item} onPress={() => setCategory(item)} />)}
-    </ScrollView>
+    </View>
 
-    {loading ? <Loading label="Chargement des produits…" /> : loadError ? <EmptyState title="Catalogue indisponible" body={loadError} action={<Button label="RÉESSAYER" onPress={() => void loadCatalog()} />} /> : <FlatList
+    {loading ? <Loading label="Chargement des produits…" /> : loadError ? <EmptyState title="Catalogue indisponible" body={loadError} action={<Button label="RÉESSAYER" onPress={() => loadCatalog()} />} /> : <FlatList
       data={visibleProducts}
       keyExtractor={(product) => product.id}
       contentContainerStyle={[ui.content, { paddingTop: 4 }]}
@@ -233,6 +233,7 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
   const [day, setDay] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -242,10 +243,13 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
   }, [visible, points]);
 
   async function submit() {
+    // A quick double tap must not send the order twice (the button only greys out after re-render).
+    if (sending.current) return;
     if (points.length > 1 && !pointId) {
       setError("Choisissez le point de livraison.");
       return;
     }
+    sending.current = true;
     setBusy(true);
     setError("");
     try {
@@ -264,6 +268,7 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
     } catch (cause) {
       setError(errorMessage(cause, "La commande n’a pas pu être envoyée."));
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
@@ -294,15 +299,15 @@ function ReviewModal({ visible, client, lines, total, placeOrder, staff, onClose
 
           <View style={ui.card}>
             <Text style={ui.strong}>Livraison souhaitée</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[ui.wrapRow, { flexWrap: "nowrap", marginTop: 10 }]}>
+            <View style={[ui.wrapRow, { marginTop: 10 }]}>
               <Chip label="Dès que possible" selected={day === null} onPress={() => setDay(null)} />
               {days.map((key, index) => <Chip key={key} label={index === 0 ? "Aujourd’hui" : index === 1 ? "Demain" : formatDay(key)} selected={day === key} onPress={() => setDay(key)} />)}
-            </ScrollView>
+            </View>
             <Field label="Remarque (facultatif)" value={note} onChangeText={setNote} multiline placeholder="Horaires, consignes…" />
           </View>
 
           {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-          <Button label="ENVOYER LA COMMANDE" onPress={() => void submit()} busy={busy} style={{ marginTop: 16 }} />
+          <Button label="ENVOYER LA COMMANDE" onPress={() => submit()} busy={busy} style={{ marginTop: 16 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -360,7 +365,7 @@ const styles = StyleSheet.create({
   checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
   checkmark: { color: colors.white, fontWeight: "800" },
   toolbar: { flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingTop: 12, alignItems: "center" },
-  categories: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
+  categories: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
   productRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginTop: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   productRowSelected: { borderColor: colors.green, backgroundColor: "#f3f8f1" },
   productImage: { width: 54, height: 54, borderRadius: 8 },

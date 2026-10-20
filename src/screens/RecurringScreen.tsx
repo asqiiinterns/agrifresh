@@ -99,7 +99,7 @@ export function RecurringModal({ visible, order, existing, onClose, onSaved }: {
         </View>
         <Text style={[ui.small, { marginTop: 6 }]}>Chaque commande arrive comme une commande normale : elle est acceptée par AgriFresh, et vous pouvez la modifier ou l’annuler.</Text>
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-        <Button label="ENREGISTRER" onPress={() => void save()} busy={busy} disabled={weekdays.length === 0 || items.length === 0} style={{ marginTop: 14 }} />
+        <Button label="ENREGISTRER" onPress={() => save()} busy={busy} disabled={weekdays.length === 0 || items.length === 0} style={{ marginTop: 14 }} />
       </ScrollView>
     </SafeAreaView>
   </Modal>;

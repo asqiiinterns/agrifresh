@@ -11,6 +11,7 @@ import { Button, CloseButton, Field, Loading, ScreenHeader, formatDay, statusLab
 import { useNav, type IconName, type NavParams, type TabKey } from "../ui/navigation";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { appLocale } from "../ui/i18n";
 
 type CalendarEvent = { key: string; day: string; time?: string; title: string; detail?: string; color: string; icon: IconName; tab?: TabKey; params?: NavParams; reminder?: Reminder };
 const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -54,7 +55,7 @@ export function CalendarScreen() {
     }
     for (const reminder of reminders) {
       const at = new Date(reminder.remind_at);
-      next.push({ key: `r-${reminder.id}`, day: toDayKey(at), time: at.toLocaleTimeString("fr-TN", { hour: "2-digit", minute: "2-digit" }), title: reminder.title, detail: reminder.note ?? undefined, color: colors.orange, icon: "alarm-outline", reminder });
+      next.push({ key: `r-${reminder.id}`, day: toDayKey(at), time: at.toLocaleTimeString(appLocale(), { hour: "2-digit", minute: "2-digit" }), title: reminder.title, detail: reminder.note ?? undefined, color: colors.orange, icon: "alarm-outline", reminder });
     }
     setEvents(next);
     setLoading(false);
@@ -100,7 +101,7 @@ export function CalendarScreen() {
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
       <View style={[ui.row, { marginTop: 10 }]}>
         <Pressable onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} hitSlop={10}><Ionicons name="chevron-back" size={22} color={colors.green} /></Pressable>
-        <Text style={[ui.strong, { textTransform: "capitalize" }]}>{month.toLocaleDateString("fr-TN", { month: "long", year: "numeric" })}</Text>
+        <Text style={[ui.strong, { textTransform: "capitalize" }]}>{month.toLocaleDateString(appLocale(), { month: "long", year: "numeric" })}</Text>
         <Pressable onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} hitSlop={10}><Ionicons name="chevron-forward" size={22} color={colors.green} /></Pressable>
       </View>
       <View style={styles.week}>{WEEKDAYS.map((day, index) => <Text key={index} style={styles.weekday}>{day}</Text>)}</View>
@@ -159,7 +160,7 @@ function ReminderModal({ visible, day, onClose, onSaved }: { visible: boolean; d
     setError("");
     try {
       await createReminder({ title, note, remindAt: at });
-      notify("Rappel enregistré", `Une alarme sonnera sur ce téléphone le ${at.toLocaleString("fr-TN", { dateStyle: "medium", timeStyle: "short" })}.`);
+      notify("Rappel enregistré", `Une alarme sonnera sur ce téléphone le ${at.toLocaleString(appLocale(), { dateStyle: "medium", timeStyle: "short" })}.`);
       onSaved();
     } catch (cause) {
       setError(errorMessage(cause, "Le rappel n’a pas pu être enregistré. La migration 20261103 est-elle exécutée ?"));
@@ -179,7 +180,7 @@ function ReminderModal({ visible, day, onClose, onSaved }: { visible: boolean; d
         </View>
         <Field label="Note (facultatif)" value={note} onChangeText={setNote} multiline />
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-        <Button label="ENREGISTRER LE RAPPEL" onPress={() => void save()} busy={busy} style={{ marginTop: 14 }} />
+        <Button label="ENREGISTRER LE RAPPEL" onPress={() => save()} busy={busy} style={{ marginTop: 14 }} />
       </ScrollView>
     </SafeAreaView>
   </Modal>;

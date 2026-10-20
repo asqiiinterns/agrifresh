@@ -53,7 +53,7 @@ export function MyNotificationsCard() {
         <Switch value={prefs.email} onValueChange={(value) => void save({ ...prefs, email: value })} trackColor={{ true: colors.green, false: colors.line }} />
       </View>
       {pushStatus ? <Text style={[ui.small, { marginTop: 10, color: pushStatus === "registered" ? colors.green : colors.amber }]}>{pushStatusText[pushStatus]}</Text> : null}
-      {pushStatus === "denied" && Platform.OS !== "web" ? <Button label="AUTORISER LES NOTIFICATIONS" variant="secondary" onPress={() => void enable()} busy={busy} style={{ marginTop: 10 }} /> : null}
+      {pushStatus === "denied" && Platform.OS !== "web" ? <Button label="AUTORISER LES NOTIFICATIONS" variant="secondary" onPress={() => enable()} busy={busy} style={{ marginTop: 10 }} /> : null}
     </>}
   </View>;
 }
@@ -121,15 +121,15 @@ export function AlertSettingsPanel() {
         <Switch value={email.enabled} onValueChange={(value) => void run("enabled", () => setEmailSettings(value, from || email.from))} trackColor={{ true: colors.green, false: colors.line }} />
       </View>
       <Field label="Expéditeur (ex. AgriFresh <commandes@votre-domaine.tn>)" value={from} onChangeText={setFrom} autoCapitalize="none" />
-      <Button label="ENREGISTRER L’EXPÉDITEUR" variant="secondary" onPress={() => void run("from", () => setEmailSettings(email.enabled, from), "Expéditeur enregistré.")} busy={busy === "from"} style={{ marginTop: 8 }} />
+      <Button label="ENREGISTRER L’EXPÉDITEUR" variant="secondary" onPress={() => run("from", () => setEmailSettings(email.enabled, from), "Expéditeur enregistré.")} busy={busy === "from"} style={{ marginTop: 8 }} />
       <Text style={[ui.small, { marginTop: 12, color: email.has_key ? colors.green : colors.amber }]}>{email.has_key ? "Clé API enregistrée (masquée)." : "Aucune clé API enregistrée."}</Text>
       <View style={ui.field}>
         <Text style={ui.fieldLabel}>{email.has_key ? "Remplacer la clé API" : "Clé API Resend"}</Text>
         <TextInput value={apiKey} onChangeText={setApiKey} placeholder="re_…" placeholderTextColor={colors.muted} style={ui.input} autoCapitalize="none" autoCorrect={false} secureTextEntry />
       </View>
-      <Button label="ENREGISTRER LA CLÉ" variant="secondary" onPress={() => void run("key", async () => { await setEmailApiKey(apiKey); setApiKey(""); }, "Clé enregistrée dans le coffre sécurisé.")} busy={busy === "key"} disabled={!apiKey.trim()} style={{ marginTop: 8 }} />
+      <Button label="ENREGISTRER LA CLÉ" variant="secondary" onPress={() => run("key", async () => { await setEmailApiKey(apiKey); setApiKey(""); }, "Clé enregistrée dans le coffre sécurisé.")} busy={busy === "key"} disabled={!apiKey.trim()} style={{ marginTop: 8 }} />
       <Field label="Envoyer un e-mail de test à" value={testTo} onChangeText={setTestTo} keyboardType="email-address" autoCapitalize="none" />
-      <Button label="ENVOYER UN TEST" variant="secondary" onPress={() => void run("test", () => sendTestEmail(testTo), "E-mail de test envoyé : vérifiez la boîte de réception (et les indésirables).")} busy={busy === "test"} disabled={!testTo.trim()} style={{ marginTop: 8 }} />
+      <Button label="ENVOYER UN TEST" variant="secondary" onPress={() => run("test", () => sendTestEmail(testTo), "E-mail de test envoyé : vérifiez la boîte de réception (et les indésirables).")} busy={busy === "test"} disabled={!testTo.trim()} style={{ marginTop: 8 }} />
       {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
     </View>
   </>;

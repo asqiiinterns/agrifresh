@@ -181,7 +181,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
           <Text style={[ui.strong, { color: "#9a4f0f" }]}>AgriFresh vous propose de reconfirmer cette commande</Text>
           {item.status_note ? <Text style={[ui.body, { marginTop: 4 }]}>{item.status_note}</Text> : null}
           <View style={[ui.wrapRow, { marginTop: 10 }]}>
-            <Button label="RECONFIRMER" onPress={() => void answer(item, true)} busy={respondingId === item.id} style={{ flexGrow: 1 }} />
+            <Button label="RECONFIRMER" onPress={() => answer(item, true)} busy={respondingId === item.id} style={{ flexGrow: 1 }} />
             <Button label="REFUSER" variant="danger" onPress={() => confirmRefusal(item)} disabled={respondingId === item.id} />
           </View>
         </View> : item.status_note && (item.status === "declined" || item.status === "on_hold" || item.status === "cancelled") ? <Text style={[ui.body, { color: colors.amber, marginTop: 6 }]}>Motif : {item.status_note}</Text> : null}
@@ -208,7 +208,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
         </View>)}
         {historyEnabled ? <OrderTimeline order={item} viewer="client" /> : null}
         {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
-          <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} />
+          <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => share(item)} busy={sharingId === item.id} />
           {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
           {canReturn && item.status === "delivered" ? <Button label="DEMANDER UN RETOUR" variant="secondary" onPress={() => setReturnOrder(item)} /> : null}
           {canRecurring ? <Button label="RÉPÉTER AUTOMATIQUEMENT" variant="secondary" onPress={() => setRecurringOrder(item)} /> : null}
@@ -279,7 +279,7 @@ function ClaimModal({ order, onClose, onSent }: { order: Order | null; onClose: 
         <TextInput value={description} onChangeText={setDescription} placeholder="Produits concernés, quantités, état constaté…" placeholderTextColor={colors.muted} style={[ui.input, { minHeight: 110, textAlignVertical: "top", marginTop: 8 }]} multiline maxLength={2000} />
         {order ? <Text style={[ui.small, { marginTop: 10 }]}>Produits de la commande : {order.order_items.map((line) => line.product_name_snapshot).join(", ")}</Text> : null}
         {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-        <Button label="ENVOYER LA RÉCLAMATION" onPress={() => void send()} busy={busy} style={{ marginTop: 16 }} />
+        <Button label="ENVOYER LA RÉCLAMATION" onPress={() => send()} busy={busy} style={{ marginTop: 16 }} />
       </ScrollView>
     </SafeAreaView>
   </Modal>;

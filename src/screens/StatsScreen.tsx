@@ -7,6 +7,7 @@ import { Chip, Loading, ScreenHeader, Sheets, formatPrice, formatQuantity, toDay
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { BarList, ColumnChart, Tile, type Point } from "./BillingDashboard";
+import { appLocale } from "../ui/i18n";
 
 type Period = "30" | "90" | "365";
 type Sheet = "overview" | "products" | "clients" | "slots" | "preparation";
@@ -45,7 +46,7 @@ export function StatsScreen() {
     const valid = orders.filter((order) => !["declined", "cancelled"].includes(order.status));
     const bucket = (iso: string) => period === "365" ? iso.slice(0, 7) : weekKey(iso);
     const buckets = [...new Set(valid.map((order) => bucket(order.created_at)))].sort();
-    const label = (key: string) => period === "365" ? new Date(`${key}-15T12:00:00`).toLocaleDateString("fr-TN", { month: "short" }) : `S${key.slice(-2)}`;
+    const label = (key: string) => period === "365" ? new Date(`${key}-15T12:00:00`).toLocaleDateString(appLocale(), { month: "short" }) : `S${key.slice(-2)}`;
     const series = (list: StaffOrder[], value: (order: StaffOrder) => number): Point[] => buckets.map((key) => ({ key, label: label(key), value: list.filter((order) => bucket(order.created_at) === key).reduce((sum, order) => sum + value(order), 0) }));
 
     const products = new Map<string, { label: string; unit: string; quantity: number; amount: number; byClient: Map<string, number> }>();

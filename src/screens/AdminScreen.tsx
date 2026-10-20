@@ -245,7 +245,7 @@ function AddAccountModal({ visible, onClose, onCreated }: { visible: boolean; on
           <Field label="Mot de passe provisoire" value={password} onChangeText={setPassword} autoCapitalize="none" />
           <Text style={[ui.small, { marginTop: 6 }]}>Un compte créé ici est actif immédiatement. Communiquez ce mot de passe à la personne ; elle le changera dans Compte.</Text>
           {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-          <Button label="CRÉER LE COMPTE" onPress={() => void create()} busy={busy} style={{ marginTop: 16 }} />
+          <Button label="CRÉER LE COMPTE" onPress={() => create()} busy={busy} style={{ marginTop: 16 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,23 +1,28 @@
 import { Alert, Platform } from "react-native";
 import { supabaseHost } from "../lib/supabase";
+import { tr } from "./i18n";
 
 export type NotifyButton = { text: string; style?: "cancel" | "default" | "destructive"; onPress?: () => void };
+export type PendingDialog = { title: string; message: string; buttons: NotifyButton[] };
 
-// React Native Web's Alert is a no-op, so fall back to the browser dialogs.
+// On the web, dialogs are drawn by the app (DialogHost): browser alert/confirm would freeze the page.
+let dialogListener: ((dialog: PendingDialog) => void) | null = null;
+export function subscribeToDialogs(listener: (dialog: PendingDialog) => void) {
+  dialogListener = listener;
+  return () => { if (dialogListener === listener) dialogListener = null; };
+}
+
 export function notify(title: string, message = "", buttons?: NotifyButton[]) {
+  const translated = (buttons ?? [{ text: "OK" }]).map((button) => ({ ...button, text: tr(button.text) }));
   if (Platform.OS !== "web") {
-    Alert.alert(title, message, buttons);
+    Alert.alert(tr(title), tr(message), translated);
     return;
   }
-  if (typeof window === "undefined") return;
-  const text = message ? `${title}\n\n${message}` : title;
-  const action = buttons?.find((button) => button.style !== "cancel");
-  if (buttons && buttons.length > 1) {
-    if (window.confirm(text)) action?.onPress?.();
-  } else {
-    window.alert(text);
-    action?.onPress?.();
+  if (dialogListener) {
+    dialogListener({ title: tr(title), message: tr(message), buttons: translated });
+    return;
   }
+  if (typeof window !== "undefined") window.alert(message ? `${tr(title)}\n\n${tr(message)}` : tr(title));
 }
 
 export function errorMessage(cause: unknown, fallback: string) {

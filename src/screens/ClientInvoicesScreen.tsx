@@ -84,7 +84,7 @@ function InvoiceList() {
           <Text style={ui.strong}>Net à payer TTC</Text>
           <Text style={ui.amount}>{formatPrice(item.total_ttc)}</Text>
         </View>
-        <Button label="VOIR LA FACTURE" variant="secondary" onPress={() => void open(item)} busy={openingId === item.id} style={{ marginTop: 10, alignSelf: "flex-start" }} />
+        <Button label="VOIR LA FACTURE" variant="secondary" onPress={() => open(item)} busy={openingId === item.id} style={{ marginTop: 10, alignSelf: "flex-start" }} />
       </View>}
     />}
   </View>;

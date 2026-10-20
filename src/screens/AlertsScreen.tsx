@@ -113,7 +113,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
   ];
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow={`${unread} NON LUE(S)`} title="Alertes" right={unread ? <Button label="TOUT LIRE" variant="secondary" onPress={() => void read()} /> : undefined} />
+    <ScreenHeader eyebrow={`${unread} NON LUE(S)`} title="Alertes" right={unread ? <Button label="TOUT LIRE" variant="secondary" onPress={() => read()} /> : undefined} />
     <FilterBar filters={filters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
@@ -141,7 +141,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
         {editingNote === item.id ? <View style={{ marginTop: 6 }}>
           <TextInput value={noteDraft} onChangeText={setNoteDraft} placeholder="Votre note (visible par vous seul)" placeholderTextColor={colors.muted} style={ui.input} multiline maxLength={1000} autoFocus />
           <View style={[ui.wrapRow, { marginTop: 6 }]}>
-            <Button label="ENREGISTRER" onPress={() => void saveNote(item)} />
+            <Button label="ENREGISTRER" onPress={() => saveNote(item)} />
             <Button label="ANNULER" variant="secondary" onPress={() => setEditingNote(null)} />
           </View>
         </View> : null}

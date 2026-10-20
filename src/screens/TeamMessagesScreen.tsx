@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardSpacer } from "../ui/KeyboardSpacer";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, TextInput } from "../ui/Text";
@@ -166,7 +167,7 @@ function RecipientsModal({ visible, mode, onClose, onDone }: {
         </> : <Text style={[ui.small, { marginTop: 10 }]}>Une seule discussion pour toute l’équipe : les nouveaux membres la verront aussi.</Text>}
         {mode === "new" && !all && recipients.length > 1 ? <Field label="Nom de la discussion (facultatif)" value={title} onChangeText={setTitle} placeholder="Ex. Tournée du matin" /> : null}
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-        <Button label={mode === "new" ? "ÉCRIRE" : "AJOUTER"} onPress={() => void done()} busy={busy} style={{ marginTop: 14 }} />
+        <Button label={mode === "new" ? "ÉCRIRE" : "AJOUTER"} onPress={() => done()} busy={busy} style={{ marginTop: 14 }} />
       </ScrollView>
     </SafeAreaView>
   </Modal>;
@@ -240,9 +241,12 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
     return () => { active = false; void realtime.removeChannel(channel); };
   }, [conversationId]);
 
+  const sendLock = useRef(false);
   async function send() {
     const body = draft.trim();
     if (!body && !file) return;
+    if (sendLock.current) return;
+    sendLock.current = true;
     setSending(true);
     setError("");
     try {
@@ -255,6 +259,7 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
     } catch (cause) {
       setError(errorMessage(cause, "Le message n’a pas pu être envoyé."));
     } finally {
+      sendLock.current = false;
       setSending(false);
     }
   }
@@ -296,6 +301,7 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
           <Ionicons name="send" size={18} color={colors.white} />
         </Pressable>
       </View>
+      <KeyboardSpacer />
     </KeyboardAvoidingView>
   </>;
 }

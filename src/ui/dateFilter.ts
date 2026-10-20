@@ -1,4 +1,5 @@
 import { toDayKey } from "./components";
+import { appLocale } from "./i18n";
 
 // A date filter: a period (inclusive days) or "no date"; null = no filter.
 export type DateFilterValue = { label: string; from?: string; to?: string; noDate?: boolean } | null;
@@ -10,7 +11,7 @@ const shift = (days: number) => {
 };
 
 export const dayLabel = (key: string) =>
-  new Date(`${key}T12:00:00`).toLocaleDateString("fr-TN", { day: "numeric", month: "short" });
+  new Date(`${key}T12:00:00`).toLocaleDateString(appLocale(), { day: "numeric", month: "short" });
 
 export const rangeLabel = (from: string, to: string) => from === to ? dayLabel(from) : `${dayLabel(from)} → ${dayLabel(to)}`;
 

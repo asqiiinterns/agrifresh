@@ -53,8 +53,8 @@ export function HomeEditor({ visible, title, tiles, shortcuts, value, onSave, on
         <Section title="Chiffres" items={tiles} selected={layout.tiles} onChange={(next) => setLayout({ ...layout, tiles: next })} />
         <Section title="Raccourcis" items={shortcuts} selected={layout.shortcuts} onChange={(next) => setLayout({ ...layout, shortcuts: next })} />
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-        <Button label="ENREGISTRER" onPress={() => void run(() => onSave(layout))} busy={busy} style={{ marginTop: 14 }} />
-        <Button label={resetLabel} variant="secondary" onPress={() => void run(onReset)} disabled={busy} style={{ marginTop: 8 }} />
+        <Button label="ENREGISTRER" onPress={() => run(() => onSave(layout))} busy={busy} style={{ marginTop: 14 }} />
+        <Button label={resetLabel} variant="secondary" onPress={() => run(onReset)} disabled={busy} style={{ marginTop: 8 }} />
       </ScrollView>
     </SafeAreaView>
   </Modal>;
