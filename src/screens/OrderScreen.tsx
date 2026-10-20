@@ -172,10 +172,10 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un produit" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
       <Button label="REPRENDRE" variant="secondary" onPress={() => setRepeatVisible(true)} disabled={loading} />
     </View>
-    {multi ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suppliers} style={{ flexGrow: 0 }}>
+    {multi ? <View style={styles.suppliers}>
       <Chip label="Tous les fournisseurs" selected={supplierFilter === "all"} onPress={() => setSupplierFilter("all")} />
       {suppliers.map((supplier) => <Chip key={supplier.client_id} label={inCart(supplier.client_id) ? `${supplier.name} (${inCart(supplier.client_id)})` : supplier.name} selected={supplierFilter === supplier.client_id} onPress={() => setSupplierFilter(supplier.client_id)} />)}
-    </ScrollView> : null}
+    </View> : null}
     <View style={styles.categories}>
       {catalog.some((product) => product.isNew) ? <Chip label="✦ Nouveautés" selected={category === "Nouveautés"} onPress={() => setCategory("Nouveautés")} /> : null}
       {categories.map((item) => <Chip key={item} label={item} selected={category === item} onPress={() => setCategory(item)} />)}
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   checkmark: { color: colors.white, fontWeight: "800" },
   toolbar: { flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingTop: 12, alignItems: "center" },
   categories: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
-  suppliers: { flexDirection: "row", paddingHorizontal: 18, paddingTop: 10, gap: 7 },
+  suppliers: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingTop: 10, gap: 7 },
   supplierName: { color: colors.textSoft, fontSize: 11, fontWeight: "700" },
   productRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginTop: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
   productRowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
