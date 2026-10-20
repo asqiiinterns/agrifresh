@@ -14,6 +14,7 @@ import { colors, ui } from "../ui/theme";
 import { RolesManager, rightLabel } from "./RolesManager";
 import { ModulesPage } from "./ModulesPage";
 import { AlertSettingsPanel } from "./NotificationSettings";
+import { CategoriesPage } from "./CategoriesPage";
 
 const statusLabels: Record<string, string> = { pending: "En attente", active: "Actif", suspended: "Suspendu", refused: "Refusé" };
 const roleWords: Record<string, string> = { admin: "Responsable", supervisor: "Superviseur", staff: "Superviseur", production: "Production", driver: "Livreur", customer: "Client", platform: "Équipe Appro+" };
@@ -131,7 +132,7 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
 // ---------------------------------------------------------------------------
 // Appro+ → Paramétrage: everything that applies to the whole platform.
 // ---------------------------------------------------------------------------
-type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts";
+type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories";
 
 export function PlatformSettingsScreen() {
   const [page, setPage] = useState<SettingsPage>("menu");
@@ -139,6 +140,7 @@ export function PlatformSettingsScreen() {
   if (page === "modules") return <ModulesPage header={back} />;
   if (page === "templates") return <TemplatesPage header={back} />;
   if (page === "accounts") return <PlatformAccountsPage header={back} />;
+  if (page === "categories") return <CategoriesPage header={back} />;
   if (page === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="APPRO+ · PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
@@ -152,6 +154,9 @@ export function PlatformSettingsScreen() {
       <ListGroup title="Fonctions et droits">
         <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction sur la plateforme." onPress={() => setPage("modules")} />
         <ListRow icon="key-outline" title="Modèles de rôles" detail="Les droits par défaut de chaque rôle fournisseur et acheteur. Les rôles des Pros qui suivent un modèle changent avec lui." onPress={() => setPage("templates")} />
+      </ListGroup>
+      <ListGroup title="Catalogue">
+        <ListRow icon="pricetags-outline" title="Catégories" detail="La liste commune où chaque Pro range ses produits ; elle rend les produits comparables entre fournisseurs." onPress={() => setPage("categories")} />
       </ListGroup>
       <ListGroup title="Communication">
         <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi des e-mails." onPress={() => setPage("alerts")} />

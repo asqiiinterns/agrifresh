@@ -17,30 +17,28 @@ type CatalogRow = {
   origin_region: string | null;
   origin_label: string | null;
   origin_note: string | null;
-  categories: { name: string } | { name: string }[] | null;
+  categories: { name: string; sort_order?: number | null } | { name: string; sort_order?: number | null }[] | null;
 };
 
 // Products added recently are highlighted to clients as new arrivals.
 const NEW_PRODUCT_DAYS = 30;
 
-const productCategories: Product["category"][] = ["Jus frais", "Fruits", "Légumes", "Épicerie"];
-
-function categoryFor(name: string | undefined): Product["category"] {
-  return productCategories.find((item) => item.toLocaleLowerCase("fr") === name?.trim().toLocaleLowerCase("fr")) ?? "Épicerie";
-}
+const OTHER_CATEGORY = "Autres";
 
 function toProduct(row: CatalogRow): Product {
   const relation = Array.isArray(row.categories) ? row.categories[0] : row.categories;
-  const category = categoryFor(relation?.name);
+  const category = relation?.name?.trim() || OTHER_CATEGORY;
   const price = Number(row.price);
   return {
     id: row.id,
     name: row.name,
     description: row.description ?? "",
     category,
+    categorySort: relation?.sort_order ?? 9999,
     price: Number.isFinite(price) ? price : 0,
     unit: row.unit_label ?? "unité",
-    image: row.image_url || demoProducts.find((item) => item.category === category)?.image || demoProducts[0].image,
+    // No photo: a neutral placeholder (never another supplier's pictures).
+    image: row.image_url ?? "",
     available: row.active,
     stock: row.stock_quantity === null ? undefined : Number(row.stock_quantity),
     origin: row.origin_producer || row.origin_region || row.origin_label || row.origin_note
@@ -55,7 +53,7 @@ export async function fetchCatalog(): Promise<Product[]> {
 
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, description, image_url, unit_label, price, active, created_at, stock_quantity, origin_producer, origin_region, origin_label, origin_note, categories(name)")
+    .select("id, name, description, image_url, unit_label, price, active, created_at, stock_quantity, origin_producer, origin_region, origin_label, origin_note, categories(name, sort_order)")
     .eq("active", true)
     .order("created_at", { ascending: false });
 
@@ -70,7 +68,7 @@ export type BuyerSupplier = {
   delivery_points: DeliveryPointSummary[];
 };
 export type BuyerCatalog = { buyerOrgId: string | null; suppliers: BuyerSupplier[]; products: Product[] };
-type BuyerRow = Omit<CatalogRow, "categories" | "active"> & { client_id: string; category: string | null };
+type BuyerRow = Omit<CatalogRow, "categories" | "active"> & { client_id: string; category: string | null; category_sort?: number | null };
 
 // Null before 20261115: the screen then keeps the single-supplier catalogue.
 export async function fetchBuyerCatalog(): Promise<BuyerCatalog | null> {
@@ -82,7 +80,7 @@ export async function fetchBuyerCatalog(): Promise<BuyerCatalog | null> {
     buyerOrgId: raw.buyer_org_id,
     suppliers: raw.suppliers ?? [],
     products: (raw.products ?? []).map((row) => ({
-      ...toProduct({ ...row, price: row.price ?? 0, active: true, categories: row.category ? { name: row.category } : null }),
+      ...toProduct({ ...row, price: row.price ?? 0, active: true, categories: row.category ? { name: row.category, sort_order: row.category_sort } : null }),
       supplierId: row.client_id,
     })),
   };

@@ -53,10 +53,16 @@ export async function fetchAdminProducts(): Promise<AdminProduct[]> {
   return (data ?? []) as AdminProduct[];
 }
 
+// Appro+'s shared list: visible categories, sub-categories shown as "Category › Sub-category".
 export async function fetchCategories(): Promise<Category[]> {
-  const { data, error } = await client().from("categories").select("id, name").order("sort_order");
+  const { data, error } = await client().from("categories").select("id, name, parent_id, active, sort_order").order("sort_order");
   if (error) throw error;
-  return (data ?? []) as Category[];
+  const rows = (data ?? []) as { id: string; name: string; parent_id: string | null; active: boolean; sort_order: number }[];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const rank = (row: { parent_id: string | null; sort_order: number }) => row.parent_id ? (byId.get(row.parent_id)?.sort_order ?? 0) : row.sort_order;
+  return rows.filter((row) => row.active)
+    .sort((a, b) => rank(a) - rank(b) || Number(!!a.parent_id) - Number(!!b.parent_id) || a.sort_order - b.sort_order)
+    .map((row) => ({ id: row.id, name: row.parent_id ? `${byId.get(row.parent_id)?.name ?? ""} › ${row.name}` : row.name }));
 }
 
 const slugify = (name: string) => name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

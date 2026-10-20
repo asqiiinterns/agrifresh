@@ -13,7 +13,7 @@ import { colors, ui } from "../ui/theme";
 import { useDisplay } from "../ui/display";
 
 type Filter = Category | "Nouveautés";
-const categories: Category[] = ["Tous", "Jus frais", "Fruits", "Légumes", "Épicerie"];
+const ALL = "Tous";
 const draftKey = (clientId: string) => `agrifresh-order-draft-${clientId}`;
 // One cart for all the suppliers of the buyer's Pro.
 const cartKey = (buyerOrgId: string) => `appro-cart-${buyerOrgId}`;
@@ -51,7 +51,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<Filter>("Tous");
+  const [category, setCategory] = useState<Filter>(ALL);
   const [reviewVisible, setReviewVisible] = useState(false);
   const [repeatVisible, setRepeatVisible] = useState(false);
   const { compactProducts } = useDisplay();
@@ -104,6 +104,12 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
   }, [quantities, draftLoaded, storageKey]);
 
   const multi = suppliers.length > 1;
+  // Only the categories that hold products, in Appro+'s order.
+  const categories = useMemo(() => {
+    const ranks = new Map<string, number>();
+    for (const product of catalog) if (!ranks.has(product.category)) ranks.set(product.category, product.categorySort ?? 9999);
+    return [ALL, ...[...ranks].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], "fr")).map(([name]) => name)];
+  }, [catalog]);
   const supplierById = useMemo(() => new Map(suppliers.map((supplier) => [supplier.client_id, supplier])), [suppliers]);
   // What each supplier lets this client see (prices, stock, origin).
   const rulesOf = (product: Product): DisplayRules => (product.supplierId ? supplierById.get(product.supplierId) : undefined) ?? client;
@@ -119,7 +125,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
     const matches = catalog.filter((product) => (supplierFilter === "all" || product.supplierId === supplierFilter)
-      && (category === "Tous" || product.category === category || (category === "Nouveautés" && product.isNew))
+      && (category === ALL || product.category === category || (category === "Nouveautés" && product.isNew))
       && `${product.name} ${product.description}`.toLocaleLowerCase("fr").includes(term));
     // New arrivals come first so clients discover them while ordering.
     return [...matches].sort((a, b) => Number(Boolean(b.isNew)) - Number(Boolean(a.isNew)));

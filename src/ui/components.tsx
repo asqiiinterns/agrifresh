@@ -250,7 +250,7 @@ export function ProductImage({ uri, style }: { uri: string; style: ComponentProp
   useEffect(() => setFailed(false), [uri]);
   if (failed || !uri) {
     return <View style={[style, { backgroundColor: colors.cream, alignItems: "center", justifyContent: "center" }]}>
-      <Text style={{ color: colors.primary, fontSize: 22, opacity: 0.6 }}>✿</Text>
+      <Ionicons name="cube-outline" size={22} color={colors.muted} />
     </View>;
   }
   return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;

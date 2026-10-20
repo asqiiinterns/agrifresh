@@ -23,6 +23,7 @@ from (values
   (19, '20261112_pro_onboarding.sql',             to_regprocedure('public.register_pro(jsonb)') is not null),
   (20, '20261113_directory.sql',                  to_regprocedure('public.pro_directory(text,text)') is not null),
   (21, '20261114_accounts.sql',                   to_regclass('public.account_entries') is not null),
-  (22, '20261115_multi_supplier_cart.sql',        to_regprocedure('public.place_multi_order(jsonb, date, text)') is not null)
+  (22, '20261115_multi_supplier_cart.sql',        to_regprocedure('public.place_multi_order(jsonb, date, text)') is not null),
+  (23, '20261116_catalog_numbers.sql',           to_regclass('public.org_counters') is not null)
 ) as checks(position, migration, installed)
 order by position;

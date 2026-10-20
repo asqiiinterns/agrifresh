@@ -1,10 +1,12 @@
-export type Category = "Tous" | "Jus frais" | "Fruits" | "Légumes" | "Épicerie";
+// Categories come from Appro+'s shared list (20261116); "Tous" is the "no filter" choice of the order screen.
+export type Category = string;
 
 export type Product = {
   id: string;
   name: string;
   description: string;
-  category: Exclude<Category, "Tous">;
+  category: string;
+  categorySort?: number;
   price: number;
   unit: string;
   image: string;
