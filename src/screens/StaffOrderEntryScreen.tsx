@@ -10,6 +10,9 @@ import { FilterBar } from "../ui/FilterBar";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { OrderScreen } from "./OrderScreen";
+import { fetchStaffClientFigures } from "../data/buyer";
+import { netBalance, overLimit, type AccountFigures } from "../data/accounts";
+import { formatPrice } from "../ui/components";
 
 // Team order for a client (phone orders): pick the client, then the client's order screen.
 export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {
@@ -19,6 +22,12 @@ export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ClientRecord | null>(null);
+  // The client's outstanding (20261117): warned before entering an order beyond its limit.
+  const [figures, setFigures] = useState<AccountFigures | null>(null);
+  useEffect(() => {
+    setFigures(null);
+    if (selected) void fetchStaffClientFigures(selected.id).then(setFigures);
+  }, [selected]);
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
@@ -61,7 +70,11 @@ export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {
       client={summary}
       placeOrder={(params) => staffPlaceOrder(selected.id, params)}
       loadHistory={() => fetchClientOrders(selected.id)}
-      staffFor={{ onBack: () => setSelected(null) }}
+      staffFor={{ onBack: () => setSelected(null), notice: figures && figures.credit_limit !== null ? <View style={[styles.notice, overLimit(figures) && styles.noticeDanger]}>
+        <Text style={[ui.small, { color: overLimit(figures) ? colors.danger : colors.text, fontWeight: "700" }]}>{overLimit(figures)
+          ? `Encours atteint : ${formatPrice(netBalance(figures))} dus pour ${formatPrice(figures.credit_limit)} autorisés. Le client ne peut plus commander lui-même ; vous pouvez enregistrer cette commande si vous l’acceptez.`
+          : `Encours : ${formatPrice(Math.max(0, netBalance(figures)))} dus sur ${formatPrice(figures.credit_limit)} autorisés.`}</Text>
+      </View> : null }}
       onPlaced={() => { setSelected(null); onPlaced(); }}
     />;
   }
@@ -92,6 +105,8 @@ export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  notice: { marginHorizontal: 18, marginTop: 8, padding: 10, borderRadius: 8, backgroundColor: colors.cream },
+  noticeDanger: { backgroundColor: "#f8e5e1", borderWidth: 1, borderColor: colors.danger },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   avatarText: { color: colors.primary, fontWeight: "800", fontSize: 16 },

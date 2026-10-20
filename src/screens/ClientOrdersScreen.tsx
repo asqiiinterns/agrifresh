@@ -16,6 +16,9 @@ import { useCan } from "../data/permissions";
 import { Button, Chip, CloseButton, EmptyState, Loading, OrderProgress, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { QR, QrCode } from "../ui/Qr";
+import { cancelOrder, fetchReceptionQr, type ReceptionQr } from "../data/buyer";
+import { OrderEditModal } from "./OrderEditModal";
+import { linesTtc } from "../ui/price";
 import { colors, ui } from "../ui/theme";
 
 const closedStatuses = ["delivered", "declined", "cancelled"];
@@ -58,6 +61,26 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
   const canRecurring = useCan()("client.recurring");
   const [recurringOrder, setRecurringOrder] = useState<Order | null>(null);
   const [returnOrder, setReturnOrder] = useState<Order | null>(null);
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  // One reception QR for all my suppliers (20261117); before that, the selected supplier's one.
+  const [buyerQr, setBuyerQr] = useState<ReceptionQr | null>(null);
+  useEffect(() => { void fetchReceptionQr().then(setBuyerQr); }, []);
+  const receptionToken = buyerQr?.token ?? (client.reception_qr ? client.reception_token : null);
+  const receptionRequired = buyerQr ? buyerQr.required : client.reception_qr && !!client.reception_token;
+
+  function confirmCancel(order: Order) {
+    notify("Annuler la commande", `Annuler la commande #${order.order_number} ? Votre fournisseur ne l’a pas encore acceptée.`, [
+      { text: "Retour", style: "cancel" },
+      { text: "Annuler la commande", style: "destructive", onPress: () => {
+        setCancellingId(order.id);
+        void cancelOrder(order.id)
+          .then(() => { notify("Commande annulée", `La commande #${order.order_number} est annulée. Votre fournisseur est prévenu.`); return reload("silent"); })
+          .catch((cause: unknown) => notify("Commande", errorMessage(cause, "La commande n’a pas pu être annulée.")))
+          .finally(() => setCancellingId(null));
+      } },
+    ]);
+  }
 
   async function answer(order: Order, accept: boolean) {
     setRespondingId(order.id);
@@ -155,7 +178,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
     <ScreenHeader
       eyebrow="SUIVI EN DIRECT"
       title="Mes commandes"
-      right={client.reception_qr && client.reception_token ? <Button label="QR RÉCEPTION" onPress={() => setReceptionVisible(true)} /> : undefined}
+      right={receptionRequired && receptionToken ? <Button label="QR RÉCEPTION" onPress={() => setReceptionVisible(true)} /> : undefined}
     />
     {historyEnabled ? <Sheets
       items={[{ key: "open", label: "En cours", count: scoped.filter((order) => !closedStatuses.includes(order.status)).length }, { key: "closed", label: "Clôturées", count: scoped.filter((order) => closedStatuses.includes(order.status)).length }]}
@@ -173,7 +196,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
           <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
           <Button label="VOIR TOUTES" variant="secondary" onPress={() => { setFocusId(null); setSheet(closedStatuses.includes(focused.status) ? "closed" : "open"); }} />
         </View>
-        : client.reception_qr && shippedCount ? <Text style={[ui.body, styles.banner]}>{shippedCount} commande(s) en route : à l’arrivée du livreur, touchez « QR RÉCEPTION » et présentez le code.</Text> : null}
+        : receptionRequired && shippedCount ? <Text style={[ui.body, styles.banner]}>{shippedCount} commande(s) en route : à l’arrivée du livreur, touchez « QR RÉCEPTION » et présentez le code.</Text> : null}
       ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body={filter === "all" ? "Vos commandes apparaîtront ici avec leur statut." : "Aucune commande avec ce statut."} />}
       renderItem={({ item }) => {
         const open = item.status === "awaiting_client" || expanded.includes(item.id);
@@ -214,6 +237,15 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
           <Text style={ui.strong}>Total HT</Text>
           <Text style={ui.amount}>{formatPrice(item.total)}</Text>
         </View> : null}
+        {rules.show_prices ? <View style={ui.row}>
+          <Text style={ui.body}>Total TTC</Text>
+          <Text style={ui.body}>{formatPrice(linesTtc(item.order_items))}</Text>
+        </View> : null}
+        {item.status === "pending" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          <Button label="MODIFIER" variant="secondary" onPress={() => setEditOrder(item)} />
+          <Button label="ANNULER LA COMMANDE" variant="danger" onPress={() => confirmCancel(item)} busy={cancellingId === item.id} />
+          <Text style={[ui.small, { flexBasis: "100%" }]}>Possible tant que votre fournisseur ne l’a pas acceptée.</Text>
+        </View> : null}
         {claims.filter((claim) => claim.order_id === item.id).map((claim) => <View key={claim.id} style={styles.claim}>
           <View style={ui.row}>
             <Text style={[ui.small, { fontWeight: "800", color: colors.text, flex: 1 }]}>Réclamation n° {claim.claim_number} · {claimReasonLabel(claim.reason)}</Text>
@@ -237,16 +269,18 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
       }}
     />}
 
+    <OrderEditModal order={editOrder} onClose={() => setEditOrder(null)} onSaved={() => { setEditOrder(null); void reload("silent"); }} />
     <RecurringModal visible={recurringOrder !== null} order={recurringOrder} onClose={() => setRecurringOrder(null)} onSaved={() => setRecurringOrder(null)} />
     <ReturnFormModal mode="client" visible={returnOrder !== null} order={returnOrder} onClose={() => setReturnOrder(null)} onSaved={() => setReturnOrder(null)} />
     <ClaimModal order={claimOrder} onClose={() => setClaimOrder(null)} onSent={() => { setClaimOrder(null); void reload("silent"); }} />
 
     <Modal visible={receptionVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setReceptionVisible(false)}>
       <SafeAreaView style={ui.modalSafe}>
-        <ScreenHeader eyebrow={client.business_name.toLocaleUpperCase("fr")} title="QR de réception" right={<CloseButton onPress={() => setReceptionVisible(false)} />} />
+        <ScreenHeader eyebrow={(buyerQr?.name ?? client.business_name).toLocaleUpperCase("fr")} title="QR de réception" right={<CloseButton onPress={() => setReceptionVisible(false)} />} />
         <ScrollView contentContainerStyle={[ui.content, { alignItems: "center", paddingTop: 24 }]}>
-          {client.reception_token ? <QrCode value={QR.client(client.reception_token)} size={280} /> : null}
+          {receptionToken ? <QrCode value={QR.client(receptionToken)} size={280} /> : null}
           <Text style={[ui.body, { textAlign: "center", marginTop: 20 }]}>Présentez ce code au livreur après avoir vérifié votre livraison. Le scan confirme la réception de vos commandes.</Text>
+          {buyerQr ? <Text style={[ui.small, { textAlign: "center", marginTop: 8 }]}>Le même code vaut pour tous vos fournisseurs.</Text> : null}
           <Text style={[ui.small, { textAlign: "center", marginTop: 8 }]}>Ne partagez pas ce code : il vaut signature de réception.</Text>
         </ScrollView>
       </SafeAreaView>

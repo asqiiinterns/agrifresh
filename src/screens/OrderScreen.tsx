@@ -44,7 +44,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
   onPlaced: () => void;
   placeOrder?: PlaceOrder;
   loadHistory?: () => Promise<Order[]>;
-  staffFor?: { onBack: () => void };
+  staffFor?: { onBack: () => void; notice?: React.ReactNode };
 }) {
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,6 +171,7 @@ export function OrderScreen({ client, onPlaced, placeOrder = placeClientOrder, l
       subtitle={multi ? "Tous vos fournisseurs dans un seul panier : chacun reçoit sa propre commande." : "Saisissez les quantités souhaitées pour chaque produit."}
       right={staffFor ? <Button label="‹ CLIENTS" variant="secondary" onPress={staffFor.onBack} /> : undefined}
     />
+    {staffFor?.notice ?? null}
     <View style={styles.toolbar}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un produit" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
       <Button label="REPRENDRE" variant="secondary" onPress={() => setRepeatVisible(true)} disabled={loading} />

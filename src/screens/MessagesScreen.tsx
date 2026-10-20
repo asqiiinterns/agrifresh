@@ -16,6 +16,73 @@ import { TeamMessagesList } from "./TeamMessagesScreen";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { useModules } from "../data/modules";
+import { buyerSendMessage, fetchBuyerInbox, fetchBuyerThread, staffSendMessages, type BuyerConversation } from "../data/buyer";
+import type { Attachment } from "../data/attachments";
+import { Button } from "../ui/components";
+import { ComposeModal } from "./ComposeModal";
+
+type ThreadSource = {
+  load: () => Promise<Message[]>;
+  send: (body: string, attachment: Attachment | null, needsReply: boolean, replyTo: string | null) => Promise<Message>;
+};
+
+// Buyer side: one conversation per supplier, and a message to one or several of them (20261117).
+// Before that migration (or with a single supplier) it is the single conversation of the selected supplier.
+export function BuyerMessagesScreen({ clientId, onRead }: { clientId: string; onRead: () => void }) {
+  const [inbox, setInbox] = useState<BuyerConversation[] | null | undefined>(undefined);
+  const [open, setOpen] = useState<BuyerConversation | null>(null);
+  const [composing, setComposing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function reload(refresh = false) {
+    if (refresh) setRefreshing(true);
+    try {
+      setInbox(await fetchBuyerInbox());
+    } finally {
+      setRefreshing(false);
+    }
+  }
+  useEffect(() => { void reload(); }, []);
+
+  if (inbox === undefined) return <View style={ui.screen}><ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" /><Loading /></View>;
+  if (inbox === null || inbox.length === 0) return <ClientMessagesScreen clientId={clientId} onRead={onRead} />;
+  const source = (conversation: BuyerConversation): ThreadSource => ({
+    load: () => fetchBuyerThread(conversation.client_id),
+    send: (body, attachment, needsReply, replyTo) => buyerSendMessage([conversation.client_id], body, attachment, needsReply, replyTo).then((sent) => sent[0]),
+  });
+  if (inbox.length === 1) return <View style={ui.screen}>
+    <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" subtitle={`Votre conversation avec ${inbox[0].supplier_name}.`} />
+    <Thread clientId={inbox[0].client_id} viewerIsStaff={false} onRead={onRead} source={source(inbox[0])} />
+  </View>;
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" subtitle="Une conversation par fournisseur." right={<Button label="+ MESSAGE" onPress={() => setComposing(true)} />} />
+    <FlatList
+      data={inbox}
+      keyExtractor={(item) => item.client_id}
+      contentContainerStyle={ui.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
+      renderItem={({ item }) => <Pressable style={ui.card} onPress={() => setOpen(item)}>
+        <View style={ui.row}>
+          <Text style={[ui.strong, { flex: 1 }]}>{item.supplier_name}</Text>
+          {Number(item.unread) ? <View style={styles.unread}><Text style={styles.unreadText}>{item.unread}</Text></View> : null}
+        </View>
+        <Text style={ui.small} numberOfLines={1}>{item.last_body ? `${item.last_from_staff ? "" : "Vous : "}${item.last_body}` : "Aucun message"}</Text>
+        {item.last_at ? <Text style={ui.small}>{formatDateTime(item.last_at)}</Text> : null}
+      </Pressable>}
+    />
+    <Modal visible={open !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setOpen(null); void reload(); }}>
+      <SafeAreaView style={ui.modalSafe}>
+        {open ? <>
+          <ScreenHeader eyebrow="CONVERSATION" title={open.supplier_name} right={<CloseButton onPress={() => { setOpen(null); void reload(); }} />} />
+          <Thread clientId={open.client_id} viewerIsStaff={false} onRead={onRead} source={source(open)} />
+        </> : null}
+      </SafeAreaView>
+    </Modal>
+    <ComposeModal visible={composing} title="À mes fournisseurs" recipients={inbox.map((item) => ({ id: item.client_id, label: item.supplier_name }))}
+      onClose={() => { setComposing(false); void reload(); }} onSend={(ids, body) => buyerSendMessage(ids, body)} />
+  </View>;
+}
 
 // Client side: a single conversation with the supplier's team.
 export function ClientMessagesScreen({ clientId, onRead }: { clientId: string; onRead: () => void }) {
@@ -66,6 +133,7 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [openClient, setOpenClient] = useState<InboxEntry | null>(null);
+  const [composing, setComposing] = useState(false);
 
   async function reload(mode: "initial" | "refresh" | "silent") {
     if (mode === "initial") setLoading(true);
@@ -97,8 +165,9 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
 
   return <View style={embedded ? { flex: 1 } : ui.screen}>
     {embedded ? null : <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" />}
-    <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
-      <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client" placeholderTextColor={colors.muted} style={ui.input} />
+    <View style={{ paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", gap: 8, alignItems: "center" }}>
+      <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1 }]} />
+      {entries.length ? <Button label="+ MESSAGE" onPress={() => setComposing(true)} /> : null}
     </View>
     {loading ? <Loading /> : <FlatList
       data={visible}
@@ -119,6 +188,8 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
       </Pressable>}
     />}
 
+    <ComposeModal visible={composing} title="À mes clients" recipients={entries.map((entry) => ({ id: entry.client_id, label: entry.business_name }))}
+      onClose={() => { setComposing(false); void reload("silent"); }} onSend={(ids, body) => staffSendMessages(ids, body)} />
     <Modal visible={openClient !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpenClient(null)}>
       <SafeAreaView style={ui.modalSafe}>
         {openClient ? <>
@@ -131,7 +202,8 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
 }
 
 // Admins and supervisors (moderator) may mark any message "needs a reply"; others only their own.
-function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: string; viewerIsStaff: boolean; onRead: () => void; moderator?: boolean }) {
+// source: a buyer's conversation with any of its suppliers (read and sent through the buyer functions).
+function Thread({ clientId, viewerIsStaff, onRead, moderator, source }: { clientId: string; viewerIsStaff: boolean; onRead: () => void; moderator?: boolean; source?: ThreadSource }) {
   const needsReplyOn = useModules()("needs_reply");
   const [messages, setMessages] = useState<Message[]>([]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -166,7 +238,8 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
 
   async function markRead() {
     try {
-      await markMessagesRead(clientId);
+      if (source) await source.load();
+      else await markMessagesRead(clientId);
       onRead();
     } catch {
       // Read receipts are best effort.
@@ -178,12 +251,15 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
     let active = true;
     setLoading(true);
     void client?.auth.getUser().then(({ data }) => { if (active) setMe(data.user?.id ?? null); });
-    void fetchMessages(clientId)
+    const load = () => source ? source.load() : fetchMessages(clientId);
+    void load()
       .then((next) => { if (active) setMessages(next); })
       .catch((cause: unknown) => { if (active) setError(errorMessage(cause, "Impossible de charger la conversation.")); })
       .finally(() => { if (active) setLoading(false); });
     void markRead();
-    if (!client) return () => { active = false; };
+    // A supplier other than the selected one: no live feed, the conversation is refreshed regularly.
+    const poll = source ? setInterval(() => { void load().then((next) => { if (active) setMessages(next); onRead(); }).catch(() => undefined); }, 15000) : null;
+    if (!client) return () => { active = false; if (poll) clearInterval(poll); };
 
     const channel = client
       .channel(`messages-${clientId}-${viewerIsStaff ? "staff" : "client"}`)
@@ -195,6 +271,7 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
       .subscribe();
     return () => {
       active = false;
+      if (poll) clearInterval(poll);
       void client.removeChannel(channel);
     };
   }, [clientId, viewerIsStaff]);
@@ -209,7 +286,9 @@ function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: stri
     setError("");
     try {
       const attachment = file ? await uploadAttachment(`client/${clientId}`, file) : null;
-      const message = await sendMessage(clientId, body, attachment, needsReply, replyTo?.id ?? null);
+      const message = source
+        ? await source.send(body, attachment, needsReply, replyTo?.id ?? null)
+        : await sendMessage(clientId, body, attachment, needsReply, replyTo?.id ?? null);
       setMessages((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
       setDraft("");
       setFile(null);

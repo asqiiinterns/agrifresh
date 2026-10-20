@@ -36,7 +36,7 @@ import { ClientInvoicesScreen } from "./src/screens/ClientInvoicesScreen";
 import { DocumentViewerHost } from "./src/ui/DocumentViewer";
 import { DialogHost } from "./src/ui/DialogHost";
 import { DriverScreen } from "./src/screens/DriverScreen";
-import { ClientMessagesScreen, StaffMessagesScreen } from "./src/screens/MessagesScreen";
+import { BuyerMessagesScreen, StaffMessagesScreen } from "./src/screens/MessagesScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { PlanningTab } from "./src/screens/PlanningScreen";
 import { ProductionHub, type HubSheet } from "./src/screens/ProductionHub";
@@ -330,6 +330,8 @@ function Main({ session }: { session: Session }) {
   useEffect(() => onModulesChanged(() => { void loadAccount(); }), [loadAccount]);
 
   const { kind, tabs } = account ? tabsFor(account, modules, myPro) : { kind: null, tabs: [] as TabDef[] };
+  // Screens that still work with one supplier at a time (the others cover all suppliers).
+  const supplierPill = suppliers.length > 1 && (tab === "recurring" || (tab === "invoices" && (nav.params?.section === "credits" || nav.params?.section === "returns")));
   const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)));
   // Commandes / Planning requested by a tile, an alert or a button open the matching sheet of "Production".
   const hub = kind === "team" && tabs.some((item) => item.key === "production");
@@ -429,11 +431,11 @@ function Main({ session }: { session: Session }) {
         return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId}
           onOpenSupplier={(clientId, orderId) => void switchSupplier(clientId).then(() => loadAccount()).then(() => navigate("orders", { orderId })).catch((cause: unknown) => notify("Fournisseur", errorMessage(cause, "Impossible de changer de fournisseur.")))} /> : null;
       case "messages":
-        return kind === "team" ? <StaffMessagesScreen moderator={["admin", "supervisor", "staff"].includes(account.role)} canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
+        return kind === "team" ? <StaffMessagesScreen moderator={["admin", "supervisor", "staff"].includes(account.role)} canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <BuyerMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "production":
         return kind === "team" ? <ProductionHub initialSheet={hubSheet} ordersSection={tab === "orders" ? nav.params?.section : undefined} orderId={nav.params?.orderId} /> : null;
       case "invoices":
-        return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen initialSheet={nav.params?.section} />;
+        return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen initialSheet={nav.params?.section} onSheet={(section) => setNav((state) => ({ ...state, params: { ...state.params, section } }))} />;
       case "decide":
         return <DecideScreen isAdmin={account.role === "admin"} onCount={setDecideCount} />;
       case "calendar":
@@ -494,11 +496,15 @@ function Main({ session }: { session: Session }) {
         <Ionicons name="log-out-outline" size={22} color={colors.danger} />
       </Pressable>
     </View>
-    {/* Several spaces (Pros, supplier or buyer mode): menus, rights and data follow the chosen one. */}
-    {spaces.length > 1 ? <Pressable onPress={() => setSpacePicker(true)} style={styles.supplierBar}>
-      <Ionicons name={spaces.find((item) => item.current)?.mode === "buyer" ? "cart-outline" : "business-outline"} size={16} color={colors.primary} />
-      <Text style={styles.supplierText} numberOfLines={1}>{(() => { const space = spaces.find((item) => item.current); return space ? `${space.org_name} · ${space.mode === "buyer" ? "Acheteur" : "Fournisseur"}` : "Choisir un espace"; })()}</Text>
-      <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
+    {/* One pill: the space (when there are several) and, only on the screens that still work with one supplier
+        at a time (credit notes, returns, recurring orders), the selected supplier. Everything else covers all suppliers. */}
+    {spaces.length > 1 || supplierPill ? <Pressable onPress={() => spaces.length > 1 ? setSpacePicker(true) : setChoosing(true)} style={styles.supplierBar}>
+      <Ionicons name={spaces.find((item) => item.current)?.mode === "buyer" || spaces.length <= 1 ? "cart-outline" : "business-outline"} size={16} color={colors.primary} />
+      <Text style={styles.supplierText} numberOfLines={1}>{[
+        spaces.length > 1 ? (() => { const space = spaces.find((item) => item.current); return space ? `${space.org_name} · ${space.mode === "buyer" ? "Acheteur" : "Fournisseur"}` : "Choisir un espace"; })() : null,
+        supplierPill ? `chez ${suppliers.find((item) => item.current)?.name ?? "à choisir"}` : null,
+      ].filter(Boolean).join(" · ")}</Text>
+      <Ionicons name="chevron-down" size={16} color={colors.primary} />
     </Pressable> : null}
     <Modal visible={spacePicker} transparent animationType="fade" onRequestClose={() => setSpacePicker(false)}>
       <Pressable style={styles.chooserBackdrop} onPress={() => setSpacePicker(false)}>
@@ -514,19 +520,19 @@ function Main({ session }: { session: Session }) {
             </View>
             {item.current ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
           </Pressable>)}
+          {supplierPill ? <Pressable style={[styles.chooserRow, { borderTopWidth: 1, borderTopColor: colors.line }]} onPress={() => { setSpacePicker(false); setChoosing(true); }}>
+            <Ionicons name="storefront-outline" size={18} color={colors.primary} />
+            <Text style={[ui.body, { flex: 1 }]}>{`Fournisseur pour cet écran : ${suppliers.find((item) => item.current)?.name ?? "à choisir"}`}</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+          </Pressable> : null}
         </View>
       </Pressable>
     </Modal>
-    {/* A buyer with several suppliers works with one at a time: orders, catalogue and invoices follow it. */}
-    {suppliers.length > 1 ? <Pressable onPress={() => setChoosing(true)} style={styles.supplierBar}>
-      <Ionicons name="storefront-outline" size={16} color={colors.primary} />
-      <Text style={styles.supplierText} numberOfLines={1}>Fournisseur : {suppliers.find((item) => item.current)?.name ?? "à choisir"}</Text>
-      <Ionicons name="chevron-down" size={16} color={colors.primary} />
-    </Pressable> : null}
     <Modal visible={choosing} transparent animationType="fade" onRequestClose={() => setChoosing(false)}>
       <Pressable style={styles.chooserBackdrop} onPress={() => setChoosing(false)}>
         <View style={styles.chooser}>
           <Text style={ui.strong}>Choisir le fournisseur</Text>
+          <Text style={ui.small}>Pour les avoirs, les retours et les commandes récurrentes. Commander, Commandes, Factures et Messages couvrent tous vos fournisseurs.</Text>
           {suppliers.map((item) => <Pressable key={item.client_id} style={[styles.chooserRow, item.current && { backgroundColor: colors.primarySoft }]}
             onPress={() => { setChoosing(false); void switchSupplier(item.client_id).then(() => { setTab(null); return loadAccount(); }).catch((cause: unknown) => notify("Fournisseur", errorMessage(cause, "Impossible de changer de fournisseur."))); }}>
             <Text style={[ui.body, { flex: 1 }]}>{item.name}</Text>

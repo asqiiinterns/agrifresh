@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
 import { fetchInvoices, invoiceLabel, shareInvoice, type InvoiceWithOrders } from "../data/invoices";
+import { fetchBuyerInvoices, withSeller, type BuyerInvoice } from "../data/buyer";
 import { deliveryNoteNumber } from "../data/orders";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, formatDay, formatPrice } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
@@ -22,8 +23,10 @@ const filters = [
 ] as const;
 
 // RLS returns only this client's issued, paid or cancelled invoices (never drafts).
+// Invoices of all my suppliers (20261117), each printed with its own supplier's details.
 function InvoiceList() {
-  const [invoices, setInvoices] = useState<InvoiceWithOrders[]>([]);
+  const [invoices, setInvoices] = useState<(InvoiceWithOrders & Partial<Pick<BuyerInvoice, "supplier_name" | "seller">>)[]>([]);
+  const [supplier, setSupplier] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +38,7 @@ function InvoiceList() {
     if (refresh) setRefreshing(true);
     setError("");
     try {
-      setInvoices(await fetchInvoices());
+      setInvoices(await fetchBuyerInvoices() ?? await fetchInvoices());
     } catch (cause) {
       setError(errorMessage(cause, "Impossible de charger vos factures."));
     } finally {
@@ -46,10 +49,10 @@ function InvoiceList() {
 
   useEffect(() => { void reload(); }, []);
 
-  async function open(invoice: InvoiceWithOrders) {
+  async function open(invoice: InvoiceWithOrders & { seller?: BuyerInvoice["seller"] }) {
     setOpeningId(invoice.id);
     try {
-      await shareInvoice(invoice);
+      await withSeller(invoice.seller, () => shareInvoice(invoice));
     } catch (cause) {
       notify("Facture", errorMessage(cause, "Impossible d’afficher la facture."));
     } finally {
@@ -57,12 +60,16 @@ function InvoiceList() {
     }
   }
 
-  const visible = invoices.filter((invoice) => (filter === "all" || invoice.status === filter) && matchesDate(invoice.issued_at, issued));
+  const suppliers = [...new Map(invoices.filter((invoice) => invoice.supplier_name).map((invoice) => [invoice.client_id, invoice.supplier_name as string]))];
+  const multi = suppliers.length > 1;
+  const visible = invoices.filter((invoice) => (supplier === "all" || invoice.client_id === supplier) && (filter === "all" || invoice.status === filter) && matchesDate(invoice.issued_at, issued));
   const listFilters: Filter[] = [
     { kind: "choice", title: "Statut", options: filters.map((item) => ({ key: item.key, label: item.label })), value: filter, defaultValue: "all", onChange: setFilter },
     { kind: "date", title: "Émise le", presets: [presets.last7, presets.last30, presets.thisMonth, presets.lastMonth], value: issued, onChange: setIssued },
+    ...(multi ? [{ kind: "choice" as const, title: "Fournisseur", options: [{ key: "all", label: "Tous les fournisseurs" }, ...suppliers.map(([key, label]) => ({ key, label }))], value: supplier, defaultValue: "all", onChange: setSupplier }] : []),
   ];
-  const due = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
+  const due = invoices.filter((invoice) => invoice.status === "issued" && (supplier === "all" || invoice.client_id === supplier))
+    .reduce((sum, invoice) => sum + Number(invoice.total_ttc) - Number(invoice.amount_paid ?? 0), 0);
 
   return <View style={{ flex: 1 }}>
     <FilterBar filters={listFilters} />
@@ -79,6 +86,7 @@ function InvoiceList() {
           <Text style={[ui.strong, { flex: 1 }]}>{invoiceLabel(item)}</Text>
           <InvoiceBadge status={item.status} />
         </View>
+        {multi && item.supplier_name ? <Text style={[ui.small, { fontWeight: "700" }]}>{item.supplier_name}</Text> : null}
         <Text style={ui.small}>Émise le {formatDay(item.issued_at, { day: "numeric", month: "long", year: "numeric" })}{item.paid_at ? ` · réglée le ${formatDay(item.paid_at, { day: "numeric", month: "long" })}` : ""}</Text>
         <Text style={ui.small}>{[...item.orders].sort((a, b) => a.order_number - b.order_number).map(deliveryNoteNumber).join(", ")}</Text>
         <View style={[ui.row, ui.divider]}>
@@ -92,7 +100,7 @@ function InvoiceList() {
 }
 
 // Mes factures: invoices, credit notes and returns, as sheets.
-export function ClientInvoicesScreen({ initialSheet }: { initialSheet?: string } = {}) {
+export function ClientInvoicesScreen({ initialSheet, onSheet }: { initialSheet?: string; onSheet?: (sheet: string) => void } = {}) {
   const canReturns = useCan()("client.returns");
   type Sheet = "invoices" | "account" | "credits" | "returns";
   const [sheet, setSheet] = useState<Sheet>(initialSheet === "credits" || initialSheet === "account" || (initialSheet === "returns" && canReturns) ? initialSheet as Sheet : "invoices");
@@ -118,7 +126,7 @@ export function ClientInvoicesScreen({ initialSheet }: { initialSheet?: string }
     <Sheets
       items={[{ key: "invoices", label: "Factures" }, { key: "account", label: "Mon compte" }, { key: "credits", label: "Avoirs", count: credits.length || undefined }, ...(canReturns ? [{ key: "returns" as const, label: "Retours", count: returns.filter((item) => item.status !== "credited" && item.status !== "refused").length || undefined }] : [])]}
       value={sheet}
-      onChange={setSheet}
+      onChange={(next) => { setSheet(next); onSheet?.(next); }}
     />
     {sheet === "invoices" ? <InvoiceList /> : sheet === "account" ? <ClientAccountSheet /> : sheet === "credits" ? <CreditsList credits={credits} refreshControl={refresh} onChanged={() => void reloadDocuments()} /> : <ClientReturnsList returns={returns} refreshControl={refresh} />}
   </View>;

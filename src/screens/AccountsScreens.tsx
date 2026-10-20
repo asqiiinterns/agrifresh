@@ -8,6 +8,7 @@ import { Button, Chip, CloseButton, EmptyState, Field, Loading, formatDay, forma
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { FilterBar } from "../ui/FilterBar";
+import { fetchBuyerAccounts, type BuyerAccount } from "../data/buyer";
 
 const MIGRATION_HINT = "La migration 20261114 est-elle exécutée ?";
 const depositMethods: { key: DepositMethod; label: string }[] = [
@@ -331,18 +332,24 @@ function LimitCard({ clientId, limit, onChanged }: { clientId: string; limit: nu
   </View>;
 }
 
-// Client side: my account with my current supplier.
+// Client side: my account with each of my suppliers (one at a time, chosen above the statement).
 export function ClientAccountSheet() {
   const [statement, setStatement] = useState<Statement | null>(null);
+  const [accounts, setAccounts] = useState<BuyerAccount[]>([]);
+  const [chosen, setChosen] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  async function reload(refresh = false) {
+  async function reload(refresh = false, clientId = chosen) {
     if (refresh) setRefreshing(true);
     setError("");
     try {
-      setStatement(await fetchStatement());
+      const list = await fetchBuyerAccounts() ?? [];
+      setAccounts(list);
+      const target = clientId ?? list.find((account) => account.current)?.client_id ?? list[0]?.client_id ?? null;
+      setChosen(target);
+      setStatement(await fetchStatement(target ?? undefined));
     } catch (cause) {
       setError(errorMessage(cause, `Impossible de charger votre compte. ${MIGRATION_HINT}`));
     } finally {
@@ -355,6 +362,9 @@ export function ClientAccountSheet() {
   if (loading) return <Loading />;
   return <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
     {error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
+    {accounts.length > 1 ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+      {accounts.map((account) => <Chip key={account.client_id} label={account.supplier_name} selected={chosen === account.client_id} onPress={() => { setChosen(account.client_id); void reload(false, account.client_id); }} />)}
+    </View> : null}
     {statement ? <>
       {statement.supplier_name ? <Text style={[ui.small, { marginTop: 8 }]}>{`Votre compte chez ${statement.supplier_name}`}</Text> : null}
       <FiguresCard figures={statement.figures} clientSide />

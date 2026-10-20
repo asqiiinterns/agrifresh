@@ -1,6 +1,18 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["Chez {0}, tant qu’elle n’est pas acceptée.", "With {0}, as long as it is not accepted.", "لدى {0}، ما دام لم يُقبل."],
+  ["La commande #{0} a été mise à jour. Votre fournisseur est prévenu.", "Order #{0} has been updated. Your supplier is informed.", "تم تحديث الطلب #{0}. تم إعلام مورّدك."],
+  ["Annuler la commande #{0} ? Votre fournisseur ne l’a pas encore acceptée.", "Cancel order #{0}? Your supplier has not accepted it yet.", "إلغاء الطلب #{0}؟ لم يقبله مورّدك بعد."],
+  ["La commande #{0} est annulée. Votre fournisseur est prévenu.", "Order #{0} is cancelled. Your supplier is informed.", "تم إلغاء الطلب #{0}. تم إعلام مورّدك."],
+  ["Votre conversation avec {0}.", "Your conversation with {0}.", "محادثتك مع {0}."],
+  ["Vous : {0}", "You: {0}", "أنت: {0}"],
+  ["Envoyé à {0} destinataires, chacun dans sa conversation.", "Sent to {0} recipients, each in its own conversation.", "أُرسل إلى {0} مرسَل إليهم، كلٌّ في محادثته."],
+  ["ENVOYER À {0} DESTINATAIRES", "SEND TO {0} RECIPIENTS", "إرسال إلى {0} مرسَل إليهم"],
+  ["chez {0}", "with {0}", "لدى {0}"],
+  ["Fournisseur pour cet écran : {0}", "Supplier for this screen: {0}", "المورّد لهذه الشاشة: {0}"],
+  ["Encours atteint : {0} dus pour {1} autorisés. Le client ne peut plus commander lui-même ; vous pouvez enregistrer cette commande si vous l’acceptez.", "Credit limit reached: {0} due for {1} allowed. The client can no longer order by itself; you may still record this order if you accept it.", "تم بلوغ سقف الدين: {0} مستحقة مقابل {1} مسموح بها. لا يمكن للحريف الطلب بنفسه؛ يمكنك تسجيل هذا الطلب إن قبلته."],
+  ["Encours : {0} dus sur {1} autorisés.", "Outstanding: {0} due out of {1} allowed.", "الدين: {0} مستحقة من {1} مسموح بها."],
   ["{0} TTC", "{0} incl. VAT", "{0} مع الأداءات"],
   ["{0} HT · {1} TTC / {2}", "{0} excl. VAT · {1} incl. VAT / {2}", "{0} دون أداءات · {1} مع الأداءات / {2}"],
   ["{0} HT · {1} TTC", "{0} excl. VAT · {1} incl. VAT", "{0} دون أداءات · {1} مع الأداءات"],
