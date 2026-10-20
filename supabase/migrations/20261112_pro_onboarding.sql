@@ -654,3 +654,71 @@ end;
 $$;
 REVOKE ALL ON FUNCTION public.platform_set_account_status(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.platform_set_account_status(uuid, text) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Who handles a new account — no confusion between Appro+ and a Pro:
+--   * linked to a client record (same e-mail): that supplier validates it;
+--   * named Responsable of a Pro by Appro+: joins that Pro;
+--   * anything else (free sign-up): Appro+ only.
+-- ---------------------------------------------------------------------------
+create or replace function public.alert_on_new_account()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_email text;
+  v_supplier uuid;
+begin
+  if new.account_status = 'pending' then
+    select u.email into v_email from auth.users u where u.id = new.id;
+    v_supplier := public.client_org(new.client_id);
+    if v_supplier is not null then
+      perform public.notify(array(select pr.id from public.profiles pr
+          where pr.org_id = v_supplier and pr.role = 'admin' and pr.account_status = 'active'),
+        'account.pending', 'Nouveau compte client à valider', format('%s attend votre validation (Admin → Comptes).', coalesce(v_email, 'Un client')));
+    elsif new.org_id is null then
+      perform public.notify(array(select pm.user_id from public.platform_members pm
+          where pm.active and pm.role in ('superadmin', 'verification', 'account_manager')),
+        'account.pending', 'Nouvelle inscription', format('%s vient de s’inscrire (Appro+ → Paramétrage → Comptes).', coalesce(v_email, 'Un utilisateur')));
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- A Pro's accounts list: its team and its clients' accounts only (free sign-ups are Appro+'s).
+DO $$
+DECLARE
+  v_def text := pg_get_functiondef('public.admin_list_accounts()'::regprocedure);
+BEGIN
+  v_def := replace(v_def, '
+           or (pr.org_id is null and pr.client_id is null and public.acting_supplier_org_id() = public.legacy_org_id())', '');
+  EXECUTE v_def;
+END;
+$$;
+
+-- A Pro's Responsable may take a free account only to add it to its own team (not validate it).
+create or replace function public.profiles_org_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_acting uuid;
+begin
+  if (select auth.uid()) is null or new.id = (select auth.uid()) or public.platform_role() is not null then
+    return new;
+  end if;
+  v_acting := public.acting_supplier_org_id();
+  if v_acting is null
+     or not (coalesce(old.org_id = v_acting, false) or coalesce(public.client_org(old.client_id) = v_acting, false)
+             or (old.org_id is null and old.client_id is null and old.role <> 'platform' and coalesce(new.org_id = v_acting, false)))
+     or not (new.org_id is null or coalesce(new.org_id = v_acting, false) or coalesce(public.client_org(new.client_id) = v_acting, false)) then
+    raise exception using errcode = '42501', message = 'Ce compte n’est pas rattaché à votre Pro : sa validation revient à Appro+.';
+  end if;
+  return new;
+end;
+$$;
