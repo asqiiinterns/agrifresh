@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import type { Attachment } from "./attachments";
 
 export type Message = {
   id: string;
@@ -7,6 +8,9 @@ export type Message = {
   body: string;
   created_at: string;
   read_at: string | null;
+  attachment?: Attachment | null;
+  // Flagged by the team: waiting for an answer (cleared by the next reply).
+  needs_reply?: boolean;
 };
 
 export type InboxEntry = {
@@ -27,7 +31,7 @@ function client() {
 export async function fetchMessages(clientId: string): Promise<Message[]> {
   const { data, error } = await client()
     .from("messages")
-    .select("id, client_id, from_staff, body, created_at, read_at")
+    .select("*")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -36,10 +40,17 @@ export async function fetchMessages(clientId: string): Promise<Message[]> {
 }
 
 // The database decides the sender side (staff or client) from the caller's role.
-export async function sendMessage(clientId: string, body: string): Promise<Message> {
-  const { data, error } = await client().rpc("send_message", { p_client_id: clientId, p_body: body.trim() });
+export async function sendMessage(clientId: string, body: string, attachment: Attachment | null = null): Promise<Message> {
+  const { data, error } = attachment
+    ? await client().rpc("send_message_v2", { p_client_id: clientId, p_body: body.trim(), p_attachment: attachment })
+    : await client().rpc("send_message", { p_client_id: clientId, p_body: body.trim() });
   if (error) throw error;
   return data as Message;
+}
+
+export async function flagMessage(messageId: string, needsReply: boolean): Promise<void> {
+  const { error } = await client().rpc("staff_flag_message", { p_message_id: messageId, p_needs_reply: needsReply });
+  if (error) throw error;
 }
 
 export async function markMessagesRead(clientId: string): Promise<void> {

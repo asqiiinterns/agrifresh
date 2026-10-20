@@ -48,6 +48,20 @@
           "color": "#24543B",
           "defaultChannel": "alerts"
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "AgriFresh utilise le micro pour enregistrer des messages vocaux."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AgriFresh accède à vos photos et vidéos pour les joindre à un message.",
+          "cameraPermission": "AgriFresh utilise l’appareil photo pour joindre une photo ou une vidéo à un message.",
+          "microphonePermission": "AgriFresh utilise le micro pour enregistrer des vidéos."
+        }
       ]
     ],
     "icon": "./assets/icon.png"

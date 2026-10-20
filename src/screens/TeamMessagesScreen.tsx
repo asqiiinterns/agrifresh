@@ -10,6 +10,8 @@ import {
   type TeamConversation, type TeamConversationKind, type TeamMessage, type TeamPerson,
 } from "../data/teamMessages";
 import { Button, CloseButton, EmptyState, Field, Loading, ScreenHeader, formatDateTime } from "../ui/components";
+import { uploadAttachment, type LocalFile } from "../data/attachments";
+import { AttachmentPicker, AttachmentView } from "../ui/Attachments";
 import type { IconName } from "../ui/navigation";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -191,6 +193,7 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
   const [messages, setMessages] = useState<TeamMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
+  const [file, setFile] = useState<LocalFile | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [me, setMe] = useState<string | null>(null);
@@ -226,13 +229,15 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
 
   async function send() {
     const body = draft.trim();
-    if (!body) return;
+    if (!body && !file) return;
     setSending(true);
     setError("");
     try {
-      const message = await sendTeamMessage(conversationId, body);
+      const attachment = file ? await uploadAttachment(`team/${conversationId}`, file) : null;
+      const message = await sendTeamMessage(conversationId, body, attachment);
       setMessages((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
       setDraft("");
+      setFile(null);
     } catch (cause) {
       setError(errorMessage(cause, "Le message n’a pas pu être envoyé."));
     } finally {
@@ -254,15 +259,17 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
           const mine = item.sender_id === me;
           return <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
             {!mine ? <Text style={styles.author}>{item.sender_name}</Text> : null}
-            <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text>
+            {item.attachment ? <AttachmentView attachment={item.attachment} mine={mine} /> : null}
+            {item.body ? <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text> : null}
             <Text style={[styles.time, mine && { color: "#d4e3d6" }]}>{formatDateTime(item.created_at)}</Text>
           </View>;
         }}
       />}
       {error ? <Text style={[ui.error, { paddingHorizontal: 14 }]}>{error}</Text> : null}
+      <AttachmentPicker value={file} onChange={setFile} disabled={sending} />
       <View style={styles.composer}>
-        <TextInput value={draft} onChangeText={setDraft} placeholder="Votre message…" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1, maxHeight: 120 }]} multiline maxLength={2000} />
-        <Pressable onPress={() => void send()} disabled={sending || !draft.trim()} style={[styles.send, (sending || !draft.trim()) && ui.disabled]} accessibilityLabel="Envoyer">
+        <TextInput value={draft} onChangeText={setDraft} placeholder={file ? "Ajouter un texte (facultatif)…" : "Votre message…"} placeholderTextColor={colors.muted} style={[ui.input, { flex: 1, maxHeight: 120 }]} multiline maxLength={2000} />
+        <Pressable onPress={() => void send()} disabled={sending || (!draft.trim() && !file)} style={[styles.send, (sending || (!draft.trim() && !file)) && ui.disabled]} accessibilityLabel="Envoyer">
           <Ionicons name="send" size={18} color={colors.white} />
         </Pressable>
       </View>

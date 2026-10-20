@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import type { Role } from "./account";
+import type { Attachment } from "./attachments";
 
 export type TeamPerson = { id: string; name: string; role: Role };
 export type TeamConversationKind = "direct" | "group" | "role" | "all";
@@ -15,7 +16,7 @@ export type TeamConversation = {
   last_mine: boolean | null;
   unread: number;
 };
-export type TeamMessage = { id: string; conversation_id: string; sender_id: string | null; sender_name: string; body: string; created_at: string };
+export type TeamMessage = { id: string; conversation_id: string; sender_id: string | null; sender_name: string; body: string; created_at: string; attachment?: Attachment | null };
 
 function client() {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
@@ -52,8 +53,10 @@ export async function fetchTeamThread(conversationId: string): Promise<{ title: 
   return data as { title: string; members: string[]; messages: TeamMessage[] };
 }
 
-export async function sendTeamMessage(conversationId: string, body: string): Promise<TeamMessage> {
-  const { data, error } = await client().rpc("team_send_message", { p_conversation_id: conversationId, p_body: body.trim() });
+export async function sendTeamMessage(conversationId: string, body: string, attachment: Attachment | null = null): Promise<TeamMessage> {
+  const { data, error } = attachment
+    ? await client().rpc("team_send_message_v2", { p_conversation_id: conversationId, p_body: body.trim(), p_attachment: attachment })
+    : await client().rpc("team_send_message", { p_conversation_id: conversationId, p_body: body.trim() });
   if (error) throw error;
   return data as TeamMessage;
 }

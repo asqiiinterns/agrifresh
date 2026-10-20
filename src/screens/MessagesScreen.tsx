@@ -4,7 +4,10 @@ import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
-import { countUnread, fetchInbox, fetchMessages, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
+import { countUnread, fetchInbox, fetchMessages, flagMessage, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
+import { uploadAttachment, type LocalFile } from "../data/attachments";
+import { AttachmentPicker, AttachmentView } from "../ui/Attachments";
+import { Ionicons } from "@expo/vector-icons";
 import { countTeamUnread } from "../data/teamMessages";
 import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime } from "../ui/components";
 import { TeamMessagesList } from "./TeamMessagesScreen";
@@ -127,8 +130,20 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
+  const [file, setFile] = useState<LocalFile | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+
+  async function toggleNeedsReply(message: Message) {
+    const next = !message.needs_reply;
+    setMessages((current) => current.map((item) => item.id === message.id ? { ...item, needs_reply: next } : item));
+    try {
+      await flagMessage(message.id, next);
+    } catch (cause) {
+      setMessages((current) => current.map((item) => item.id === message.id ? { ...item, needs_reply: !next } : item));
+      setError(errorMessage(cause, "Impossible de marquer le message. La migration 20261031 est-elle exécutée ?"));
+    }
+  }
 
   async function markRead() {
     try {
@@ -166,13 +181,15 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
 
   async function send() {
     const body = draft.trim();
-    if (!body) return;
+    if (!body && !file) return;
     setSending(true);
     setError("");
     try {
-      const message = await sendMessage(clientId, body);
+      const attachment = file ? await uploadAttachment(`client/${clientId}`, file) : null;
+      const message = await sendMessage(clientId, body, attachment);
       setMessages((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
       setDraft("");
+      setFile(null);
     } catch (cause) {
       setError(errorMessage(cause, "Le message n’a pas pu être envoyé."));
     } finally {
@@ -193,15 +210,21 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
         const mine = item.from_staff === viewerIsStaff;
         return <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
           {!mine ? <Text style={styles.author}>{item.from_staff ? "AgriFresh" : "Client"}</Text> : null}
-          <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text>
+          {item.attachment ? <AttachmentView attachment={item.attachment} mine={mine} /> : null}
+          {item.body ? <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text> : null}
           <Text style={[styles.time, mine && { color: "#d4e3d6" }]}>{formatDateTime(item.created_at)}{mine && item.read_at ? " · lu" : ""}</Text>
+          {viewerIsStaff && !item.from_staff ? <Pressable onPress={() => void toggleNeedsReply(item)} style={styles.needsReply} hitSlop={6}>
+            <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={16} color={item.needs_reply ? colors.orange : colors.muted} />
+            <Text style={[styles.needsReplyText, item.needs_reply && { color: colors.orange }]}>Nécessite une réponse</Text>
+          </Pressable> : null}
         </View>;
       }}
     />}
     {error ? <Text style={[ui.error, { paddingHorizontal: 18 }]}>{error}</Text> : null}
+    <AttachmentPicker value={file} onChange={setFile} disabled={sending} />
     <View style={styles.composer}>
-      <TextInput value={draft} onChangeText={setDraft} placeholder="Votre message…" placeholderTextColor={colors.muted} style={[ui.input, { flex: 1, maxHeight: 120 }]} multiline maxLength={2000} />
-      <Pressable onPress={() => void send()} disabled={sending || !draft.trim()} style={[styles.send, (sending || !draft.trim()) && ui.disabled]} accessibilityLabel="Envoyer">
+      <TextInput value={draft} onChangeText={setDraft} placeholder={file ? "Ajouter un texte (facultatif)…" : "Votre message…"} placeholderTextColor={colors.muted} style={[ui.input, { flex: 1, maxHeight: 120 }]} multiline maxLength={2000} />
+      <Pressable onPress={() => void send()} disabled={sending || (!draft.trim() && !file)} style={[styles.send, (sending || (!draft.trim() && !file)) && ui.disabled]} accessibilityLabel="Envoyer">
         <Text style={styles.sendText}>{sending ? "…" : "➤"}</Text>
       </Pressable>
     </View>
@@ -218,6 +241,8 @@ const styles = StyleSheet.create({
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
   send: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   sendText: { color: colors.white, fontSize: 18 },
+  needsReply: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 4 },
+  needsReplyText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   unread: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   unreadText: { color: colors.white, fontSize: 11, fontWeight: "800" },
 });
