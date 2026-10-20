@@ -56,6 +56,13 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, no
   if (error) throw error;
 }
 
+// Special follow-up (kept in « À décider » whatever the status) and "to reschedule" in the planning.
+export async function setOrderFlags(orderId: string, flags: { special?: boolean; reschedule?: boolean }): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("staff_set_order_flags", { p_order_id: orderId, p_special: flags.special ?? null, p_reschedule: flags.reschedule ?? null });
+  if (error) throw error;
+}
+
 // Puts an accepted order before another one in the execution queue (or at the end when null).
 export async function scheduleOrder(orderId: string, beforeOrderId: string | null): Promise<void> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");

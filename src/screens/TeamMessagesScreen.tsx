@@ -6,10 +6,10 @@ import { Text, TextInput } from "../ui/Text";
 import { supabase } from "../lib/supabase";
 import { roleLabels, type Role } from "../data/account";
 import {
-  fetchTeamConversations, fetchTeamDirectory, fetchTeamThread, flagTeamMessage, markTeamRead, sendTeamMessage, startTeamConversation,
+  addTeamMembers, fetchTeamConversations, fetchTeamDirectory, fetchTeamThread, flagTeamMessage, markTeamRead, sendTeamMessage, startTeamConversation,
   type TeamConversation, type TeamConversationKind, type TeamMessage, type TeamPerson,
 } from "../data/teamMessages";
-import { Button, CloseButton, EmptyState, Field, Loading, ScreenHeader, formatDateTime } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, formatDateTime } from "../ui/components";
 import { uploadAttachment, type LocalFile } from "../data/attachments";
 import { AttachmentPicker, AttachmentView, NeedsReplyTag, NeedsReplyToggle } from "../ui/Attachments";
 import type { IconName } from "../ui/navigation";
@@ -77,7 +77,7 @@ export function TeamMessagesList({ onRead, initialConversationId }: { onRead: ()
         {item.unread ? <View style={styles.badge}><Text style={styles.badgeText}>{item.unread}</Text></View> : null}
       </Pressable>}
     />}
-    <NewConversationModal visible={creating} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setOpenId(id); void reload(); }} />
+    <RecipientsModal visible={creating} mode="new" onClose={() => setCreating(false)} onDone={async (choice) => { const id = await startFromChoice(choice); setCreating(false); setOpenId(id); void reload(); }} />
     <Modal visible={openId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpenId(null)}>
       <SafeAreaView style={ui.modalSafe}>
         {openId ? <TeamThread conversationId={openId} onClose={() => { setOpenId(null); void reload(); }} onRead={onRead} /> : null}
@@ -86,25 +86,25 @@ export function TeamMessagesList({ onRead, initialConversationId }: { onRead: ()
   </View>;
 }
 
-const choices: { kind: TeamConversationKind; title: string; body: string }[] = [
-  { kind: "direct", title: "Une personne", body: "Discussion privée avec un collègue." },
-  { kind: "group", title: "Plusieurs personnes", body: "Choisissez les participants et donnez un nom au groupe." },
-  { kind: "role", title: "Un profil", body: "Tous les livreurs, toute la production, tous les superviseurs…" },
-  { kind: "all", title: "Toute l’équipe", body: "Une annonce pour tout le monde." },
-];
 const teamRoles: Role[] = ["supervisor", "production", "driver", "admin"];
 const roleAudience: Partial<Record<Role, string>> = {
   supervisor: "Tous les superviseurs",
-  production: "Toute l’équipe de production",
+  production: "Toute la production",
   driver: "Tous les livreurs",
   admin: "Tous les administrateurs",
 };
 
-function NewConversationModal({ visible, onClose, onCreated }: { visible: boolean; onClose: () => void; onCreated: (id: string) => void }) {
-  const [kind, setKind] = useState<TeamConversationKind | null>(null);
+// One screen: tick people, whole profiles or the whole team, then write. Also used to add people.
+function RecipientsModal({ visible, mode, onClose, onDone }: {
+  visible: boolean;
+  mode: "new" | "add";
+  onClose: () => void;
+  onDone: (choice: { all: boolean; ids: string[]; roles: Role[]; title: string }) => Promise<void>;
+}) {
   const [people, setPeople] = useState<TeamPerson[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [role, setRole] = useState<Role | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [all, setAll] = useState(false);
   const [title, setTitle] = useState("");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
@@ -112,9 +112,9 @@ function NewConversationModal({ visible, onClose, onCreated }: { visible: boolea
 
   useEffect(() => {
     if (!visible) return;
-    setKind(null);
     setSelected([]);
-    setRole(null);
+    setRoles([]);
+    setAll(false);
     setTitle("");
     setSearch("");
     setError("");
@@ -123,68 +123,61 @@ function NewConversationModal({ visible, onClose, onCreated }: { visible: boolea
 
   const term = search.trim().toLocaleLowerCase("fr");
   const visiblePeople = people.filter((person) => `${person.name} ${roleLabels[person.role] ?? ""}`.toLocaleLowerCase("fr").includes(term));
-  const counts = useMemo(() => Object.fromEntries(teamRoles.map((item) => [item, people.filter((person) => person.role === item).length])), [people]);
+  const fromRoles = people.filter((person) => roles.includes(person.role)).map((person) => person.id);
+  const recipients = all ? people.map((person) => person.id) : [...new Set([...selected, ...fromRoles])];
+  const toggle = (id: string) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleRole = (role: Role) => setRoles((current) => current.includes(role) ? current.filter((item) => item !== role) : [...current, role]);
 
-  async function start(nextKind = kind) {
-    if (!nextKind) return;
-    if (nextKind === "direct" && selected.length !== 1) { setError("Choisissez une personne."); return; }
-    if (nextKind === "group" && selected.length < 1) { setError("Choisissez au moins une personne."); return; }
-    if (nextKind === "role" && !role) { setError("Choisissez un profil."); return; }
+  async function done() {
+    if (!all && recipients.length === 0) {
+      setError("Choisissez au moins une personne ou un profil.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      onCreated(await startTeamConversation(nextKind, { memberIds: selected, role: role ?? undefined, title }));
+      await onDone({ all, ids: recipients, roles: selected.length ? [] : roles, title });
     } catch (cause) {
-      setError(errorMessage(cause, "La conversation n’a pas pu être ouverte."));
+      setError(errorMessage(cause, "L’opération a échoué."));
     } finally {
       setBusy(false);
     }
   }
 
-  const toggle = (id: string) => setSelected((current) => kind === "direct" ? [id] : current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
-      <ScreenHeader eyebrow="MESSAGE À L’ÉQUIPE" title={kind ? choices.find((item) => item.kind === kind)!.title : "À qui écrire ?"} right={<CloseButton onPress={onClose} />} />
+      <ScreenHeader eyebrow={mode === "new" ? "MESSAGE À L’ÉQUIPE" : "AJOUTER À LA DISCUSSION"} title={all ? "Toute l’équipe" : recipients.length ? `${recipients.length} destinataire(s)` : "Destinataires"} right={<CloseButton onPress={onClose} />} />
       <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
-        {!kind ? choices.map((choice) => <Pressable key={choice.kind} onPress={() => { setSelected([]); if (choice.kind === "all") void start("all"); else setKind(choice.kind); }} style={[ui.card, styles.choice]}>
-          <View style={styles.avatar}><Ionicons name={kindIcon[choice.kind]} size={20} color={colors.green} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={ui.strong}>{choice.title}</Text>
-            <Text style={ui.small}>{choice.body}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-        </Pressable>) : <>
-          <Pressable onPress={() => setKind(null)} style={{ marginTop: 8 }}><Text style={styles.link}>‹ Changer de type</Text></Pressable>
-          {kind === "role" ? <View style={{ marginTop: 6 }}>
-            {teamRoles.map((item) => {
-              const on = role === item;
-              return <Pressable key={item} onPress={() => setRole(item)} style={[ui.card, styles.choice, on && styles.selected]}>
-                <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={20} color={on ? colors.green : colors.muted} />
-                <Text style={[ui.strong, { flex: 1 }]}>{roleAudience[item]}</Text>
-                <Text style={ui.small}>{counts[item] ?? 0} pers.</Text>
-              </Pressable>;
-            })}
-          </View> : <>
-            {kind === "group" ? <Field label="Nom du groupe (facultatif)" value={title} onChangeText={setTitle} placeholder="Ex. Tournée du matin" /> : null}
-            <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un collègue" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 10 }]} />
-            {kind === "group" ? <Text style={[ui.small, { marginTop: 6 }]}>{selected.length} personne(s) sélectionnée(s)</Text> : null}
-            {visiblePeople.map((person) => {
-              const on = selected.includes(person.id);
-              return <Pressable key={person.id} onPress={() => toggle(person.id)} style={[styles.person, on && styles.selected]}>
-                <Ionicons name={kind === "direct" ? (on ? "radio-button-on" : "radio-button-off") : (on ? "checkbox" : "square-outline")} size={20} color={on ? colors.green : colors.muted} />
-                <Text style={[ui.body, { flex: 1, fontWeight: "700" }]}>{person.name}</Text>
-                <Text style={ui.small}>{roleLabels[person.role] ?? person.role}</Text>
-              </Pressable>;
-            })}
-          </>}
-          {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
-          <Button label="ÉCRIRE" onPress={() => void start()} busy={busy} style={{ marginTop: 14 }} />
-        </>}
-        {!kind && error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
+        <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          {mode === "new" ? <Chip label="Toute l’équipe" selected={all} onPress={() => setAll(!all)} /> : null}
+          {!all ? teamRoles.filter((role) => people.some((person) => person.role === role)).map((role) => <Chip key={role} label={roleAudience[role] ?? role} selected={roles.includes(role)} onPress={() => toggleRole(role)} />) : null}
+        </View>
+        {!all ? <>
+          <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un collègue" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 10 }]} />
+          {visiblePeople.map((person) => {
+            const viaRole = roles.includes(person.role);
+            const on = selected.includes(person.id) || viaRole;
+            return <Pressable key={person.id} onPress={() => toggle(person.id)} disabled={viaRole} style={[styles.person, on && styles.selected]}>
+              <Ionicons name={on ? "checkbox" : "square-outline"} size={20} color={on ? colors.green : colors.muted} />
+              <Text style={[ui.body, { flex: 1, fontWeight: "700" }]}>{person.name}</Text>
+              <Text style={ui.small}>{roleLabels[person.role] ?? person.role}</Text>
+            </Pressable>;
+          })}
+        </> : <Text style={[ui.small, { marginTop: 10 }]}>Une seule discussion pour toute l’équipe : les nouveaux membres la verront aussi.</Text>}
+        {mode === "new" && !all && recipients.length > 1 ? <Field label="Nom de la discussion (facultatif)" value={title} onChangeText={setTitle} placeholder="Ex. Tournée du matin" /> : null}
+        {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
+        <Button label={mode === "new" ? "ÉCRIRE" : "AJOUTER"} onPress={() => void done()} busy={busy} style={{ marginTop: 14 }} />
       </ScrollView>
     </SafeAreaView>
   </Modal>;
+}
+
+// A single profile alone stays a living "profile" conversation; otherwise people are listed.
+async function startFromChoice(choice: { all: boolean; ids: string[]; roles: Role[]; title: string }) {
+  if (choice.all) return startTeamConversation("all");
+  if (choice.roles.length === 1) return startTeamConversation("role", { role: choice.roles[0] });
+  if (choice.ids.length === 1) return startTeamConversation("direct", { memberIds: choice.ids });
+  return startTeamConversation("group", { memberIds: choice.ids, title: choice.title });
 }
 
 function TeamThread({ conversationId, onClose, onRead }: { conversationId: string; onClose: () => void; onRead: () => void }) {
@@ -198,6 +191,14 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [me, setMe] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  async function reloadThread() {
+    const thread = await fetchTeamThread(conversationId);
+    setTitle(thread.title);
+    setMembers(thread.members);
+    setMessages(thread.messages);
+  }
 
   async function toggleFlag(message: TeamMessage) {
     const next = !message.needs_reply;
@@ -259,7 +260,11 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
   }
 
   return <>
-    <ScreenHeader eyebrow={`${members.length} PARTICIPANT(S)`} title={title || "Conversation"} subtitle={members.length > 1 && members.length <= 8 ? members.join(", ") : undefined} right={<CloseButton onPress={onClose} />} />
+    <ScreenHeader eyebrow={`${members.length} PARTICIPANT(S)`} title={title || "Conversation"} subtitle={members.length > 1 && members.length <= 8 ? members.join(", ") : undefined} right={<View style={[ui.row, { gap: 6 }]}>
+      <Pressable onPress={() => setAdding(true)} style={styles.addButton} accessibilityLabel="Ajouter des participants"><Ionicons name="person-add-outline" size={18} color={colors.green} /></Pressable>
+      <CloseButton onPress={onClose} />
+    </View>} />
+    <RecipientsModal visible={adding} mode="add" onClose={() => setAdding(false)} onDone={async (choice) => { await addTeamMembers(conversationId, choice.ids); setAdding(false); await reloadThread(); }} />
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}>
       {loading ? <Loading /> : messages.length === 0 ? <View style={{ flex: 1, justifyContent: "center" }}>
         <EmptyState title="Aucun message" body="Écrivez le premier message ci-dessous." />
@@ -311,6 +316,7 @@ const styles = StyleSheet.create({
   author: { color: colors.orange, fontSize: 10, fontWeight: "800", marginBottom: 2 },
   body: { color: colors.text, fontSize: 14, lineHeight: 20 },
   time: { color: colors.muted, fontSize: 9, marginTop: 3, textAlign: "right" },
+  addButton: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   flagRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   flagText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },

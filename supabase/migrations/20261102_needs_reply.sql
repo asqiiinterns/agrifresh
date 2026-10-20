@@ -251,3 +251,31 @@ begin
   );
 end;
 $$;
+
+-- Adds people to a conversation; a two-person conversation becomes a group.
+create or replace function public.team_add_members(p_conversation_id uuid, p_member_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_kind text;
+begin
+  if not public.is_team_conversation_member(p_conversation_id) then
+    raise exception using errcode = '42501', message = 'Vous ne participez pas à cette conversation.';
+  end if;
+  select c.kind into v_kind from public.team_conversations c where c.id = p_conversation_id;
+  if v_kind in ('role', 'all') then
+    raise exception using errcode = '22023', message = 'Cette conversation est déjà ouverte à tout un profil ou à toute l’équipe.';
+  end if;
+  insert into public.team_conversation_members (conversation_id, user_id)
+  select p_conversation_id, pr.id from public.profiles pr
+  where pr.id = any(coalesce(p_member_ids, '{}'::uuid[])) and pr.account_status = 'active' and pr.role <> 'customer'
+  on conflict do nothing;
+  update public.team_conversations set kind = 'group' where id = p_conversation_id and kind = 'direct'
+    and (select count(*) from public.team_conversation_members m where m.conversation_id = p_conversation_id) > 2;
+end;
+$$;
+REVOKE ALL ON FUNCTION public.team_add_members(uuid, uuid[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.team_add_members(uuid, uuid[]) TO authenticated;

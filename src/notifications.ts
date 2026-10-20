@@ -39,6 +39,18 @@ export async function registerForPush(askPermission: boolean): Promise<PushStatu
   }
 }
 
+// The permission prompt appears once on this phone; afterwards only from Plus → Autorisations.
+export async function askPushOnce(): Promise<boolean> {
+  const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+  try {
+    if (await AsyncStorage.getItem("agrifresh-push-asked")) return false;
+    await AsyncStorage.setItem("agrifresh-push-asked", "1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // On sign-out the phone stops receiving this account's alerts.
 export async function unregisterPush(): Promise<void> {
   if (!currentToken || !supabase) return;

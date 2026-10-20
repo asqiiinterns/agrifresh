@@ -3,7 +3,8 @@ import { FlatList, Modal, Pressable, RefreshControl, StyleSheet, View } from "re
 import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
-import { executionQueue, fetchAllOrders, scheduleOrder, type StaffOrder } from "../data/staff";
+import { executionQueue, fetchAllOrders, scheduleOrder, setOrderFlags, type StaffOrder } from "../data/staff";
+import { notify } from "../ui/notify";
 import { CloseButton, EmptyState, Loading, ScreenHeader, StatusBadge, formatDay } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -32,6 +33,15 @@ function PlanningBoard({ queue, focusId, onChanged, header, refreshControl }: {
       setError(errorMessage(cause, "La file n’a pas pu être modifiée."));
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function toggleReschedule(order: StaffOrder) {
+    try {
+      await setOrderFlags(order.id, { reschedule: !order.needs_reschedule });
+      await onChanged();
+    } catch (cause) {
+      notify("Planning", errorMessage(cause, "La pastille n’a pas pu être enregistrée."));
     }
   }
 
@@ -70,8 +80,13 @@ function PlanningBoard({ queue, focusId, onChanged, header, refreshControl }: {
             <View style={[ui.row, { justifyContent: "flex-start", gap: 6 }]}>
               <Text style={[styles.clientName, { flexShrink: 1 }]} numberOfLines={1}>{name(item)}</Text>
               <StatusBadge status={item.status} />
+              {item.needs_reschedule ? <Text style={styles.reschedule}>↻ À reprogrammer</Text> : null}
             </View>
             <Text style={ui.small}>#{item.order_number} · {item.requested_delivery_date ? `Livraison ${formatDay(item.requested_delivery_date)}` : "Dès que possible"} · {item.order_items.length} produit(s)</Text>
+            <Pressable onPress={() => void toggleReschedule(item)} hitSlop={6} style={styles.flag}>
+              <Text style={[styles.flagBox, item.needs_reschedule && styles.flagBoxOn]}>{item.needs_reschedule ? "✓" : ""}</Text>
+              <Text style={styles.flagText}>À reprogrammer</Text>
+            </Pressable>
             {selectedOrder && !isSelected ? <Pressable onPress={() => void place(selectedOrder.id, item.id)} disabled={busy} style={styles.insert}>
               <Text style={styles.insertText}>↳ Insérer #{selectedOrder.order_number} avant celle-ci</Text>
             </Pressable> : null}
@@ -159,6 +174,11 @@ const styles = StyleSheet.create({
   rowSelected: { borderColor: colors.green, borderWidth: 2, backgroundColor: "#f3f8f1" },
   position: { minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.cream, color: colors.green, textAlign: "center", lineHeight: 26, fontWeight: "800" },
   positionSelected: { backgroundColor: colors.green, color: colors.white },
+  reschedule: { color: colors.danger, fontSize: 10, fontWeight: "800" },
+  flag: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, alignSelf: "flex-start" },
+  flagBox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: colors.line, textAlign: "center", lineHeight: 15, color: colors.white, fontSize: 11, fontWeight: "800" },
+  flagBoxOn: { backgroundColor: colors.danger, borderColor: colors.danger },
+  flagText: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   insert: { marginTop: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.green, borderStyle: "dashed", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
   insertText: { color: colors.green, fontSize: 11, fontWeight: "800" },
   arrows: { gap: 4 },

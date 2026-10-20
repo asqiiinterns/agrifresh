@@ -15,8 +15,11 @@ import { fontScales, useDisplay } from "../ui/display";
 import { useNav, type TabDef } from "../ui/navigation";
 import { HomeCustomizeCard } from "./HomeScreen";
 import { StaffClientsScreen } from "./StaffClientsScreen";
+import { PermissionsCard } from "./PermissionsCard";
+import { Switch } from "react-native";
+import { colors } from "../ui/theme";
 
-export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications";
+export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications" | "permissions";
 
 // "Compte": the other sections of the app (former "Plus") and every personal setting, as sheets.
 export function AccountScreen({ session, account, sections = [], initialSheet, onLayoutChanged }: {
@@ -32,29 +35,29 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   const hasHome = active && (account?.role === "customer" ? can("client.home") : can("home.view"));
   const sheets: { key: AccountSheet; label: string }[] = [
     ...(sections.length ? [{ key: "sections" as const, label: "Rubriques" }] : []),
-    { key: "profile", label: "Profil" },
-    ...(hasHome ? [{ key: "home" as const, label: "Accueil" }] : []),
+    ...(hasHome ? [{ key: "home" as const, label: "Personnaliser" }] : []),
+    { key: "profile", label: "Compte" },
     { key: "display", label: "Affichage" },
-    { key: "password", label: "Mot de passe" },
+    ...(active ? [{ key: "notifications" as const, label: "Notifications" }] : []),
+    { key: "permissions", label: "Autorisations" },
     ...(active && can("products.manage") ? [{ key: "products" as const, label: "Produits" }] : []),
     ...(active && can("clients.view") ? [{ key: "clients" as const, label: "Clients" }] : []),
-    ...(active ? [{ key: "notifications" as const, label: "Notifications" }] : []),
   ];
   const [sheet, setSheet] = useState<AccountSheet>(sheets.some((item) => item.key === initialSheet) ? initialSheet as AccountSheet : sheets[0].key);
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow={session.user.email?.toLocaleUpperCase("fr") ?? "VOTRE ESPACE"} title="Compte" />
+    <ScreenHeader eyebrow={session.user.email?.toLocaleUpperCase("fr") ?? "VOTRE ESPACE"} title="Plus" />
     <Sheets items={sheets} value={sheet} onChange={setSheet} />
     {sheet === "clients" ? <StaffClientsScreen embedded /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
       {sheet === "sections" ? <ListGroup>
         {sections.map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} detail={item.description} onPress={() => navigate(item.key)} />)}
       </ListGroup> : null}
-      {sheet === "profile" ? <ProfileCard session={session} account={account} /> : null}
+      {sheet === "profile" ? <><ProfileCard session={session} account={account} /><PasswordCard /></> : null}
+      {sheet === "permissions" ? <PermissionsCard /> : null}
       {sheet === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
       {sheet === "display" ? <DisplaySettingsCard showProducts={account?.role === "customer"} /> : null}
-      {sheet === "password" ? <PasswordCard /> : null}
       {sheet === "products" ? <ProductsCard /> : null}
-      {sheet === "notifications" ? <MyNotificationsCard /> : null}
+      {sheet === "notifications" ? <><MyNotificationsCard />{account?.client ? <ReminderChoiceCard account={account} onChanged={onLayoutChanged ?? (() => {})} /> : null}</> : null}
     </ScrollView>}
   </View>;
 }
@@ -87,6 +90,34 @@ function ProfileCard({ session, account }: { session: Session; account: Account 
     {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
     <Button label="SE DÉCONNECTER" onPress={() => void signOut()} busy={busy} style={{ marginTop: 14 }} />
   </>;
+}
+
+// Payment reminders: the client may turn them off only if AgriFresh allows it (otherwise greyed out).
+function ReminderChoiceCard({ account, onChanged }: { account: Account; onChanged: () => void }) {
+  const client = account.client as (Account["client"] & { payment_reminders?: boolean; reminder_opt_out_allowed?: boolean; reminder_opt_out?: boolean }) | null;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!client || client.payment_reminders === false) return null;
+  const allowed = client.reminder_opt_out_allowed !== false;
+  async function toggle(value: boolean) {
+    if (!supabase) return;
+    setBusy(true);
+    setError("");
+    const { error: rpcError } = await supabase.rpc("set_my_reminder_opt_out", { p_opt_out: !value });
+    if (rpcError) setError(errorMessage(rpcError, "Réglage impossible."));
+    else onChanged();
+    setBusy(false);
+  }
+  return <View style={[ui.card, !allowed && { opacity: 0.6 }]}>
+    <View style={ui.row}>
+      <View style={{ flex: 1 }}>
+        <Text style={ui.strong}>Rappels de factures à régler</Text>
+        <Text style={ui.small}>{allowed ? "Recevoir un rappel quand une facture arrive à échéance." : "Activés par AgriFresh pour votre compte : ce réglage ne peut pas être modifié."}</Text>
+      </View>
+      <Switch value={!client.reminder_opt_out || !allowed} disabled={!allowed || busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.green, false: colors.line }} />
+    </View>
+    {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
+  </View>;
 }
 
 function PasswordCard() {

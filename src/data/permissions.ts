@@ -73,25 +73,27 @@ export const configurableRoles: { role: Role; label: string; short: string; audi
 
 // Client options: one value for all clients, which a client record may override.
 export type ClientOptionKey = "show_prices" | "show_origin" | "show_stock" | "stock_managed" | "invoice_mode" | "reception_qr"
-  | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr";
-export const clientOptionBlocks: { title: string; items: { key: ClientOptionKey; label: string; hint: string }[] }[] = [
-  { title: "Affichage", items: [
+  | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr" | "payment_reminders" | "reminder_opt_out_allowed";
+export const clientOptionBlocks: { title: string; icon: string; items: { key: ClientOptionKey; label: string; hint: string }[] }[] = [
+  { title: "Affichage", icon: "eye-outline", items: [
     { key: "show_prices", label: "Afficher les prix", hint: "Dans l’application et sur les bons de livraison." },
     { key: "show_origin", label: "Afficher l’origine des produits", hint: "Producteur, région et label." },
     { key: "show_stock", label: "Afficher le stock disponible", hint: "Quantité disponible au moment de commander." },
   ] },
-  { title: "Commandes", items: [
+  { title: "Commandes", icon: "receipt-outline", items: [
     { key: "stock_managed", label: "Commandes limitées au stock", hint: "Sinon : production à la demande, sans limite." },
     { key: "history_enabled", label: "Historique visible par le client", hint: "Commandes livrées ou annulées et suivi détaillé." },
     { key: "reconfirm_declined", label: "Reconfirmation par le client", hint: "Désactivée : une commande rouverte repasse directement en acceptée." },
   ] },
-  { title: "Livraison", items: [
+  { title: "Livraison et remise", icon: "car-outline", items: [
     { key: "scan_delivery_note", label: "Scan du bon de livraison", hint: "Le livreur scanne le QR de chaque bon à la remise." },
     { key: "scan_client_qr", label: "Scan du QR client", hint: "QR collé au point de livraison (ou QR de réception)." },
     { key: "reception_qr", label: "QR de réception dans l’appli du client", hint: "Remplace le QR collé au point de livraison." },
   ] },
-  { title: "Facturation", items: [
-    { key: "invoice_mode", label: "Facture automatique à l’acceptation", hint: "Sinon : factures regroupées par l’équipe." },
+  { title: "Facturation et relances", icon: "document-text-outline", items: [
+    { key: "invoice_mode", label: "Facture automatique à l’acceptation", hint: "Sinon : factures regroupées par l’équipe (fréquence réglée sur la fiche)." },
+    { key: "payment_reminders", label: "Relances des factures en retard", hint: "Rappel envoyé au client après l’échéance." },
+    { key: "reminder_opt_out_allowed", label: "Le client peut désactiver les relances", hint: "Sinon le réglage apparaît grisé dans son application." },
   ] },
 ];
 export const clientOptionKeys = clientOptionBlocks.flatMap((block) => block.items.map((item) => item.key));

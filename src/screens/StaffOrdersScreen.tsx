@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { claimReasonLabel, claimStatusStyle, fetchClaims, updateClaim, type Claim, type ClaimStatus } from "../data/claims";
 import { deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/orders";
-import { executionQueue, fetchAllOrders, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
+import { executionQueue, fetchAllOrders, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { PlanningScreen } from "./PlanningScreen";
@@ -225,6 +225,19 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   const clientName = order.clients?.business_name ?? address.business_name ?? address.recipient_name ?? "Client";
   const openClaims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress").length;
 
+  // Special follow-up keeps the order in « À décider » whatever its status; "to reschedule" flags it in the planning.
+  async function toggleFlag(flag: "special" | "reschedule") {
+    const next = flag === "special" ? !order.special_follow : !order.needs_reschedule;
+    const updated = flag === "special" ? { ...order, special_follow: next } : { ...order, needs_reschedule: next };
+    onLocalUpdate(updated);
+    try {
+      await setOrderFlags(order.id, flag === "special" ? { special: next } : { reschedule: next });
+    } catch (cause) {
+      onLocalUpdate(order);
+      notify("Commande", errorMessage(cause, "La pastille n’a pas pu être enregistrée. La migration 20261031 est-elle exécutée ?"));
+    }
+  }
+
   async function apply(action: StaffAction) {
     setBusy(true);
     try {
@@ -275,7 +288,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     <Pressable onPress={() => setExpanded((value) => !value)}>
       <View style={ui.row}>
         {position ? <Text style={styles.position}>{position}</Text> : null}
-        <Text style={[styles.clientName, { flex: 1 }]} numberOfLines={1}>{expanded ? "▾ " : "▸ "}{clientName}</Text>
+        <Text style={[styles.clientName, { flex: 1 }]} numberOfLines={1}>{expanded ? "▾ " : "▸ "}{order.special_follow ? "★ " : ""}{order.needs_reschedule ? "↻ " : ""}{clientName}</Text>
         <StatusBadge status={order.status} />
       </View>
       <Text style={[ui.small, { marginTop: 3 }]}>
@@ -307,6 +320,10 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
 
       {claims.map((claim) => <Text key={claim.id} style={[ui.small, styles.claimLine]}>Réclamation n° {claim.claim_number} · {claimReasonLabel(claim.reason)} · {claimStatusStyle[claim.status].label}</Text>)}
       <OrderTimeline order={order} viewer="staff" />
+      <View style={[ui.wrapRow, { marginTop: 8 }]}>
+        {can("orders.decide") || can("orders.plan") ? <Chip label={order.special_follow ? "★ Suivi spécial" : "☆ Suivi spécial"} selected={!!order.special_follow} onPress={() => void toggleFlag("special")} /> : null}
+        {can("orders.plan") && ["confirmed", "preparing", "ready"].includes(order.status) ? <Chip label="↻ À reprogrammer" selected={!!order.needs_reschedule} onPress={() => void toggleFlag("reschedule")} /> : null}
+      </View>
 
       {needsReason ? <TextInput
         value={reason}

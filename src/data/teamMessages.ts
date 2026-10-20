@@ -61,6 +61,11 @@ export async function sendTeamMessage(conversationId: string, body: string, atta
   return data as TeamMessage;
 }
 
+export async function addTeamMembers(conversationId: string, memberIds: string[]): Promise<void> {
+  const { error } = await client().rpc("team_add_members", { p_conversation_id: conversationId, p_member_ids: memberIds });
+  if (error) throw error;
+}
+
 export async function flagTeamMessage(messageId: string, needsReply: boolean): Promise<void> {
   const { error } = await client().rpc("team_flag_message", { p_message_id: messageId, p_needs_reply: needsReply });
   if (error) throw error;

@@ -9,7 +9,16 @@ export type HomeTileDef = { key: string; label: string; icon: IconName; audience
 export type HomeShortcutDef = { key: string; label: string; icon: IconName; audience: Audience; need: Need; tab: TabKey; params?: NavParams };
 
 export const homeTiles: HomeTileDef[] = [
-  { key: "decide", label: "À décider", icon: "hourglass-outline", audience: "team", need: "orders.decide", tab: "orders", params: { section: "decide" }, tone: "action" },
+  { key: "decide", label: "Commandes à décider", icon: "hourglass-outline", audience: "team", need: "orders.decide", tab: "orders", params: { section: "decide" }, tone: "action" },
+  { key: "pending", label: "Tout « À décider »", icon: "flag-outline", audience: "team", need: null, tab: "decide", tone: "action" },
+  { key: "special", label: "Suivis spéciaux", icon: "star-outline", audience: "team", need: "orders.view", tab: "decide", tone: "warn" },
+  { key: "reschedule", label: "À reprogrammer", icon: "refresh-circle-outline", audience: "team", need: "orders.plan", tab: "planning", tone: "warn" },
+  { key: "waitingReply", label: "Messages à répondre", icon: "alert-circle-outline", audience: "team", need: null, tab: "decide", tone: "warn" },
+  { key: "invoicedMonth", label: "Facturé ce mois (TND)", icon: "trending-up-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
+  { key: "collectedMonth", label: "Encaissé ce mois (TND)", icon: "cash-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
+  { key: "outstanding", label: "Reste à encaisser (TND)", icon: "wallet-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
+  { key: "overdue", label: "Factures en retard", icon: "time-outline", audience: "team", need: "invoices.manage", tab: "invoices", tone: "warn" },
+  { key: "toInvoice", label: "Clients à facturer", icon: "document-text-outline", audience: "team", need: "invoices.manage", tab: "decide", tone: "action" },
   { key: "placedToday", label: "Commandes du jour", icon: "today-outline", audience: "team", need: "orders.view", tab: "orders", params: { section: "queue" } },
   { key: "queue", label: "En file de production", icon: "list-outline", audience: "team", need: "orders.plan", tab: "planning" },
   { key: "prepare", label: "À préparer", icon: "construct-outline", audience: "team", need: "production.view", tab: "production", params: { section: "prepare" } },
@@ -31,6 +40,8 @@ export const homeTiles: HomeTileDef[] = [
 ];
 
 export const homeShortcuts: HomeShortcutDef[] = [
+  { key: "decideAll", label: "À décider (tout ce qui est en suspens)", icon: "flag-outline", audience: "team", need: null, tab: "decide" },
+  { key: "billingDashboard", label: "Tableau de bord de facturation", icon: "bar-chart-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
   { key: "staffOrder", label: "Commander pour un client", icon: "add-circle-outline", audience: "team", need: "orders.create", tab: "staffOrder" },
   { key: "planning", label: "Planifier la production", icon: "list-outline", audience: "team", need: "orders.plan", tab: "planning" },
   { key: "decide", label: "Commandes à décider", icon: "hourglass-outline", audience: "team", need: "orders.decide", tab: "orders", params: { section: "decide" } },
@@ -53,9 +64,10 @@ export const homeShortcuts: HomeShortcutDef[] = [
 ];
 
 // Built-in layout when neither the user nor the admin chose one.
+// Built-in layout when neither the user nor the admin chose one: the usual figures and every shortcut.
 export const defaultLayout = (audience: Audience): HomeLayout => audience === "team"
-  ? { tiles: ["decide", "placedToday", "queue", "prepare", "ready", "shipping", "claims", "accounts", "messages"], shortcuts: ["staffOrder", "planning", "decide", "production", "clients"] }
-  : { tiles: ["c_progress", "c_reconfirm", "c_shipped", "c_invoices", "c_messages"], shortcuts: ["c_order", "c_orders", "c_invoices", "c_messages"] };
+  ? { tiles: ["pending", "decide", "placedToday", "queue", "prepare", "ready", "shipping", "claims", "accounts", "messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "team").map((item) => item.key) }
+  : { tiles: ["c_progress", "c_reconfirm", "c_shipped", "c_invoices", "c_messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "customer").map((item) => item.key) };
 
 export function allowedFor(need: Need, can: (feature: Feature) => boolean, isAdmin: boolean) {
   if (need === null) return true;

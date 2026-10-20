@@ -39,6 +39,12 @@ Expo Go est l'environnement de test; ce n'est pas le fichier APK autonome. Utili
    Puis `supabase/migrations/20261028_alert_important.sql` : étoile « importante » sur les alertes (filtre *Importantes*). Toucher une alerte ouvre directement la commande, la conversation, les factures ou le compte concerné, depuis l'onglet Alertes comme depuis la notification de l'écran de verrouillage.
 
    Puis `supabase/migrations/20261029_team_messages.sql` : **messagerie d'équipe** (Messages → Équipe). « Nouveau message » propose quatre choix : une personne, plusieurs personnes (groupe nommé), un profil (tous les livreurs, toute la production…) ou toute l'équipe. Invisible des clients ; chaque message crée une alerte qui ouvre la conversation. Droit « Messagerie entre membres de l'équipe » dans Admin → Paramétrage → Messages et factures.
+
+   Puis, dans l'ordre :
+   - `20261030_numbering_returns.sql` : numérotation des documents (Paramétrage → Numérotation : préfixe, année, chiffres, numéro de départ), retours et avoirs, notes et « non lu » sur les alertes ;
+   - `20261031_billing_decisions.sql` : règlements partiels et multi-moyens, relances de paiement (activables par client, désactivables par le client si autorisé), fréquence de facturation par client, pastilles « suivi spécial » et « à reprogrammer », messages à répondre ;
+   - `20261101_message_attachments.sql` : photos, vidéos, messages vocaux et documents dans les messages (stockage Supabase, dossier privé « attachments ») ;
+   - `20261102_needs_reply.sql` : « nécessite une réponse » sur tous les messages, ajout de participants à une discussion d'équipe.
 8. Comptes personnel et livreur : crée le compte dans l'appli (« Activer mon accès »), puis exécute dans le SQL Editor `update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'adresse@exemple.com');` (ou `'driver'` pour un livreur). La validation par l'administrateur (Admin → Comptes) empêche quelqu'un d'utiliser l'accès d'un client avec son e-mail.
 9. Dans Supabase **Authentication → URL Configuration → Redirect URLs**, autorise `agrifresh://auth/callback` pour les confirmations e-mail qui doivent revenir dans l'appli native.
 10. Redémarre Expo après une modification de `.env.local`.
@@ -78,7 +84,7 @@ Application de commande professionnelle pour des clients connus et récurrents.
 
 **Rôles internes** : *administrateur* (tout, seul à créer des clients et à gérer l'équipe), *superviseur* (commandes, planification, factures, réclamations, messages), *production* (onglet Production uniquement), *livreur*.
 
-**Navigation** : barre du bas limitée à cinq rubriques, les autres dans **Plus**. **Accueil** (équipe et clients) : chiffres du moment et raccourcis, chaque élément ouvrant directement le bon écran ; « Personnaliser » choisit et ordonne ce qui s'affiche. **Planning** : onglet dédié à la file de production (monter, descendre, insérer avant).
+**Navigation** : barre du bas : Accueil, À décider, Production (feuillets En cours · Clôturées · Production · Planning), Facturation, Livraisons et Plus (rubriques, personnaliser l'accueil, compte, affichage, notifications, autorisations, produits, clients). Messages et Alertes sont en haut de l'écran avec une pastille. **À décider** regroupe ce qui est en suspens : commandes en attente, suivis spéciaux, à reprogrammer, réclamations, messages à répondre, facturation à faire, factures en retard, retours, comptes à valider.
 
 **Administrateur et superviseur**
 - **Commander** : choisir un client puis saisir sa commande comme lui (prix, origine et stock visibles) ; le client la retrouve dans son historique et en est averti.

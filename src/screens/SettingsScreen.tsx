@@ -15,9 +15,10 @@ import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { HomeEditor } from "./HomeEditor";
+import { AlertSettingsPanel } from "./NotificationSettings";
 import type { IconName } from "../ui/navigation";
 
-type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions" } | { kind: "home" } | { kind: "numbering" };
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
@@ -93,6 +94,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   }
   if (page.kind === "clientOptions") {
     return <ClientOptionsPage
+      theme={page.theme}
       header={back}
       clients={clients}
       defaults={defaults}
@@ -115,6 +117,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   }
   if (page.kind === "home") return <HomeRolesPage header={back} />;
   if (page.kind === "numbering") return <NumberingPage header={back} />;
+  if (page.kind === "alerts") return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
+  </View>;
 
   const exceptionCount = (block: SettingsBlock) => Object.keys(userPerms).filter((key) => block.items.some((item) => key.endsWith(`|${item.key}`))).length
     + (block.audience === "customer" ? clients.reduce((sum, record) => sum + Object.keys(record.feature_overrides ?? {}).length, 0) : 0);
@@ -131,12 +137,18 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           return <ListRow key={block.key} icon={block.icon as IconName} title={block.title} detail={`${block.items.length} réglage(s)${count ? ` · ${count} exception(s) utilisateur` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
         })}
       </ListGroup>
-      <ListGroup title="Clients">
+      <ListGroup title="Clients : espace et options">
         {featureBlocks.filter((block) => block.audience === "customer").map((block) => {
           const count = exceptionCount(block);
-          return <ListRow key={block.key} icon={block.icon as IconName} title={`${block.title} : onglets`} detail={`Commander, commandes, factures, messages…${count ? ` · ${count} exception(s)` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
+          return <ListRow key={block.key} icon={block.icon as IconName} title="Onglets de l’espace client" detail={`Commander, commandes, factures, messages, retours…${count ? ` · ${count} exception(s)` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
         })}
-        <ListRow icon="options-outline" title="Options des clients" detail={`Prix, stock, historique, reconfirmation, QR de livraison, facturation${customClients ? ` · ${customClients} fiche(s) adaptée(s)` : ""}`} onPress={() => setPage({ kind: "clientOptions" })} />
+        {clientOptionBlocks.map((block) => {
+          const custom = clients.filter((record) => block.items.some((item) => record.custom_settings?.includes(item.key))).length;
+          return <ListRow key={block.title} icon={block.icon as IconName} title={block.title} detail={`${block.items.map((item) => item.label.toLocaleLowerCase("fr")).join(", ")}${custom ? ` · ${custom} fiche(s) adaptée(s)` : ""}`} onPress={() => setPage({ kind: "clientOptions", theme: block.title })} />;
+        })}
+      </ListGroup>
+      <ListGroup title="Communication">
+        <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi." onPress={() => setPage({ kind: "alerts" })} />
       </ListGroup>
       <ListGroup title="Documents">
         <ListRow icon="barcode-outline" title="Numérotation des documents" detail="Format et numéro de départ des bons de livraison, factures, avoirs et retours." onPress={() => setPage({ kind: "numbering" })} />
@@ -242,7 +254,8 @@ function BlockPage({ block, header, accounts, clients, roleValue, setRole, userV
   </View>;
 }
 
-function ClientOptionsPage({ header, clients, defaults, setDefault, setClientOption }: {
+function ClientOptionsPage({ theme, header, clients, defaults, setDefault, setClientOption }: {
+  theme?: string;
   header: React.ReactNode;
   clients: ClientRecord[];
   defaults: Partial<Record<ClientOptionKey, unknown>>;
@@ -256,17 +269,17 @@ function ClientOptionsPage({ header, clients, defaults, setDefault, setClientOpt
   const term = search.trim().toLocaleLowerCase("fr");
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Options des clients" right={header} />
+    <ScreenHeader eyebrow="OPTIONS DES CLIENTS" title={theme ?? "Options des clients"} right={header} />
     <Sheets items={[{ key: "all", label: "Tous les clients" }, { key: "client", label: "Par client" }]} value={sheet} onChange={(next) => { setSheet(next); setClientId(null); }} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
       {sheet === "all" ? <>
         <Text style={[ui.small, { marginTop: 8 }]}>Réglage commun à tous les clients. Une fiche peut avoir sa propre valeur (onglet « Par client » ou dans la fiche).</Text>
-        {clientOptionBlocks.map((block) => <ListGroup key={block.title} title={block.title}>
+        {clientOptionBlocks.filter((block) => !theme || block.title === theme).map((block) => <ListGroup key={block.title} title={block.title}>
           {block.items.map((item) => <ListRow key={item.key} title={item.label} detail={item.hint} right={<Switch value={optionToBool(item.key, defaults[item.key])} onValueChange={(value) => setDefault(item.key, value)} trackColor={{ true: colors.green, false: colors.line }} />} />)}
         </ListGroup>)}
       </> : record ? <>
         <ListRow icon="storefront-outline" title={record.business_name} detail={`${record.custom_settings.length} option(s) propre(s)`} right={<BackButton label="Liste" onPress={() => setClientId(null)} />} />
-        <ClientOptionsEditor record={record} defaults={defaults} onChange={(key, value) => setClientOption(record, key, value)} />
+        <ClientOptionsEditor record={record} defaults={defaults} theme={theme} onChange={(key, value) => setClientOption(record, key, value)} />
       </> : <>
         <Search value={search} onChange={setSearch} placeholder="Client" />
         <ListGroup>
@@ -278,14 +291,15 @@ function ClientOptionsPage({ header, clients, defaults, setDefault, setClientOpt
 }
 
 // Each option: follow the default for all clients, or this client's own yes / no.
-export function ClientOptionsEditor({ record, defaults, onChange, disabled }: {
+export function ClientOptionsEditor({ record, defaults, onChange, disabled, theme }: {
+  theme?: string;
   record: Pick<ClientRecord, ClientOptionKey | "custom_settings">;
   defaults: Partial<Record<ClientOptionKey, unknown>>;
   onChange: (key: ClientOptionKey, value: boolean | null) => void;
   disabled?: boolean;
 }) {
   return <>
-    {clientOptionBlocks.map((block) => <View key={block.title} style={{ marginTop: 10 }}>
+    {clientOptionBlocks.filter((block) => !theme || block.title === theme).map((block) => <View key={block.title} style={{ marginTop: 10 }}>
       <Text style={styles.groupTitle}>{block.title.toLocaleUpperCase("fr")}</Text>
       {block.items.map((item) => <View key={item.key} style={[ui.card, { marginTop: 4 }]}>
         <Text style={ui.body}>{item.label}</Text>

@@ -34,6 +34,9 @@ export type Order = {
   delivery_point_id: string | null;
   delivery_token: string;
   delivery_note_number?: string | null;
+  // Flags for « À décider » (20261031_billing_decisions.sql).
+  special_follow?: boolean;
+  needs_reschedule?: boolean;
   client_invoice_id: string | null;
   address_snapshot: {
     business_name?: string;
@@ -48,7 +51,7 @@ export type Order = {
   order_status_history: StatusEvent[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, special_follow, needs_reschedule, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 

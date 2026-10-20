@@ -38,13 +38,24 @@ export type ClientRecord = {
   scan_delivery_note: boolean;
   scan_client_qr: boolean;
   // Options set apart from the "all clients" default, and client tabs switched on/off for this client.
+  payment_reminders: boolean;
+  reminder_opt_out_allowed: boolean;
+  reminder_opt_out: boolean;
+  // Billing frequency and payment terms (20261031_billing_decisions.sql).
+  payment_terms_days: number;
+  reminder_interval_days: number;
+  billing_frequency: "manual" | "every_n_days" | "monthly_day";
+  billing_every_days: number;
+  billing_start: string | null;
+  billing_month_day: number;
   custom_settings: ClientOptionKey[];
   feature_overrides: Record<string, boolean>;
   client_delivery_points: DeliveryPoint[];
   has_account: boolean;
 };
 
-export type ClientOptions = Pick<ClientRecord, ClientOptionKey | "custom_settings" | "feature_overrides">;
+export type BillingSettings = Pick<ClientRecord, "payment_terms_days" | "reminder_interval_days" | "billing_frequency" | "billing_every_days" | "billing_start" | "billing_month_day">;
+export type ClientOptions = Pick<ClientRecord, ClientOptionKey | "custom_settings" | "feature_overrides"> & BillingSettings;
 export type ClientInput = Pick<ClientRecord, "business_name" | "contact_name" | "phone" | "notes"> & Partial<ClientOptions> & { email: string; tax_id: string };
 export type DeliveryPointInput = Pick<DeliveryPoint, "label" | "address_line" | "city" | "phone" | "instructions">;
 
@@ -56,7 +67,7 @@ function client() {
 export async function fetchClients(): Promise<ClientRecord[]> {
   const { data, error } = await client()
     .from("clients")
-    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, history_enabled, reconfirm_declined, scan_delivery_note, scan_client_qr, custom_settings, feature_overrides, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
+    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, history_enabled, reconfirm_declined, scan_delivery_note, scan_client_qr, payment_reminders, reminder_opt_out_allowed, reminder_opt_out, payment_terms_days, reminder_interval_days, billing_frequency, billing_every_days, billing_start, billing_month_day, custom_settings, feature_overrides, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
   type Row = Omit<ClientRecord, "has_account"> & {

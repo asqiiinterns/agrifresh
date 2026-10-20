@@ -9,7 +9,9 @@ import { PermissionsContext } from "./src/data/permissions";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
-import { hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
+import { askPushOnce, hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
+import { DecideScreen } from "./src/screens/DecideScreen";
+import { decisionCount, fetchDecisionBoard } from "./src/data/decisions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { countUnread } from "./src/data/messages";
@@ -39,6 +41,7 @@ import { colors, ui } from "./src/ui/theme";
 
 const TAB = {
   home: { key: "home", label: "Accueil", icon: "home-outline", description: "Tableau de bord du moment." },
+  decide: { key: "decide", label: "À décider", icon: "flag-outline", description: "Tout ce qui est en suspens." },
   order: { key: "order", label: "Commander", icon: "add-circle-outline" },
   staffOrder: { key: "staffOrder", label: "Commander", icon: "add-circle-outline", description: "Saisir une commande pour un client." },
   alerts: { key: "alerts", label: "Alertes", icon: "notifications-outline", description: "Notifications reçues." },
@@ -51,12 +54,12 @@ const TAB = {
   messages: { key: "messages", label: "Messages", icon: "chatbubbles-outline", description: "Échanges avec les clients et entre collègues." },
   returns: { key: "returns", label: "Retours et avoirs", icon: "return-down-back-outline", description: "Demandes de retour, réception, avoirs." },
   admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
-  account: { key: "account", label: "Compte", icon: "person-circle-outline", description: "Profil, affichage, déconnexion." },
+  account: { key: "account", label: "Plus", icon: "grid-outline", description: "Rubriques, personnaliser, compte, autorisations." },
   more: { key: "more", label: "Plus", icon: "grid-outline" },
 } satisfies Record<TabKey, TabDef>;
 
 // Bottom bar: at most five entries, the rest goes into "Plus".
-const MAX_BAR = 5;
+const MAX_BAR = 6;
 // Messages and alerts have their own icons at the top of the screen, with a badge.
 const TOP_KEYS: TabKey[] = ["messages", "alerts"];
 // Commandes and Planning live as sheets inside "Production" for the team.
@@ -81,6 +84,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   // Main menu: Accueil, Production (Commandes · Production · Planning), Facturation, Livraisons; the rest in "Plus".
   const tabs: TabDef[] = [];
   add(tabs, TAB.home, has("home.view"));
+  add(tabs, TAB.decide, account.role === "admin" || ["orders.decide", "orders.plan", "claims.manage", "messages.manage", "team.messages", "invoices.manage", "returns.manage"].some(has));
   add(tabs, TAB.production, has("orders.view") || has("production.view") || has("orders.plan"));
   add(tabs, { ...TAB.invoices, label: "Facturation" }, has("invoices.manage"));
   add(tabs, TAB.deliveries, has("deliveries"));
@@ -277,12 +281,23 @@ function Main({ session }: { session: Session }) {
     team: kind === "team" && !!account?.features.includes("team.messages"),
   });
   const isActive = !!account && (account.status ?? "active") === "active";
+  // Badge of « À décider », refreshed every two minutes (and live while the screen is open).
+  const [decideCount, setDecideCount] = useState(0);
+  const hasDecide = tabs.some((item) => item.key === "decide");
+  useEffect(() => {
+    if (!isActive || !hasDecide || !account) return;
+    const can = (feature: string) => account.features.includes(feature);
+    const load = () => { void fetchDecisionBoard(can as never, account.role === "admin").then((board) => setDecideCount(decisionCount(board))).catch(() => {}); };
+    load();
+    const timer = setInterval(load, 120000);
+    return () => clearInterval(timer);
+  }, [isActive, hasDecide, account?.features.join(",")]);
   const alerts = useUnreadAlerts(isActive ? session.user.id : null);
 
   // Register this phone for lock-screen alerts once the account is active; a tap opens Alertes.
   useEffect(() => {
     if (!isActive) return;
-    void registerForPush(true);
+    void askPushOnce().then((ask) => registerForPush(ask));
     return onAlertTapped((data) => {
       if (data.id) void markAlertsRead([data.id]).then(alerts.refresh).catch(() => {});
       void (data.event === "team.message" && data.id ? fetchAlertConversation(data.id).catch(() => null) : Promise.resolve(null)).then((conversationId) => {
@@ -331,6 +346,8 @@ function Main({ session }: { session: Session }) {
         return kind === "team" ? <ProductionHub initialSheet={hubSheet} ordersSection={tab === "orders" ? nav.params?.section : undefined} orderId={nav.params?.orderId} /> : null;
       case "invoices":
         return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen initialSheet={nav.params?.section} />;
+      case "decide":
+        return <DecideScreen isAdmin={account.role === "admin"} onCount={setDecideCount} />;
       case "returns":
         return <ReturnsScreen initialSheet={nav.params?.section} />;
       case "deliveries":
@@ -351,7 +368,7 @@ function Main({ session }: { session: Session }) {
     }
   }
 
-  const badgeFor = (key: TabKey) => key === "messages" ? unread : key === "alerts" ? alerts.unread : 0;
+  const badgeFor = (key: TabKey) => key === "messages" ? unread : key === "alerts" ? alerts.unread : key === "decide" ? decideCount : 0;
   const topTabs = tabs.filter((item) => TOP_KEYS.includes(item.key));
 
   return <PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>

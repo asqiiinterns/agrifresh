@@ -6,7 +6,8 @@ import { supabase } from "../lib/supabase";
 import { setMyHomeLayout, type Account } from "../data/account";
 import { fetchAccounts } from "../data/admin";
 import { fetchClaims } from "../data/claims";
-import { fetchInvoices } from "../data/invoices";
+import { balanceOf, fetchInvoices, isOverdue } from "../data/invoices";
+import { decisionCount, fetchDecisionBoard } from "../data/decisions";
 import { fetchCreditNotes, fetchReturns } from "../data/returns";
 import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
@@ -56,6 +57,25 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
           shows("returns") ? fetchReturns().catch(() => []) : Promise.resolve([]),
           shows("credits") ? fetchCreditNotes().catch(() => []) : Promise.resolve([]),
         ]);
+        const money = ["invoicedMonth", "collectedMonth", "outstanding", "overdue", "toInvoice"].some(shows);
+        const decisions = ["pending", "special", "reschedule", "waitingReply", "toInvoice"].some(shows);
+        const [invoices, board] = await Promise.all([
+          money ? fetchInvoices().catch(() => []) : Promise.resolve([]),
+          decisions ? fetchDecisionBoard(can, isAdmin).catch(() => null) : Promise.resolve(null),
+        ]);
+        const month = new Date().toISOString().slice(0, 7);
+        const valid = invoices.filter((invoice) => invoice.status === "issued" || invoice.status === "paid");
+        next.invoicedMonth = Math.round(valid.filter((invoice) => invoice.issued_at.slice(0, 7) === month).reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0));
+        next.collectedMonth = Math.round(valid.flatMap((invoice) => invoice.invoice_payments ?? []).filter((payment) => payment.paid_on.slice(0, 7) === month).reduce((sum, payment) => sum + Number(payment.amount), 0));
+        next.outstanding = Math.round(valid.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + balanceOf(invoice), 0));
+        next.overdue = valid.filter(isOverdue).length;
+        if (board) {
+          next.pending = decisionCount(board);
+          next.special = board.special.length;
+          next.reschedule = board.reschedule.length;
+          next.waitingReply = board.messages.clients.length + board.messages.team.length;
+          next.toInvoice = board.billing.due.length;
+        }
         next.returns = returns.filter((item) => ["requested", "approved", "received"].includes(item.status)).length;
         next.credits = credits.filter((item) => item.status === "draft" || item.status === "issued").length;
         next.decide = count(orders, ["pending", "on_hold", "awaiting_client"]);

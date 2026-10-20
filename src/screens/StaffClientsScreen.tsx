@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshCont
 import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatClientNumber } from "../data/account";
-import { createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
+import { type BillingSettings, createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { boolToOption, clientOptionKeys, fetchClientDefaults, useCan, type ClientOptionKey } from "../data/permissions";
@@ -83,7 +83,8 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
 }
 
 type Options = Pick<ClientRecord, ClientOptionKey | "custom_settings">;
-const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, custom_settings: [] };
+const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, payment_reminders: true, reminder_opt_out_allowed: true, custom_settings: [] };
+const blankBilling: BillingSettings = { payment_terms_days: 30, reminder_interval_days: 7, billing_frequency: "manual", billing_every_days: 7, billing_start: null, billing_month_day: 1 };
 const pickOptions = (record: ClientRecord): Options => ({ ...Object.fromEntries(clientOptionKeys.map((key) => [key, record[key]])), custom_settings: record.custom_settings ?? [] }) as Options;
 
 const emptyPoint: DeliveryPointInput = { label: "Principal", address_line: "", city: "", phone: "", instructions: "" };
@@ -100,6 +101,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
   const [taxId, setTaxId] = useState("");
   const [options, setOptions] = useState<Options>(blankOptions);
   const [defaults, setDefaults] = useState<Partial<Record<ClientOptionKey, unknown>>>({});
+  const [billing, setBilling] = useState<BillingSettings>(blankBilling);
   const [firstPoint, setFirstPoint] = useState<DeliveryPointInput>(emptyPoint);
   const [pointForm, setPointForm] = useState<{ id: string | null; values: DeliveryPointInput } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -114,6 +116,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     setNotes(record?.notes ?? "");
     setTaxId(record?.tax_id ?? "");
     setOptions(record ? pickOptions(record) : blankOptions);
+    setBilling(record ? { payment_terms_days: record.payment_terms_days ?? 30, reminder_interval_days: record.reminder_interval_days ?? 7, billing_frequency: record.billing_frequency ?? "manual", billing_every_days: record.billing_every_days ?? 7, billing_start: record.billing_start ?? null, billing_month_day: record.billing_month_day ?? 1 } : blankBilling);
     void fetchClientDefaults().then((next) => {
       setDefaults(next);
       // A new record starts on the defaults for all clients.
@@ -148,7 +151,7 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     }
     void run(async () => {
       // Only this client's own options are sent; the database applies the defaults to the others.
-      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, custom_settings: options.custom_settings, ...Object.fromEntries(options.custom_settings.map((key) => [key, options[key]])) };
+      const input = { business_name: businessName, contact_name: contactName, email, phone, notes, tax_id: taxId, custom_settings: options.custom_settings, ...Object.fromEntries(options.custom_settings.map((key) => [key, options[key]])), ...billing };
       if (record) await updateClient(record.id, { ...input, active });
       else await createClient(input, firstPoint);
       onSaved();
@@ -232,6 +235,25 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
             {record ? <Text style={[ui.small, { marginTop: 10, color: record.has_account ? colors.green : colors.amber }]}>
               {record.has_account ? "Le client a activé son accès." : "Le client n’a pas encore activé son accès avec cet e-mail."}
             </Text> : null}
+          </View>
+
+          <View style={ui.card}>
+            <Text style={ui.strong}>Fréquence de facturation et paiement</Text>
+            <Text style={ui.small}>Les clients à facturer apparaissent dans « À décider » à la date prévue.</Text>
+            <View style={[ui.wrapRow, { marginTop: 8 }]}>
+              <Chip label="Manuelle" selected={billing.billing_frequency === "manual"} onPress={() => setBilling({ ...billing, billing_frequency: "manual" })} />
+              <Chip label="Tous les X jours" selected={billing.billing_frequency === "every_n_days"} onPress={() => setBilling({ ...billing, billing_frequency: "every_n_days" })} />
+              <Chip label="Un jour fixe par mois" selected={billing.billing_frequency === "monthly_day"} onPress={() => setBilling({ ...billing, billing_frequency: "monthly_day" })} />
+            </View>
+            {billing.billing_frequency === "every_n_days" ? <View style={ui.row}>
+              <View style={{ flex: 1 }}><Field label="Tous les (jours)" value={String(billing.billing_every_days)} onChangeText={(text) => setBilling({ ...billing, billing_every_days: Math.min(365, Math.max(1, Number(text) || 1)) })} keyboardType="number-pad" /></View>
+              <View style={{ flex: 1 }}><Field label="À partir du (AAAA-MM-JJ)" value={billing.billing_start ?? ""} onChangeText={(text) => setBilling({ ...billing, billing_start: text.trim() || null })} placeholder="2026-11-01" /></View>
+            </View> : null}
+            {billing.billing_frequency === "monthly_day" ? <Field label="Jour du mois (1 à 28)" value={String(billing.billing_month_day)} onChangeText={(text) => setBilling({ ...billing, billing_month_day: Math.min(28, Math.max(1, Number(text) || 1)) })} keyboardType="number-pad" /> : null}
+            <View style={ui.row}>
+              <View style={{ flex: 1 }}><Field label="Délai de paiement (jours)" value={String(billing.payment_terms_days)} onChangeText={(text) => setBilling({ ...billing, payment_terms_days: Math.min(365, Math.max(0, Number(text) || 0)) })} keyboardType="number-pad" /></View>
+              <View style={{ flex: 1 }}><Field label="Relancer tous les (jours)" value={String(billing.reminder_interval_days)} onChangeText={(text) => setBilling({ ...billing, reminder_interval_days: Math.min(90, Math.max(1, Number(text) || 1)) })} keyboardType="number-pad" /></View>
+            </View>
           </View>
 
           {!record ? <View style={ui.card}>
