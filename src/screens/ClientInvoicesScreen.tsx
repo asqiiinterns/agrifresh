@@ -6,6 +6,10 @@ import { deliveryNoteNumber } from "../data/orders";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, formatDay, formatPrice } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { Sheets } from "../ui/components";
+import { useCan } from "../data/permissions";
+import { fetchCreditNotes, fetchReturns, type CreditNote, type ProductReturn } from "../data/returns";
+import { ClientReturnsList, CreditsList } from "./ReturnsScreen";
 import { InvoiceBadge } from "./StaffInvoicesScreen";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
@@ -17,7 +21,7 @@ const filters = [
 ] as const;
 
 // RLS returns only this client's issued, paid or cancelled invoices (never drafts).
-export function ClientInvoicesScreen() {
+function InvoiceList() {
   const [invoices, setInvoices] = useState<InvoiceWithOrders[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,9 +63,9 @@ export function ClientInvoicesScreen() {
   ];
   const due = invoices.filter((invoice) => invoice.status === "issued").reduce((sum, invoice) => sum + Number(invoice.total_ttc), 0);
 
-  return <View style={ui.screen}>
-    <ScreenHeader eyebrow={due ? `À RÉGLER : ${formatPrice(due)}` : "VOS DOCUMENTS"} title="Mes factures" />
+  return <View style={{ flex: 1 }}>
     <FilterBar filters={listFilters} />
+    {due ? <Text style={[ui.small, { paddingHorizontal: 14, marginTop: 6, color: colors.text, fontWeight: "800" }]}>À régler : {formatPrice(due)}</Text> : null}
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(invoice) => invoice.id}
@@ -83,6 +87,39 @@ export function ClientInvoicesScreen() {
         <Button label="VOIR LA FACTURE" variant="secondary" onPress={() => void open(item)} busy={openingId === item.id} style={{ marginTop: 10, alignSelf: "flex-start" }} />
       </View>}
     />}
+  </View>;
+}
+
+// Mes factures: invoices, credit notes and returns, as sheets.
+export function ClientInvoicesScreen({ initialSheet }: { initialSheet?: string } = {}) {
+  const canReturns = useCan()("client.returns");
+  type Sheet = "invoices" | "credits" | "returns";
+  const [sheet, setSheet] = useState<Sheet>(initialSheet === "credits" || (initialSheet === "returns" && canReturns) ? initialSheet as Sheet : "invoices");
+  const [credits, setCredits] = useState<CreditNote[]>([]);
+  const [returns, setReturns] = useState<ProductReturn[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function reloadDocuments(refresh = false) {
+    if (refresh) setRefreshing(true);
+    try {
+      const [nextCredits, nextReturns] = await Promise.all([fetchCreditNotes().catch(() => []), canReturns ? fetchReturns().catch(() => []) : Promise.resolve([])]);
+      setCredits(nextCredits);
+      setReturns(nextReturns);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+  useEffect(() => { void reloadDocuments(); }, []);
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={() => void reloadDocuments(true)} tintColor={colors.green} />;
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="VOS DOCUMENTS" title="Mes factures" />
+    <Sheets
+      items={[{ key: "invoices", label: "Factures" }, { key: "credits", label: "Avoirs", count: credits.length || undefined }, ...(canReturns ? [{ key: "returns" as const, label: "Retours", count: returns.filter((item) => item.status !== "credited" && item.status !== "refused").length || undefined }] : [])]}
+      value={sheet}
+      onChange={setSheet}
+    />
+    {sheet === "invoices" ? <InvoiceList /> : sheet === "credits" ? <CreditsList credits={credits} refreshControl={refresh} onChanged={() => void reloadDocuments()} /> : <ClientReturnsList returns={returns} refreshControl={refresh} />}
   </View>;
 }
 

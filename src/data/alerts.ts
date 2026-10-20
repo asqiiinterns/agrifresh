@@ -13,6 +13,8 @@ export type AppAlert = {
   important?: boolean;
   // Team conversation the alert is about (20261029_team_messages.sql).
   conversation_id?: string | null;
+  // Personal note (20261030_numbering_returns.sql).
+  note?: string | null;
 };
 
 export type NotificationSetting = { event: string; label: string; audience: string; push_enabled: boolean; email_enabled: boolean; sort_order: number };
@@ -28,6 +30,9 @@ export const alertKinds: Record<string, string> = {
   "invoice.issued": "Factures",
   "account.pending": "Comptes",
   "team.message": "Messages",
+  "return.new": "Retours",
+  "return.update": "Retours",
+  "credit.issued": "Avoirs",
 };
 
 // Where an alert leads: the order itself, the conversation, the invoices or the account to validate.
@@ -43,6 +48,9 @@ export function alertTarget(event: string | undefined, orderId: string | null | 
     case "team.message": return { tab: "messages", params: { section: "team", page: conversationId ?? undefined } };
     case "invoice.issued": return { tab: "invoices" };
     case "account.pending": return { tab: "admin", params: { page: "accounts" } };
+    case "return.new": return { tab: "returns" };
+    case "return.update": return team ? { tab: "returns" } : { tab: "invoices", params: { section: "returns" } };
+    case "credit.issued": return team ? { tab: "returns", params: { section: "credits" } } : { tab: "invoices", params: { section: "credits" } };
     default: return { tab: "alerts" };
   }
 }
@@ -62,6 +70,16 @@ export async function fetchAlerts(): Promise<AppAlert[]> {
 export async function fetchAlertConversation(id: string): Promise<string | null> {
   const { data } = await client().from("notifications").select("*").eq("id", id).maybeSingle();
   return (data as AppAlert | null)?.conversation_id ?? null;
+}
+
+export async function markAlertsUnread(ids: string[]): Promise<void> {
+  const { error } = await client().rpc("mark_notifications_unread", { p_ids: ids });
+  if (error) throw error;
+}
+
+export async function setAlertNote(id: string, note: string): Promise<void> {
+  const { error } = await client().rpc("set_notification_note", { p_id: id, p_note: note });
+  if (error) throw error;
 }
 
 export async function setAlertImportant(id: string, important: boolean): Promise<void> {

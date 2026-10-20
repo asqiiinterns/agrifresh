@@ -9,14 +9,15 @@ import {
   optionToBool, setClientDefault, setRolePermission, setUserPermission,
   type ClientOptionKey, type Feature, type SettingsBlock,
 } from "../data/permissions";
-import { BackButton, ListGroup, ListRow, Loading, ScreenHeader, Sheets, TriState } from "../ui/components";
+import { BackButton, Button, Field, ListGroup, ListRow, Loading, ScreenHeader, Sheets, TriState } from "../ui/components";
+import { docTypeLabels, fetchNumbering, previewNumber, saveNumbering, type Numbering } from "../data/numbering";
 import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { HomeEditor } from "./HomeEditor";
 import type { IconName } from "../ui/navigation";
 
-type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions" } | { kind: "home" };
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions" } | { kind: "home" } | { kind: "numbering" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
@@ -113,6 +114,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     />;
   }
   if (page.kind === "home") return <HomeRolesPage header={back} />;
+  if (page.kind === "numbering") return <NumberingPage header={back} />;
 
   const exceptionCount = (block: SettingsBlock) => Object.keys(userPerms).filter((key) => block.items.some((item) => key.endsWith(`|${item.key}`))).length
     + (block.audience === "customer" ? clients.reduce((sum, record) => sum + Object.keys(record.feature_overrides ?? {}).length, 0) : 0);
@@ -135,6 +137,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           return <ListRow key={block.key} icon={block.icon as IconName} title={`${block.title} : onglets`} detail={`Commander, commandes, factures, messages…${count ? ` · ${count} exception(s)` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
         })}
         <ListRow icon="options-outline" title="Options des clients" detail={`Prix, stock, historique, reconfirmation, QR de livraison, facturation${customClients ? ` · ${customClients} fiche(s) adaptée(s)` : ""}`} onPress={() => setPage({ kind: "clientOptions" })} />
+      </ListGroup>
+      <ListGroup title="Documents">
+        <ListRow icon="barcode-outline" title="Numérotation des documents" detail="Format et numéro de départ des bons de livraison, factures, avoirs et retours." onPress={() => setPage({ kind: "numbering" })} />
       </ListGroup>
       <ListGroup title="Accueil">
         <ListRow icon="home-outline" title="Accueil par profil" detail="Chiffres et raccourcis proposés à chaque profil ; chacun peut ensuite personnaliser le sien." onPress={() => setPage({ kind: "home" })} />
@@ -328,6 +333,59 @@ function HomeRolesPage({ header }: { header: React.ReactNode }) {
       onReset={async () => { if (editing) { await setRoleHomeLayout(editing, null); await reload(); } }}
       onClose={() => setEditing(null)}
     />
+  </View>;
+}
+
+function NumberingPage({ header }: { header: React.ReactNode }) {
+  const [items, setItems] = useState<Numbering[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void fetchNumbering().then(setItems).catch((cause: unknown) => setError(errorMessage(cause, "Impossible de charger la numérotation. La migration 20261030 est-elle exécutée ?"))).finally(() => setLoading(false));
+  }, []);
+
+  const patch = (type: string, values: Partial<Numbering>) => setItems((current) => current.map((item) => item.doc_type === type ? { ...item, ...values } : item));
+  async function save(item: Numbering) {
+    setBusy(item.doc_type);
+    setError("");
+    try {
+      await saveNumbering(item);
+      notify("Numérotation", `${docTypeLabels[item.doc_type]} : prochain numéro ${previewNumber(item)}.`);
+    } catch (cause) {
+      setError(errorMessage(cause, "La numérotation n’a pas pu être enregistrée."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Numérotation" right={header} />
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      <Text style={[ui.small, { marginTop: 8 }]}>Le numéro est attribué à l’émission du document (BL : à l’acceptation de la commande). Un numéro déjà utilisé ne peut pas être réattribué.</Text>
+      {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
+      {items.map((item) => <View key={item.doc_type} style={ui.card}>
+        <View style={ui.row}>
+          <Text style={[ui.strong, { flex: 1 }]}>{docTypeLabels[item.doc_type]}</Text>
+          <Text style={[ui.small, { color: colors.green, fontWeight: "800" }]}>Prochain : {previewNumber(item)}</Text>
+        </View>
+        <View style={[ui.row, { marginTop: 4 }]}>
+          <View style={{ flex: 1 }}><Field label="Préfixe" value={item.prefix} onChangeText={(text) => patch(item.doc_type, { prefix: text })} autoCapitalize="characters" /></View>
+          <View style={{ flex: 1 }}><Field label="Chiffres" value={String(item.digits)} onChangeText={(text) => patch(item.doc_type, { digits: Math.min(10, Math.max(1, Number(text) || 1)) })} keyboardType="number-pad" /></View>
+          <View style={{ flex: 1 }}><Field label="Prochain n°" value={String(item.next_number)} onChangeText={(text) => patch(item.doc_type, { next_number: Math.max(1, Number(text) || 1) })} keyboardType="number-pad" /></View>
+        </View>
+        <View style={[ui.row, { marginTop: 8 }]}>
+          <Text style={[ui.body, { flex: 1 }]}>Inclure l’année (ex. 2026-)</Text>
+          <Switch value={item.with_year} onValueChange={(value) => patch(item.doc_type, { with_year: value })} trackColor={{ true: colors.green, false: colors.line }} />
+        </View>
+        <View style={[ui.row, { marginTop: 4 }]}>
+          <Text style={[ui.body, { flex: 1 }]}>Repartir à 1 chaque année</Text>
+          <Switch value={item.yearly_reset} onValueChange={(value) => patch(item.doc_type, { yearly_reset: value })} trackColor={{ true: colors.green, false: colors.line }} />
+        </View>
+        <Button label="ENREGISTRER" variant="secondary" onPress={() => void save(item)} busy={busy === item.doc_type} style={{ marginTop: 8, alignSelf: "flex-start" }} />
+      </View>)}
+    </ScrollView>}
   </View>;
 }
 

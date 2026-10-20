@@ -30,6 +30,9 @@ export const entityLabels: Record<string, string> = {
   notification_settings: "Alertes",
   app_settings: "Réglages e-mail",
   home_layouts: "Accueil",
+  returns: "Retours",
+  credit_notes: "Avoirs",
+  document_numbering: "Numérotation",
 };
 
 const fieldLabels: Record<string, string> = {

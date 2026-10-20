@@ -6,7 +6,7 @@ export type Feature =
   | "home.view" | "alerts.view" | "orders.view"
   | "orders.decide" | "orders.plan" | "orders.ship" | "orders.create" | "production.view" | "production.update"
   | "clients.view" | "clients.edit" | "clients.create" | "invoices.manage" | "products.manage"
-  | "messages.manage" | "team.messages" | "claims.manage" | "deliveries" | "fleet.manage" | "audit.view"
+  | "messages.manage" | "team.messages" | "claims.manage" | "returns.manage" | "client.returns" | "deliveries" | "fleet.manage" | "audit.view"
   | "client.home" | "client.order" | "client.orders" | "client.alerts"
   | "client.invoices" | "client.messages" | "client.claims";
 
@@ -46,6 +46,9 @@ export const featureBlocks: SettingsBlock[] = [
     { key: "messages.manage", label: "Messagerie avec les clients" },
     { key: "invoices.manage", label: "Onglet Factures" },
   ] },
+  { key: "returns", title: "Retours et avoirs", icon: "return-down-back-outline", audience: "team", items: [
+    { key: "returns.manage", label: "Gérer les retours et les avoirs" },
+  ] },
   { key: "audit", title: "Traçabilité", icon: "time-outline", audience: "team", items: [
     { key: "audit.view", label: "Consulter le journal des actions" },
   ] },
@@ -57,6 +60,7 @@ export const featureBlocks: SettingsBlock[] = [
     { key: "client.invoices", label: "Onglet Mes factures" },
     { key: "client.messages", label: "Messages" },
     { key: "client.claims", label: "Réclamations" },
+    { key: "client.returns", label: "Demandes de retour et avoirs" },
   ] },
 ];
 

@@ -7,6 +7,7 @@ import { setMyHomeLayout, type Account } from "../data/account";
 import { fetchAccounts } from "../data/admin";
 import { fetchClaims } from "../data/claims";
 import { fetchInvoices } from "../data/invoices";
+import { fetchCreditNotes, fetchReturns } from "../data/returns";
 import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
 import { fetchAllOrders } from "../data/staff";
@@ -51,6 +52,12 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
           shows("claims") ? fetchClaims().catch(() => []) : Promise.resolve([]),
           shows("accounts") ? fetchAccounts().catch(() => []) : Promise.resolve([]),
         ]);
+        const [returns, credits] = await Promise.all([
+          shows("returns") ? fetchReturns().catch(() => []) : Promise.resolve([]),
+          shows("credits") ? fetchCreditNotes().catch(() => []) : Promise.resolve([]),
+        ]);
+        next.returns = returns.filter((item) => ["requested", "approved", "received"].includes(item.status)).length;
+        next.credits = credits.filter((item) => item.status === "draft" || item.status === "issued").length;
         next.decide = count(orders, ["pending", "on_hold", "awaiting_client"]);
         next.placedToday = orders.filter((order) => toDayKey(new Date(order.created_at)) === today).length;
         next.queue = count(orders, ["confirmed", "preparing", "ready"]);

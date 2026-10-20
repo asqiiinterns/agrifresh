@@ -28,6 +28,7 @@ import { ClientMessagesScreen, StaffMessagesScreen } from "./src/screens/Message
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { PlanningTab } from "./src/screens/PlanningScreen";
 import { ProductionHub, type HubSheet } from "./src/screens/ProductionHub";
+import { ReturnsScreen } from "./src/screens/ReturnsScreen";
 import { MoreScreen } from "./src/screens/MoreScreen";
 import { StaffOrderEntryScreen } from "./src/screens/StaffOrderEntryScreen";
 import { Ionicons } from "@expo/vector-icons";
@@ -48,6 +49,7 @@ const TAB = {
   clients: { key: "clients", label: "Clients", icon: "people-outline", description: "Fiches, points de livraison, QR codes." },
   invoices: { key: "invoices", label: "Factures", icon: "document-text-outline", description: "Factures et bons de livraison." },
   messages: { key: "messages", label: "Messages", icon: "chatbubbles-outline", description: "Échanges avec les clients et entre collègues." },
+  returns: { key: "returns", label: "Retours et avoirs", icon: "return-down-back-outline", description: "Demandes de retour, réception, avoirs." },
   admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
   account: { key: "account", label: "Compte", icon: "person-circle-outline", description: "Profil, affichage, déconnexion." },
   more: { key: "more", label: "Plus", icon: "grid-outline" },
@@ -83,6 +85,7 @@ function tabsFor(account: Account): { kind: "client" | "unlinked" | "team"; tabs
   add(tabs, { ...TAB.invoices, label: "Facturation" }, has("invoices.manage"));
   add(tabs, TAB.deliveries, has("deliveries"));
   add(tabs, TAB.staffOrder, has("orders.create"));
+  add(tabs, TAB.returns, has("returns.manage"));
   add(tabs, TAB.messages, has("messages.manage") || has("team.messages"));
   add(tabs, TAB.alerts, has("alerts.view"));
   tabs.push(TAB.account);
@@ -327,7 +330,9 @@ function Main({ session }: { session: Session }) {
       case "production":
         return kind === "team" ? <ProductionHub initialSheet={hubSheet} ordersSection={tab === "orders" ? nav.params?.section : undefined} orderId={nav.params?.orderId} /> : null;
       case "invoices":
-        return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen />;
+        return kind === "team" ? <StaffInvoicesScreen /> : <ClientInvoicesScreen initialSheet={nav.params?.section} />;
+      case "returns":
+        return <ReturnsScreen initialSheet={nav.params?.section} />;
       case "deliveries":
         return <DriverScreen />;
       case "alerts":
@@ -362,6 +367,10 @@ function Main({ session }: { session: Session }) {
         </Pressable>;
       })}
     </View> : null}
+    {nav.params?.back && nav.params.back !== current ? <Pressable onPress={() => setTab(nav.params!.back!)} style={styles.backBar}>
+      <Ionicons name="chevron-back" size={16} color={colors.green} />
+      <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
+    </Pressable> : null}
     <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}>{renderTab()}</View>
     {bar.length > 1 ? <View style={styles.tabBar}>
       {bar.map((item) => {
@@ -397,6 +406,8 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  backBar: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#f3f8f1", borderBottomWidth: 1, borderBottomColor: colors.line },
+  backText: { color: colors.green, fontSize: 12, fontWeight: "800" },
   topBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },
   brand: { color: colors.green, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
   topIcon: { width: 40, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },

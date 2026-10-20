@@ -33,6 +33,7 @@ export type Order = {
   client_id: string | null;
   delivery_point_id: string | null;
   delivery_token: string;
+  delivery_note_number?: string | null;
   client_invoice_id: string | null;
   address_snapshot: {
     business_name?: string;
@@ -47,7 +48,7 @@ export type Order = {
   order_status_history: StatusEvent[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 
@@ -114,7 +115,8 @@ export async function respondToOrder(orderId: string, accept: boolean, note?: st
   if (error) throw error;
 }
 
-export const deliveryNoteNumber = (order: Pick<Order, "order_number">) => `BL-${String(order.order_number).padStart(6, "0")}`;
+// Number given when the order is accepted (configurable format); older orders fall back to their order number.
+export const deliveryNoteNumber = (order: Pick<Order, "order_number"> & { delivery_note_number?: string | null }) => order.delivery_note_number ?? `BL-${String(order.order_number).padStart(6, "0")}`;
 
 // Delivery note: one per order. Its QR code is scanned by the driver at hand-over.
 export const formatOrigin = (origin: ProductOrigin | null | undefined) =>

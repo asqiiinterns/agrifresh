@@ -8,6 +8,7 @@ import type { ClientSummary } from "../data/account";
 import { deliveryNoteNumber, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type Order } from "../data/orders";
 import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
 import { OrderTimeline } from "../ui/OrderTimeline";
+import { ReturnFormModal } from "./ReturnsScreen";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { useCan } from "../data/permissions";
@@ -48,6 +49,8 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
   const [claimOrder, setClaimOrder] = useState<Order | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const canClaim = useCan()("client.claims");
+  const canReturn = useCan()("client.returns");
+  const [returnOrder, setReturnOrder] = useState<Order | null>(null);
 
   async function answer(order: Order, accept: boolean) {
     setRespondingId(order.id);
@@ -204,12 +207,14 @@ export function ClientOrdersScreen({ session, client, initialOrderId }: { sessio
         {item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => void share(item)} busy={sharingId === item.id} />
           {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
+          {canReturn && item.status === "delivered" ? <Button label="DEMANDER UN RETOUR" variant="secondary" onPress={() => setReturnOrder(item)} /> : null}
         </View> : null}
         </> : null}
       </View>;
       }}
     />}
 
+    <ReturnFormModal mode="client" visible={returnOrder !== null} order={returnOrder} onClose={() => setReturnOrder(null)} onSaved={() => setReturnOrder(null)} />
     <ClaimModal order={claimOrder} onClose={() => setClaimOrder(null)} onSent={() => { setClaimOrder(null); void reload("silent"); }} />
 
     <Modal visible={receptionVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setReceptionVisible(false)}>

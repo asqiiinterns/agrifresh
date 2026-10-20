@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Text } from "./Text";
 import { timeline, type Order } from "../data/orders";
-import { formatDateTime, statusLabel } from "./components";
+import { formatDateTime, statusLabel, statusStyles } from "./components";
 import { colors, ui } from "./theme";
 
 // Who did what and when: keeps the trace when an order is declined, reopened and reconfirmed.
@@ -18,9 +18,9 @@ export function OrderTimeline({ order, viewer }: { order: Order; viewer: "client
       {events.map((event, index) => {
         const actor = event.byClient ? (viewer === "client" ? "Vous" : event.changed_by_name ?? "Client") : (viewer === "client" ? "AgriFresh" : event.changed_by_name ?? "Personnel");
         return <View key={`${event.created_at}-${index}`} style={styles.item}>
-          <View style={[styles.dot, event.byClient && styles.dotClient]} />
+          <View style={[styles.dot, { backgroundColor: statusStyles[event.status]?.color ?? colors.green }]} />
           <View style={{ flex: 1 }}>
-            <Text style={ui.body}><Text style={{ fontWeight: "800" }}>{statusLabel(event.status)}</Text> · {actor}</Text>
+            <Text style={ui.body}><Text style={{ fontWeight: "800", color: statusStyles[event.status]?.color ?? colors.text }}>{statusLabel(event.status)}</Text> · {actor}</Text>
             <Text style={ui.small}>{formatDateTime(event.created_at)}</Text>
             {event.note ? <Text style={[ui.small, { color: colors.text }]}>{event.note}</Text> : null}
           </View>
