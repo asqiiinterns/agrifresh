@@ -8,6 +8,7 @@ import { BackButton, Button, Chip, Field, ListGroup, ListRow, ScreenHeader } fro
 import { errorMessage } from "../ui/notify";
 import { ui } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
+import { PricingModal } from "./PricingScreen";
 import { useCan } from "../data/permissions";
 import { MyNotificationsCard } from "./NotificationSettings";
 import { unregisterPush } from "../notifications";
@@ -24,7 +25,7 @@ import { confirmSignOut } from "../ui/signOut";
 import { fetchMyPro, type MyPro } from "../data/pros";
 import { RolesManager } from "./RolesManager";
 
-export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "clients" | "notifications" | "permissions" | "team";
+export type AccountSheet = "sections" | "profile" | "home" | "display" | "password" | "products" | "pricing" | "clients" | "notifications" | "permissions" | "team";
 
 // "Plus": one page, grouped by what people look for — the sections that do not fit in the
 // bottom bar, catalogue and clients, administration, then the account's own settings.
@@ -51,6 +52,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   useEffect(() => { if (account?.role === "customer") void fetchMyPro().then(setMyPro); }, [account?.role]);
   const pages: { key: AccountSheet; icon: TabDef["icon"]; title: string; detail: string; allowed: boolean }[] = [
     { key: "products", icon: "pricetags-outline", title: "Produits", detail: "Catalogue, prix, TVA, stock, nouveautés et origine.", allowed: active && can("products.manage") },
+    { key: "pricing", icon: "pricetag-outline", title: "Remises et tarifs", detail: "Remises, prix négociés et groupes de clients.", allowed: active && account?.role !== "customer" && can("products.manage") && mod("pricing") },
     { key: "clients", icon: "people-outline", title: "Clients", detail: "Fiches, points de livraison, QR codes, options.", allowed: active && can("clients.view") },
     { key: "team", icon: "people-outline", title: "Mon équipe", detail: "Collaborateurs, rôles et droits de votre Pro.", allowed: active && account?.role === "customer" && !!myPro },
     { key: "profile", icon: "person-circle-outline", title: "Mon profil et mot de passe", detail: account?.client ? "Votre fiche, vos points de livraison, votre mot de passe." : "Vos informations et votre mot de passe.", allowed: true },
@@ -63,9 +65,10 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   const startPage = allowedPages.some((page) => page.key === initialSheet) ? initialSheet as AccountSheet : null;
   const [page, setPage] = useState<AccountSheet | null>(startPage);
   const [productsVisible, setProductsVisible] = useState(false);
+  const [pricingVisible, setPricingVisible] = useState(false);
   const [query, setQuery] = useState("");
 
-  const open = (key: AccountSheet) => key === "products" ? setProductsVisible(true) : setPage(key);
+  const open = (key: AccountSheet) => key === "products" ? setProductsVisible(true) : key === "pricing" ? setPricingVisible(true) : setPage(key);
   const entry = (key: AccountSheet): Entry[] => allowedPages.filter((item) => item.key === key).map((item) => ({ key: item.key, icon: item.icon, title: item.title, detail: item.detail, onPress: () => open(item.key) }));
   const adminEntries: Entry[] = !sections.some((item) => item.key === "admin") ? [] : [
     { page: "accounts", icon: "person-outline" as const, title: "Comptes", detail: "Comptes de vos clients et de votre équipe : validation, suspension, ajout.", allowed: isAdmin },
@@ -83,7 +86,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
     { title: "Activité", entries: sectionEntries("Activité") },
     { title: "Équipe", entries: sectionEntries("Équipe") },
     { title: "Pilotage", entries: sectionEntries("Pilotage") },
-    { title: "Catalogue et clients", entries: [...entry("products"), ...entry("clients")] },
+    { title: "Catalogue et clients", entries: [...entry("products"), ...entry("pricing"), ...entry("clients")] },
     { title: "Administration", entries: adminEntries },
     { title: "Mon Pro", entries: entry("team") },
     { title: "Mon compte", entries: [...entry("profile"), ...entry("notifications"), ...entry("display"), ...entry("home"), ...entry("permissions")] },
@@ -122,6 +125,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
       </ListGroup>
     </ScrollView>
     <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} />
+    <PricingModal visible={pricingVisible} onClose={() => setPricingVisible(false)} />
   </View>;
 }
 

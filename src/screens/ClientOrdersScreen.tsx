@@ -229,6 +229,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
             <View style={{ flex: 1 }}>
               <Text style={ui.body}>{formatQuantity(line.quantity)} {line.unit_snapshot} · {line.product_name_snapshot}</Text>
               {rules.show_origin && line.origin_snapshot ? <Text style={styles.origin}>Origine : {formatOrigin(line.origin_snapshot)}{line.origin_snapshot.label ? ` · ${line.origin_snapshot.label}` : ""}</Text> : null}
+              {rules.show_prices && line.discount_label ? <Text style={styles.origin}>{line.discount_label}</Text> : null}
             </View>
             {rules.show_prices ? <Text style={ui.small}>{formatPrice(line.line_total)}</Text> : null}
           </View>)}

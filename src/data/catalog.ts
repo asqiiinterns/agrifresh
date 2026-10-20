@@ -2,6 +2,7 @@ import type { Product } from "../types/product";
 import { products as demoProducts } from "./products";
 import { supabase } from "../lib/supabase";
 import type { DeliveryPointSummary } from "./account";
+import type { Offer } from "./pricing";
 
 type CatalogRow = {
   id: string;
@@ -69,21 +70,25 @@ export type BuyerSupplier = {
   show_prices: boolean; show_stock: boolean; show_origin: boolean;
   delivery_points: DeliveryPointSummary[];
 };
-export type BuyerCatalog = { buyerOrgId: string | null; suppliers: BuyerSupplier[]; products: Product[] };
-type BuyerRow = Omit<CatalogRow, "categories" | "active"> & { client_id: string; category: string | null; category_sort?: number | null };
+// offers: the discounts of each supplier for me (20261118; empty before).
+export type BuyerCatalog = { buyerOrgId: string | null; suppliers: BuyerSupplier[]; products: Product[]; offers: Offer[] };
+type BuyerRow = Omit<CatalogRow, "categories" | "active"> & { client_id: string; category: string | null; category_sort?: number | null; category_id?: string | null; category_parent_id?: string | null };
 
 // Null before 20261115: the screen then keeps the single-supplier catalogue.
 export async function fetchBuyerCatalog(): Promise<BuyerCatalog | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.rpc("buyer_catalog");
   if (error) return null;
-  const raw = data as { buyer_org_id: string | null; suppliers: BuyerSupplier[]; products: BuyerRow[] };
+  const raw = data as { buyer_org_id: string | null; suppliers: BuyerSupplier[]; products: BuyerRow[]; offers?: Offer[] };
   return {
     buyerOrgId: raw.buyer_org_id,
     suppliers: raw.suppliers ?? [],
     products: (raw.products ?? []).map((row) => ({
       ...toProduct({ ...row, price: row.price ?? 0, active: true, categories: row.category ? { name: row.category, sort_order: row.category_sort } : null }),
       supplierId: row.client_id,
+      categoryId: row.category_id ?? null,
+      categoryParentId: row.category_parent_id ?? null,
     })),
+    offers: raw.offers ?? [],
   };
 }

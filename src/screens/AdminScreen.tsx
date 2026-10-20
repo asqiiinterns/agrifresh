@@ -16,6 +16,8 @@ import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import { StaffProductsModal } from "./StaffProductsScreen";
+import { PricingModal } from "./PricingScreen";
+import { useModules } from "../data/modules";
 
 type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "location" | "roles";
 const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location", "roles"];
@@ -24,7 +26,9 @@ const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "loca
 export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean; initialPage?: string } = {}) {
   const [page, setPage] = useState<Page>(pages.includes(initialPage as Page) ? initialPage as Page : "menu");
   const [productsVisible, setProductsVisible] = useState(false);
+  const [pricingVisible, setPricingVisible] = useState(false);
   const can = useCan();
+  const pricingOn = useModules()("pricing");
 
   if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} />;
   if (page === "alerts") return <View style={ui.screen}>
@@ -48,12 +52,14 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
       </ListGroup> : null}
       <ListGroup title="Exploitation">
         {can("products.manage") ? <ListRow icon="leaf-outline" title="Produits" detail="Catalogue, prix, TVA, stock, nouveautés et origine." onPress={() => setProductsVisible(true)} /> : null}
+        {can("products.manage") && pricingOn ? <ListRow icon="pricetag-outline" title="Remises et tarifs" detail="Remises, prix négociés et groupes de clients." onPress={() => setPricingVisible(true)} /> : null}
         {can("fleet.manage") ? <ListRow icon="car-outline" title="Flotte" detail="Véhicules proposés au livreur à l’expédition." onPress={() => setPage("fleet")} /> : null}
         {can("audit.view") ? <ListRow icon="time-outline" title="Journal des actions" detail="Qui a fait quoi et quand, sur tout le système." onPress={() => setPage("audit")} /> : null}
         {can("location.view") ? <ListRow icon="location-outline" title="Localisation" detail="Dernière position des comptes qui la partagent." onPress={() => setPage("location")} /> : null}
       </ListGroup>
     </ScrollView>
     <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} />
+    <PricingModal visible={pricingVisible} onClose={() => setPricingVisible(false)} />
   </View>;
 }
 

@@ -30,12 +30,14 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [roles, setRoles] = useState(false);
+  const [plan, setPlan] = useState(false);
   const isNew = orgId === null;
 
   useEffect(() => {
     if (!visible) return;
     setError("");
     setRoles(false);
+    setPlan(false);
     if (isNew) { setCard(null); setForm(emptyPro); return; }
     void fetchProCard(orgId).then((next) => {
       setCard(next);
@@ -73,7 +75,8 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
 
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
-      {roles && card ? <RolesManager orgId={card.id} header={<ScreenHeader eyebrow={card.name.toLocaleUpperCase("fr")} title="Rôles et accès" right={<BackButton label="Fiche" onPress={() => setRoles(false)} />} />} /> : <>
+      {plan && card ? <ModulesPage mode={{ kind: "plan", orgId: card.id, orgName: card.name }} header={<BackButton label="Fiche" onPress={() => setPlan(false)} />} />
+      : roles && card ? <RolesManager orgId={card.id} header={<ScreenHeader eyebrow={card.name.toLocaleUpperCase("fr")} title="Rôles et accès" right={<BackButton label="Fiche" onPress={() => setRoles(false)} />} />} /> : <>
         <ScreenHeader eyebrow="APPRO+ · PROS" title={isNew ? "Nouveau Pro" : card?.name ?? "Pro"} subtitle={card ? `${statusLabels[card.status]} · ${card.products} produit(s) · ${card.clients} client(s) · ${card.suppliers} fournisseur(s)` : undefined} right={<CloseButton onPress={onClose} />} />
         <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
           {card ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
@@ -81,6 +84,7 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
             {card.status === "active" && !card.legacy ? <Button label="SUSPENDRE" variant="danger" onPress={() => changeStatus("suspended")} /> : null}
             {card.status === "pending" ? <Button label="REFUSER" variant="danger" onPress={() => changeStatus("refused")} /> : null}
             <Button label="RÔLES ET ACCÈS" variant="secondary" onPress={() => setRoles(true)} />
+            <Button label="MODULES (FORMULE)" variant="secondary" onPress={() => setPlan(true)} />
           </View> : null}
           <View style={ui.card}>
             <Text style={ui.strong}>Type et activités</Text>
@@ -137,7 +141,7 @@ type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "
 export function PlatformSettingsScreen() {
   const [page, setPage] = useState<SettingsPage>("menu");
   const back = <BackButton label="Paramétrage" onPress={() => setPage("menu")} />;
-  if (page === "modules") return <ModulesPage header={back} />;
+  if (page === "modules") return <ModulesPage header={back} mode={{ kind: "platform" }} />;
   if (page === "templates") return <TemplatesPage header={back} />;
   if (page === "accounts") return <PlatformAccountsPage header={back} />;
   if (page === "categories") return <CategoriesPage header={back} />;
@@ -152,7 +156,7 @@ export function PlatformSettingsScreen() {
         <ListRow icon="people-outline" title="Tous les comptes" detail="Rechercher, valider les inscriptions, suspendre ou réactiver un compte." onPress={() => setPage("accounts")} />
       </ListGroup>
       <ListGroup title="Fonctions et droits">
-        <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction sur la plateforme." onPress={() => setPage("modules")} />
+        <ListRow icon="apps-outline" title="Modules par défaut" detail="La valeur par défaut de chaque fonction pour tous les Pros ; la formule de chaque Pro se règle dans sa fiche." onPress={() => setPage("modules")} />
         <ListRow icon="key-outline" title="Modèles de rôles" detail="Les droits par défaut de chaque rôle fournisseur et acheteur. Les rôles des Pros qui suivent un modèle changent avec lui." onPress={() => setPage("templates")} />
       </ListGroup>
       <ListGroup title="Catalogue">

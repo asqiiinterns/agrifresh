@@ -317,6 +317,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
           <View style={{ flex: 1 }}>
             <Text style={ui.body}><Text style={{ fontWeight: "800" }}>{formatQuantity(line.quantity)} {line.unit_snapshot}</Text> · {line.product_name_snapshot}</Text>
             {line.origin_snapshot ? <Text style={styles.origin}>{formatOrigin(line.origin_snapshot)}</Text> : null}
+            {line.discount_label ? <Text style={styles.origin}>{line.discount_label}</Text> : null}
           </View>
           <Text style={ui.small}>{formatPrice(line.line_total)}</Text>
         </View>)}

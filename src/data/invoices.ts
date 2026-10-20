@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabase";
 import { company } from "../config/company";
 import { formatClientNumber } from "./account";
-import { ORDER_FIELDS, deliveryNoteNumber, type Order } from "./orders";
+import { ORDER_FIELDS, deliveryNoteNumber, discountText, type Order } from "./orders";
 import { brandColor, documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity, sellerBlock } from "./pdf";
 
 export type Invoice = {
@@ -154,7 +154,7 @@ export async function shareInvoice(invoice: InvoiceWithOrders): Promise<void> {
   const rows = orders.map((order) => `
     <tr class="bl"><td colspan="5"><strong>${deliveryNoteNumber(order)}</strong> · commande #${order.order_number} du ${pdfDate(order.created_at)}${order.address_snapshot?.point_label ? ` · ${escapeHtml(order.address_snapshot.point_label)}` : ""}${order.delivered_at ? ` · livrée le ${pdfDate(order.delivered_at)}` : ""}</td></tr>
     ${order.order_items.map((line) => `<tr>
-      <td>${escapeHtml(line.product_name_snapshot)}</td>
+      <td>${escapeHtml(line.product_name_snapshot)}${line.discount_label ? `<div class="muted">${escapeHtml(discountText(line))}</div>` : ""}</td>
       <td class="number">${pdfQuantity(line.quantity)} ${escapeHtml(line.unit_snapshot)}</td>
       <td class="number">${pdfAmount(line.unit_price)}</td>
       <td class="number">${Number(line.vat_rate)} %</td>

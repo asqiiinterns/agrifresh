@@ -3,13 +3,15 @@ import { supabase } from "../lib/supabase";
 import { clientOptionBlocks, featureBlocks, type ClientOptionKey, type Feature } from "./permissions";
 import type { IconName } from "../ui/navigation";
 
-// Modules (Paramétrage → Modules): a module that is off disappears for everyone, admins included.
+// Modules: a module that is off disappears (menus, buttons, settings), admins included.
+// Appro+ sets the default of each module and the plan of each Pro (included / excluded); within its plan,
+// the Pro's Responsable switches each module on or off (20261118_pro_modules_pricing.sql).
 // Same keys as supabase/migrations/20261107_modules.sql, which also enforces them on the server.
 export type ModuleKey =
   | "decide" | "production" | "planning" | "delivery" | "delivery_qr" | "signature" | "fleet" | "invoicing" | "reminders"
   | "exports" | "returns" | "claims" | "client_messages" | "team_messages" | "attachments" | "needs_reply" | "staff_orders"
   | "recurring" | "order_tags" | "stock" | "origin" | "reconfirm" | "calendar" | "leaves" | "incidents" | "location" | "stats"
-  | "audit" | "languages" | "home_custom";
+  | "audit" | "languages" | "home_custom" | "pricing";
 
 export type ModuleDef = { key: ModuleKey; label: string; description: string; icon: IconName; requires?: ModuleKey[] };
 
@@ -17,6 +19,7 @@ export const moduleGroups: { title: string; modules: ModuleDef[] }[] = [
   { title: "Ventes et commandes", modules: [
     { key: "decide", label: "À décider", description: "Onglet qui regroupe tout ce qui attend une décision.", icon: "checkmark-done-outline" },
     { key: "staff_orders", label: "Commande saisie par l’équipe", description: "L’équipe passe une commande pour un client.", icon: "create-outline" },
+    { key: "pricing", label: "Remises et tarifs clients", description: "Remises, prix négociés, groupes de clients, calculés en direct dans le panier.", icon: "pricetag-outline" },
     { key: "recurring", label: "Commandes récurrentes", description: "Une commande se répète automatiquement (jours, fréquence).", icon: "repeat-outline" },
     { key: "order_tags", label: "Étiquettes de commande", description: "★ Suivi spécial et ↻ À reprogrammer.", icon: "pricetags-outline" },
     { key: "reconfirm", label: "Reconfirmation par le client", description: "Une commande rouverte attend l’accord du client.", icon: "help-circle-outline" },
@@ -127,8 +130,42 @@ export function onModulesChanged(listener: () => void) {
   return () => { listeners.delete(listener); };
 }
 
+// Appro+: the default of a module for every Pro.
 export async function setModule(key: ModuleKey, enabled: boolean): Promise<void> {
   const { error } = await client().rpc("admin_set_module", { p_key: key, p_enabled: enabled });
   if (error) throw error;
   listeners.forEach((listener) => listener());
+}
+
+export async function fetchModuleDefaults(): Promise<ModuleState> {
+  if (!supabase) return {};
+  const { data, error } = await supabase.rpc("platform_modules_defaults");
+  if (!error && data) return data as ModuleState;
+  return fetchModules();
+}
+
+// The modules of one Pro (mine when orgId is omitted). Null before 20261118.
+export type OrgModule = { default: boolean; granted: boolean | null; included: boolean; enabled: boolean; effective: boolean };
+export type OrgModules = Partial<Record<ModuleKey, OrgModule>>;
+export async function fetchOrgModules(orgId?: string): Promise<OrgModules | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("org_modules_state", orgId ? { p_org_id: orgId } : {});
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") return null;
+    throw error;
+  }
+  return data as OrgModules;
+}
+
+// The Pro's Responsable: on or off within its plan.
+export async function setOrgModule(key: ModuleKey, enabled: boolean): Promise<void> {
+  const { error } = await client().rpc("org_set_module", { p_key: key, p_enabled: enabled });
+  if (error) throw error;
+  listeners.forEach((listener) => listener());
+}
+
+// Appro+: include (true) or exclude (false) a module in a Pro's plan, or follow the default (null).
+export async function setPlanModule(orgId: string, key: ModuleKey, granted: boolean | null): Promise<void> {
+  const { error } = await client().rpc("platform_set_org_module", { p_org_id: orgId, p_key: key, p_granted: granted });
+  if (error) throw error;
 }

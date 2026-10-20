@@ -7,6 +7,9 @@ export type Product = {
   description: string;
   category: string;
   categorySort?: number;
+  // Category ids, for the supplier's offers on a category (buyer catalogue).
+  categoryId?: string | null;
+  categoryParentId?: string | null;
   price: number;
   // VAT rate in %, prices being excl. VAT.
   vatRate?: number;

@@ -138,7 +138,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
       <Text style={[ui.small, { marginTop: 8 }]}>Chaque thème se règle par profil, puis par utilisateur (exception). Les clients suivent un réglage commun, que chaque fiche peut adapter. L’administrateur garde tous les droits.</Text>
       <ListGroup title="Fonctions de l’application">
-        <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction pour tout le monde (commandes récurrentes, retours, statistiques…)." onPress={() => setPage({ kind: "modules" })} />
+        <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction de votre formule pour votre équipe et vos clients (remises, retours, statistiques…)." onPress={() => setPage({ kind: "modules" })} />
       </ListGroup>
       <ListGroup title="Onglets et droits de l’équipe">
         {featureBlocks.filter((block) => block.audience === "team").map((block) => {

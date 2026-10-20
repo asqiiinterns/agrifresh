@@ -12,6 +12,9 @@ export type OrderLine = {
   line_total: number | string;
   vat_rate: number | string;
   origin_snapshot: ProductOrigin | null;
+  // Supplier's discount (20261118): catalogue price and what was applied.
+  list_price?: number | string | null;
+  discount_label?: string | null;
 };
 
 export type ProductOrigin = { producer?: string; region?: string; label?: string; note?: string };
@@ -53,7 +56,7 @@ export type Order = {
   order_status_history: StatusEvent[];
 };
 
-export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, special_follow, needs_reschedule, delivery_signature, client_invoice_id, address_snapshot, order_items(product_id, product_name_snapshot, quantity, unit_snapshot, unit_price, line_total, vat_rate, origin_snapshot), order_status_history(status, note, changed_by, changed_by_name, created_at)";
+export const ORDER_FIELDS = "id, order_number, status, status_note, total, currency, created_at, requested_delivery_date, delivered_at, customer_note, customer_id, production_rank, client_id, delivery_point_id, delivery_token, delivery_note_number, special_follow, needs_reschedule, delivery_signature, client_invoice_id, address_snapshot, order_items(*), order_status_history(status, note, changed_by, changed_by_name, created_at)";
 
 export type OrderDraftLine = { product_id: string; quantity: number };
 
@@ -159,13 +162,17 @@ export const timeline = (order: Order) => [...(order.order_status_history ?? [])
   .sort((a, b) => a.created_at.localeCompare(b.created_at))
   .map((event) => ({ ...event, byClient: event.changed_by === order.customer_id }));
 
+// "Promo −10 % · prix catalogue 2,500" under a discounted line.
+export const discountText = (line: Pick<OrderLine, "discount_label" | "list_price">) =>
+  [line.discount_label, line.list_price !== null && line.list_price !== undefined ? `prix catalogue ${pdfAmount(line.list_price)}` : ""].filter(Boolean).join(" · ");
+
 export async function shareDeliveryNote(order: Order, options: { showPrices: boolean; showOrigin: boolean }): Promise<void> {
   const { showPrices, showOrigin } = options;
   const number = deliveryNoteNumber(order);
   const address = order.address_snapshot ?? {};
   const lines = order.order_items.map((line) => `
     <tr>
-      <td>${escapeHtml(line.product_name_snapshot)}${showOrigin && line.origin_snapshot ? `<div class="muted">Origine : ${escapeHtml([formatOrigin(line.origin_snapshot), line.origin_snapshot.label].filter(Boolean).join(" — "))}</div>` : ""}</td>
+      <td>${escapeHtml(line.product_name_snapshot)}${showOrigin && line.origin_snapshot ? `<div class="muted">Origine : ${escapeHtml([formatOrigin(line.origin_snapshot), line.origin_snapshot.label].filter(Boolean).join(" — "))}</div>` : ""}${showPrices && line.discount_label ? `<div class="muted">${escapeHtml(discountText(line))}</div>` : ""}</td>
       <td class="number">${pdfQuantity(line.quantity)}</td>
       <td>${escapeHtml(line.unit_snapshot)}</td>
       ${showPrices ? `<td class="number">${pdfAmount(line.unit_price)}</td><td class="number">${pdfAmount(line.line_total)}</td>` : ""}
