@@ -9,8 +9,15 @@ const fromRow = (row: Row): CompanyProfile => ({
 });
 
 // Read by everyone (printed on documents); best effort before 20261106_appro_plus.sql.
+// The supplier the person acts for (its own Pro, or a client's supplier); before 20261111 the
+// single company_profile row.
 export async function loadCompanyProfile(): Promise<CompanyProfile> {
   if (!supabase) return company;
+  const mine = await supabase.rpc("my_company_profile");
+  if (!mine.error && mine.data) {
+    applyCompanyProfile(fromRow(mine.data as Row));
+    return { ...company };
+  }
   const { data } = await supabase.from("company_profile").select("*").eq("id", 1).maybeSingle();
   if (data) applyCompanyProfile(fromRow(data as Row));
   return { ...company };
