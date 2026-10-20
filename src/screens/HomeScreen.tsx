@@ -33,6 +33,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
   const [values, setValues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const allowedTiles = homeTiles.filter((tile) => tile.audience === audience && allowedFor(tile.need, can, isAdmin));
   const allowedShortcuts = homeShortcuts.filter((item) => item.audience === audience && allowedFor(item.need, can, isAdmin));
@@ -126,6 +127,21 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     <ScreenHeader
       eyebrow={today.toLocaleUpperCase("fr")}
       title={`${new Date().getHours() < 18 ? "Bonjour" : "Bonsoir"}${name ? ` ${name}` : ""}`}
+      right={<Pressable onPress={() => setEditing(true)} style={styles.gear} hitSlop={8} accessibilityLabel="Personnaliser l’accueil">
+        <Ionicons name="settings-outline" size={20} color={colors.green} />
+      </Pressable>}
+    />
+    {/* Gear next to the greeting: choose and order the figures and shortcuts shown here. */}
+    <HomeEditor
+      visible={editing}
+      title="Mon accueil"
+      tiles={allowedTiles.map(({ key, label, icon }) => ({ key, label, icon }))}
+      shortcuts={allowedShortcuts.map(({ key, label, icon }) => ({ key, label, icon }))}
+      value={layout}
+      resetLabel={account.role_home_layout ? "REVENIR À L’ACCUEIL DE MON PROFIL" : "REVENIR À L’ACCUEIL PAR DÉFAUT"}
+      onSave={async (next) => { await setMyHomeLayout(next); onLayoutChanged(); }}
+      onReset={async () => { await setMyHomeLayout(null); onLayoutChanged(); }}
+      onClose={() => setEditing(false)}
     />
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.green} />}>
       {tiles.length ? <View style={styles.grid}>
@@ -146,7 +162,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
         {shortcuts.map((item) => <ListRow key={item.key} icon={item.icon} title={item.label} onPress={() => navigate(item.tab, item.params)} />)}
       </ListGroup> : null}
 
-      {!tiles.length && !shortcuts.length ? <Text style={[ui.small, { marginTop: 14 }]}>Votre accueil est vide : choisissez vos chiffres et raccourcis dans Compte → Accueil.</Text> : null}
+      {!tiles.length && !shortcuts.length ? <Text style={[ui.small, { marginTop: 14 }]}>Votre accueil est vide : touchez ⚙ en haut pour choisir vos chiffres et raccourcis.</Text> : null}
     </ScrollView>}
 
   </View>;
@@ -180,6 +196,7 @@ export function HomeCustomizeCard({ account, onLayoutChanged }: { account: Accou
 }
 
 const styles = StyleSheet.create({
+  gear: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   edit: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.white },
   editText: { color: colors.green, fontSize: 11, fontWeight: "800" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },

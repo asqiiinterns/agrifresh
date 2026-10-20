@@ -8,6 +8,7 @@ import { formatClientNumber } from "../data/account";
 import { countUnread, fetchInbox, fetchMessages, flagMessage, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
 import { uploadAttachment, type LocalFile } from "../data/attachments";
 import { AttachmentPicker, AttachmentView, NeedsReplyTag, NeedsReplyToggle } from "../ui/Attachments";
+import { ReplyAction, ReplyBanner, ReplyQuote, messagePreview } from "../ui/MessageReply";
 import { Ionicons } from "@expo/vector-icons";
 import { countTeamUnread } from "../data/teamMessages";
 import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime } from "../ui/components";
@@ -24,7 +25,8 @@ export function ClientMessagesScreen({ clientId, onRead }: { clientId: string; o
 }
 
 // Team side: conversations with clients and, separately, between team members.
-export function StaffMessagesScreen({ canClients, canTeam, initialSection, initialConversationId, onRead }: {
+export function StaffMessagesScreen({ canClients, canTeam, initialSection, initialConversationId, onRead, moderator }: {
+  moderator?: boolean;
   canClients: boolean;
   canTeam: boolean;
   initialSection?: string;
@@ -51,12 +53,12 @@ export function StaffMessagesScreen({ canClients, canTeam, initialSection, initi
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ÉCHANGE DIRECT" title="Messages" />
     {canClients && canTeam ? <Sheets items={[{ key: "clients", label: "Clients", count: counts.clients || undefined }, { key: "team", label: "Équipe", count: counts.team || undefined }]} value={sheet} onChange={setSheet} /> : null}
-    {sheet === "clients" ? <StaffInboxScreen embedded onRead={read} /> : <TeamMessagesList onRead={read} initialConversationId={initialConversationId} />}
+    {sheet === "clients" ? <StaffInboxScreen embedded onRead={read} moderator={moderator} /> : <TeamMessagesList onRead={read} initialConversationId={initialConversationId} moderator={moderator} />}
   </View>;
 }
 
 // Staff side: one conversation per client, most recent first.
-export function StaffInboxScreen({ onRead, embedded }: { onRead: () => void; embedded?: boolean }) {
+export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () => void; embedded?: boolean; moderator?: boolean }) {
   const [entries, setEntries] = useState<InboxEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -120,15 +122,28 @@ export function StaffInboxScreen({ onRead, embedded }: { onRead: () => void; emb
       <SafeAreaView style={ui.modalSafe}>
         {openClient ? <>
           <ScreenHeader eyebrow={formatClientNumber(openClient.client_number)} title={openClient.business_name} right={<CloseButton onPress={() => setOpenClient(null)} />} />
-          <Thread clientId={openClient.client_id} viewerIsStaff onRead={() => { onRead(); void reload("silent"); }} />
+          <Thread clientId={openClient.client_id} viewerIsStaff moderator={moderator} onRead={() => { onRead(); void reload("silent"); }} />
         </> : null}
       </SafeAreaView>
     </Modal>
   </View>;
 }
 
-function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerIsStaff: boolean; onRead: () => void }) {
+// Admins and supervisors (moderator) may mark any message "needs a reply"; others only their own.
+function Thread({ clientId, viewerIsStaff, onRead, moderator }: { clientId: string; viewerIsStaff: boolean; onRead: () => void; moderator?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [me, setMe] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const list = useRef<FlatList<Message>>(null);
+  const authorOf = (message: Message) => message.from_staff === viewerIsStaff ? "Vous" : message.from_staff ? "AgriFresh" : "Client";
+  function goTo(id: string) {
+    const index = messages.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    setHighlight(id);
+    setTimeout(() => setHighlight((current) => current === id ? null : current), 1600);
+  }
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<LocalFile | null>(null);
@@ -160,6 +175,7 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
     const client = supabase;
     let active = true;
     setLoading(true);
+    void client?.auth.getUser().then(({ data }) => { if (active) setMe(data.user?.id ?? null); });
     void fetchMessages(clientId)
       .then((next) => { if (active) setMessages(next); })
       .catch((cause: unknown) => { if (active) setError(errorMessage(cause, "Impossible de charger la conversation.")); })
@@ -191,11 +207,12 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
     setError("");
     try {
       const attachment = file ? await uploadAttachment(`client/${clientId}`, file) : null;
-      const message = await sendMessage(clientId, body, attachment, needsReply);
+      const message = await sendMessage(clientId, body, attachment, needsReply, replyTo?.id ?? null);
       setMessages((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
       setDraft("");
       setFile(null);
       setNeedsReply(false);
+      setReplyTo(null);
     } catch (cause) {
       setError(errorMessage(cause, "Le message n’a pas pu être envoyé."));
     } finally {
@@ -209,26 +226,35 @@ function Thread({ clientId, viewerIsStaff, onRead }: { clientId: string; viewerI
     {loading ? <Loading /> : messages.length === 0 ? <View style={{ flex: 1, justifyContent: "center" }}>
       <EmptyState title="Aucun message" body="Écrivez le premier message ci-dessous." />
     </View> : <FlatList
+      ref={list}
       inverted
       data={messages}
       keyExtractor={(message) => message.id}
       contentContainerStyle={{ padding: 18, flexGrow: 1 }}
+      onScrollToIndexFailed={({ index }) => setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5 }), 250)}
       renderItem={({ item }) => {
         const mine = item.from_staff === viewerIsStaff;
-        return <View style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && styles.waiting]}>
+        const canFlag = !!moderator || (!!me && item.sender_id === me);
+        const original = item.reply_to ? messages.find((other) => other.id === item.reply_to) : undefined;
+        return <Pressable onLongPress={() => setReplyTo(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && styles.waiting, highlight === item.id && styles.highlight]}>
           {item.needs_reply ? <NeedsReplyTag mine={mine} /> : null}
           {!mine ? <Text style={styles.author}>{item.from_staff ? "AgriFresh" : "Client"}</Text> : null}
+          {item.reply_to ? <ReplyQuote mine={mine} author={original ? authorOf(original) : "Message"} text={original ? messagePreview(original.body, original.attachment) : null} onPress={original ? () => goTo(original.id) : undefined} /> : null}
           {item.attachment ? <AttachmentView attachment={item.attachment} mine={mine} /> : null}
           {item.body ? <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text> : null}
           <Text style={[styles.time, mine && { color: "#d4e3d6" }]}>{formatDateTime(item.created_at)}{mine && item.read_at ? " · lu" : ""}</Text>
-          <Pressable onPress={() => void toggleNeedsReply(item)} style={styles.needsReply} hitSlop={6}>
-            <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? "#d4e3d6" : colors.muted} />
-            <Text style={[styles.needsReplyText, mine && { color: "#d4e3d6" }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
-          </Pressable>
-        </View>;
+          <View style={styles.footer}>
+            <ReplyAction mine={mine} onPress={() => setReplyTo(item)} />
+            {canFlag ? <Pressable onPress={() => void toggleNeedsReply(item)} style={styles.needsReply} hitSlop={6}>
+              <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? "#d4e3d6" : colors.muted} />
+              <Text style={[styles.needsReplyText, mine && { color: "#d4e3d6" }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
+            </Pressable> : null}
+          </View>
+        </Pressable>;
       }}
     />}
     {error ? <Text style={[ui.error, { paddingHorizontal: 18 }]}>{error}</Text> : null}
+    {replyTo ? <ReplyBanner author={authorOf(replyTo)} text={messagePreview(replyTo.body, replyTo.attachment)} onCancel={() => setReplyTo(null)} /> : null}
     <AttachmentPicker value={file} onChange={setFile} disabled={sending} extra={<NeedsReplyToggle value={needsReply} onChange={setNeedsReply} />} />
     <View style={styles.composer}>
       <TextInput value={draft} onChangeText={setDraft} placeholder={file ? "Ajouter un texte (facultatif)…" : "Votre message…"} placeholderTextColor={colors.muted} style={[ui.input, { flex: 1, maxHeight: 120 }]} multiline maxLength={2000} />
@@ -251,7 +277,9 @@ const styles = StyleSheet.create({
   send: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   sendText: { color: colors.white, fontSize: 18 },
   waiting: { borderWidth: 2, borderColor: colors.danger },
-  needsReply: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 4 },
+  footer: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 5, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 4 },
+  needsReply: { flexDirection: "row", alignItems: "center", gap: 4 },
+  highlight: { borderWidth: 2, borderColor: colors.orange },
   needsReplyText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   unread: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   unreadText: { color: colors.white, fontSize: 11, fontWeight: "800" },

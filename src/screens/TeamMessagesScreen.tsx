@@ -13,6 +13,7 @@ import {
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, formatDateTime } from "../ui/components";
 import { uploadAttachment, type LocalFile } from "../data/attachments";
 import { AttachmentPicker, AttachmentView, NeedsReplyTag, NeedsReplyToggle } from "../ui/Attachments";
+import { ReplyAction, ReplyBanner, ReplyQuote, messagePreview } from "../ui/MessageReply";
 import type { IconName } from "../ui/navigation";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -20,7 +21,7 @@ import { colors, ui } from "../ui/theme";
 const kindIcon: Record<TeamConversationKind, IconName> = { direct: "person-outline", group: "people-outline", role: "id-card-outline", all: "megaphone-outline" };
 
 // Team conversations: list, new conversation, thread.
-export function TeamMessagesList({ onRead, initialConversationId }: { onRead: () => void; initialConversationId?: string }) {
+export function TeamMessagesList({ onRead, initialConversationId, moderator }: { onRead: () => void; initialConversationId?: string; moderator?: boolean }) {
   const [conversations, setConversations] = useState<TeamConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -81,7 +82,7 @@ export function TeamMessagesList({ onRead, initialConversationId }: { onRead: ()
     <RecipientsModal visible={creating} mode="new" onClose={() => setCreating(false)} onDone={async (choice) => { const id = await startFromChoice(choice); setCreating(false); setOpenId(id); void reload(); }} />
     <Modal visible={openId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpenId(null)}>
       <SafeAreaView style={ui.modalSafe}>
-        {openId ? <TeamThread conversationId={openId} onClose={() => { setOpenId(null); void reload(); }} onRead={onRead} /> : null}
+        {openId ? <TeamThread conversationId={openId} moderator={moderator} onClose={() => { setOpenId(null); void reload(); }} onRead={onRead} /> : null}
       </SafeAreaView>
     </Modal>
   </View>;
@@ -181,7 +182,11 @@ async function startFromChoice(choice: { all: boolean; ids: string[]; roles: Rol
   return startTeamConversation("group", { memberIds: choice.ids, title: choice.title });
 }
 
-function TeamThread({ conversationId, onClose, onRead }: { conversationId: string; onClose: () => void; onRead: () => void }) {
+// Admins and supervisors (moderator) may mark any message "needs a reply"; others only their own.
+function TeamThread({ conversationId, onClose, onRead, moderator }: { conversationId: string; onClose: () => void; onRead: () => void; moderator?: boolean }) {
+  const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const list = useRef<FlatList<TeamMessage>>(null);
   const [title, setTitle] = useState("");
   const [members, setMembers] = useState<string[]>([]);
   const [messages, setMessages] = useState<TeamMessage[]>([]);
@@ -193,6 +198,15 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
   const [error, setError] = useState("");
   const [me, setMe] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+
+  const authorOf = (message: TeamMessage) => message.sender_id === me ? "Vous" : message.sender_name;
+  function goTo(id: string) {
+    const index = messages.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    setHighlight(id);
+    setTimeout(() => setHighlight((current) => current === id ? null : current), 1600);
+  }
 
   async function reloadThread() {
     const thread = await fetchTeamThread(conversationId);
@@ -251,11 +265,12 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
     setError("");
     try {
       const attachment = file ? await uploadAttachment(`team/${conversationId}`, file) : null;
-      const message = await sendTeamMessage(conversationId, body, attachment, needsReply);
+      const message = await sendTeamMessage(conversationId, body, attachment, needsReply, replyTo?.id ?? null);
       setMessages((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
       setDraft("");
       setFile(null);
       setNeedsReply(false);
+      setReplyTo(null);
     } catch (cause) {
       setError(errorMessage(cause, "Le message n’a pas pu être envoyé."));
     } finally {
@@ -274,26 +289,35 @@ function TeamThread({ conversationId, onClose, onRead }: { conversationId: strin
       {loading ? <Loading /> : messages.length === 0 ? <View style={{ flex: 1, justifyContent: "center" }}>
         <EmptyState title="Aucun message" body="Écrivez le premier message ci-dessous." />
       </View> : <FlatList
+        ref={list}
         inverted
         data={messages}
         keyExtractor={(message) => message.id}
         contentContainerStyle={{ padding: 14, flexGrow: 1 }}
+        onScrollToIndexFailed={({ index }) => setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5 }), 250)}
         renderItem={({ item }) => {
           const mine = item.sender_id === me;
-          return <View style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && { borderWidth: 2, borderColor: colors.danger }]}>
+          const canFlag = !!moderator || mine;
+          const original = item.reply_to ? messages.find((other) => other.id === item.reply_to) : undefined;
+          return <Pressable onLongPress={() => setReplyTo(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.needs_reply && { borderWidth: 2, borderColor: colors.danger }, highlight === item.id && { borderWidth: 2, borderColor: colors.orange }]}>
             {item.needs_reply ? <NeedsReplyTag mine={mine} /> : null}
             {!mine ? <Text style={styles.author}>{item.sender_name}</Text> : null}
+            {item.reply_to ? <ReplyQuote mine={mine} author={original ? authorOf(original) : "Message"} text={original ? messagePreview(original.body, original.attachment) : null} onPress={original ? () => goTo(original.id) : undefined} /> : null}
             {item.attachment ? <AttachmentView attachment={item.attachment} mine={mine} /> : null}
             {item.body ? <Text style={[styles.body, mine && { color: colors.white }]}>{item.body}</Text> : null}
             <Text style={[styles.time, mine && { color: "#d4e3d6" }]}>{formatDateTime(item.created_at)}</Text>
-            <Pressable onPress={() => void toggleFlag(item)} hitSlop={6} style={styles.flagRow}>
-              <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? "#d4e3d6" : colors.muted} />
-              <Text style={[styles.flagText, mine && { color: "#d4e3d6" }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
-            </Pressable>
-          </View>;
+            <View style={styles.footer}>
+              <ReplyAction mine={mine} onPress={() => setReplyTo(item)} />
+              {canFlag ? <Pressable onPress={() => void toggleFlag(item)} hitSlop={6} style={styles.flagRow}>
+                <Ionicons name={item.needs_reply ? "checkbox" : "square-outline"} size={14} color={item.needs_reply ? colors.danger : mine ? "#d4e3d6" : colors.muted} />
+                <Text style={[styles.flagText, mine && { color: "#d4e3d6" }, item.needs_reply && { color: mine ? colors.white : colors.danger }]}>Nécessite une réponse</Text>
+              </Pressable> : null}
+            </View>
+          </Pressable>;
         }}
       />}
       {error ? <Text style={[ui.error, { paddingHorizontal: 14 }]}>{error}</Text> : null}
+      {replyTo ? <ReplyBanner author={authorOf(replyTo)} text={messagePreview(replyTo.body, replyTo.attachment)} onCancel={() => setReplyTo(null)} /> : null}
       <AttachmentPicker value={file} onChange={setFile} disabled={sending} extra={<NeedsReplyToggle value={needsReply} onChange={setNeedsReply} />} />
       <View style={styles.composer}>
         <TextInput value={draft} onChangeText={setDraft} placeholder={file ? "Ajouter un texte (facultatif)…" : "Votre message…"} placeholderTextColor={colors.muted} style={[ui.input, { flex: 1, maxHeight: 120 }]} multiline maxLength={2000} />
@@ -323,7 +347,8 @@ const styles = StyleSheet.create({
   body: { color: colors.text, fontSize: 14, lineHeight: 20 },
   time: { color: colors.muted, fontSize: 9, marginTop: 3, textAlign: "right" },
   addButton: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
-  flagRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  footer: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 4 },
+  flagRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   flagText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },

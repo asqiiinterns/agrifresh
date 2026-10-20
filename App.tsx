@@ -14,7 +14,7 @@ import { DecideScreen } from "./src/screens/DecideScreen";
 import { decisionCount, fetchDecisionBoard } from "./src/data/decisions";
 import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
-import { countUnread } from "./src/data/messages";
+import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
@@ -229,31 +229,35 @@ function useUnreadAlerts(userId: string | null) {
   return { unread, refresh };
 }
 
-// Unread client messages plus, for the team, unread messages between colleagues.
+// Unread client messages plus, for the team, unread messages between colleagues,
+// and the messages waiting for my answer (red mark on the icon).
 function useUnreadMessages(enabled: boolean, isStaff: boolean, sources: { clients: boolean; team: boolean }) {
   const [unread, setUnread] = useState(0);
+  const [needsReply, setNeedsReply] = useState(0);
   const { clients, team } = sources;
   const refresh = useCallback(() => {
     if (!enabled) return;
     void Promise.all([clients ? countUnread(isStaff) : 0, team ? countTeamUnread() : 0]).then(([a, b]) => setUnread(a + b));
+    void countNeedingReply().then(setNeedsReply).catch(() => setNeedsReply(0));
   }, [enabled, isStaff, clients, team]);
 
   useEffect(() => {
     const client = supabase;
     if (!enabled || !client) {
       setUnread(0);
+      setNeedsReply(0);
       return;
     }
     refresh();
     const channel = client
       .channel(`unread-${isStaff ? "staff" : "client"}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, refresh)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_messages" }, refresh)
       .subscribe();
     return () => { void client.removeChannel(channel); };
   }, [enabled, isStaff, refresh]);
 
-  return { unread, refresh };
+  return { unread, needsReply, refresh };
 }
 
 function Main({ session }: { session: Session }) {
@@ -294,7 +298,7 @@ function Main({ session }: { session: Session }) {
   const current = requested && tabs.some((item) => item.key === requested) ? requested : bar[0]?.key ?? tabs[0]?.key;
   const barCurrent = overflow.some((item) => item.key === current) ? "account" : current;
   const permissions = useMemo(() => new Set(account?.features ?? []), [account]);
-  const { unread, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team", {
+  const { unread, needsReply, refresh: refreshUnread } = useUnreadMessages(tabs.some((item) => item.key === "messages"), kind === "team", {
     clients: kind !== "team" || !!account?.features.includes("messages.manage"),
     team: kind === "team" && !!account?.features.includes("team.messages"),
   });
@@ -373,7 +377,7 @@ function Main({ session }: { session: Session }) {
       case "orders":
         return kind === "team" ? <StaffOrdersScreen initialSection={nav.params?.section} initialOrderId={nav.params?.orderId} /> : account.client ? <ClientOrdersScreen key={ordersKey} session={session} client={account.client} initialOrderId={nav.params?.orderId} /> : null;
       case "messages":
-        return kind === "team" ? <StaffMessagesScreen canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
+        return kind === "team" ? <StaffMessagesScreen moderator={["admin", "supervisor", "staff"].includes(account.role)} canClients={account.features.includes("messages.manage")} canTeam={account.features.includes("team.messages")} initialSection={nav.params?.section} initialConversationId={nav.params?.page} onRead={refreshUnread} /> : account.client ? <ClientMessagesScreen clientId={account.client.id} onRead={refreshUnread} /> : null;
       case "production":
         return kind === "team" ? <ProductionHub initialSheet={hubSheet} ordersSection={tab === "orders" ? nav.params?.section : undefined} orderId={nav.params?.orderId} /> : null;
       case "invoices":
@@ -420,7 +424,7 @@ function Main({ session }: { session: Session }) {
       {topTabs.map((item) => {
         const selected = item.key === current;
         const badge = badgeFor(item.key);
-        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} onPress={() => setTab(item.key)} />;
+        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={needsReply} onPress={() => setTab(item.key)} />;
         return <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
           <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.green : colors.text} />
           {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
@@ -482,8 +486,9 @@ function confirmSignOut() {
   ]);
 }
 
-// Messages: larger than the other icons, and pulses (orange) while messages are unread.
-function MessagesButton({ selected, unread, onPress }: { selected: boolean; unread: number; onPress: () => void }) {
+// Messages: larger than the other icons, pulses (orange) while messages are unread,
+// and wears a red ring with "!" while a message waits for my answer.
+function MessagesButton({ selected, unread, needsReply, onPress }: { selected: boolean; unread: number; needsReply: number; onPress: () => void }) {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!unread) { pulse.setValue(0); return; }
@@ -496,11 +501,12 @@ function MessagesButton({ selected, unread, onPress }: { selected: boolean; unre
   }, [unread > 0]);
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
   const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
-  return <Pressable onPress={onPress} style={[styles.messagesButton, selected && styles.tabPillActive]} accessibilityLabel={`Messages${unread ? `, ${unread} non lu(s)` : ""}`} hitSlop={6}>
+  return <Pressable onPress={onPress} style={[styles.messagesButton, selected && styles.tabPillActive, needsReply > 0 && styles.messagesWaiting]} accessibilityLabel={`Messages${unread ? `, ${unread} non lu(s)` : ""}${needsReply ? `, ${needsReply} réponse(s) attendue(s)` : ""}`} hitSlop={6}>
     {unread ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.messagesGlow, { opacity: glow }]} /> : null}
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Ionicons name={selected || unread ? "chatbubbles" : "chatbubbles-outline"} size={28} color={unread ? colors.white : selected ? colors.green : colors.text} />
+      <Ionicons name={selected || unread || needsReply ? "chatbubbles" : "chatbubbles-outline"} size={28} color={unread ? colors.white : needsReply ? colors.danger : selected ? colors.green : colors.text} />
     </Animated.View>
+    {needsReply > 0 ? <View style={styles.replyMark}><Text style={styles.replyMarkText}>!</Text></View> : null}
     {unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
   </Pressable>;
 }
@@ -508,6 +514,9 @@ function MessagesButton({ selected, unread, onPress }: { selected: boolean; unre
 const styles = StyleSheet.create({
   messagesButton: { width: 52, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   messagesGlow: { borderRadius: 20, backgroundColor: colors.orange },
+  messagesWaiting: { borderWidth: 2, borderColor: colors.danger },
+  replyMark: { position: "absolute", top: -4, left: -2, width: 17, height: 17, borderRadius: 9, backgroundColor: colors.danger, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.white },
+  replyMarkText: { color: colors.white, fontSize: 11, fontWeight: "900", lineHeight: 13 },
   backBar: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#f3f8f1", borderBottomWidth: 1, borderBottomColor: colors.line },
   backText: { color: colors.green, fontSize: 12, fontWeight: "800" },
   topBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },

@@ -12,6 +12,7 @@ from (values
   (8,  '20261101_message_attachments.sql',        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'attachment')),
   (9,  '20261102_needs_reply.sql',                to_regprocedure('public.team_add_members(uuid,uuid[])') is not null),
   (10, '20261103_location_reminders_leaves.sql',  to_regclass('public.incidents') is not null),
-  (11, '20261104_recurring_signature.sql',        to_regclass('public.recurring_orders') is not null)
+  (11, '20261104_recurring_signature.sql',        to_regclass('public.recurring_orders') is not null),
+  (12, '20261105_message_replies.sql',            to_regprocedure('public.send_message_v3(uuid,text,jsonb,boolean,uuid)') is not null)
 ) as checks(position, migration, installed)
 order by position;
