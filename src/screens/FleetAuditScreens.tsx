@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollVi
 import { Text } from "../ui/Text";
 import { actionLabels, describeChanges, entityLabels, fetchAudit, type AuditEntry } from "../data/audit";
 import { roleLabels, type Role } from "../data/account";
-import { fetchVehicles, saveVehicle, type Vehicle, type VehicleInput } from "../data/fleet";
+import { fetchVehicles, saveVehicle, setDefaultVehicle, type Vehicle, type VehicleInput } from "../data/fleet";
 import { fetchLocationRequestStatus, fetchTeamLocations, requestLocation, setLocationTracking, type LocationRequestStatus, type TeamLocation } from "../data/workplace";
 import { Linking } from "react-native";
 import { BackButton, Button, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime, toDayKey } from "../ui/components";
@@ -63,7 +63,7 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
   return <View style={ui.screen}>
     <ScreenHeader eyebrow={`${vehicles.filter((item) => item.active).length} VÉHICULE(S) EN SERVICE`} title="Flotte" right={<BackButton label="Admin" onPress={onBack} />} />
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
-      <Text style={[ui.small, { marginTop: 8 }]}>Le livreur choisit l’un de ces véhicules à chaque expédition. Un véhicule retiré n’est plus proposé mais reste dans l’historique.</Text>
+      <Text style={[ui.small, { marginTop: 8 }]}>Le livreur peut choisir l’un de ces véhicules à chaque expédition ; sans choix, c’est le véhicule prévu pour la commande, sinon le véhicule par défaut. Une expédition n’est jamais bloquée faute de véhicule. Un véhicule retiré n’est plus proposé mais reste dans l’historique.</Text>
       {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
       {form ? <View style={ui.card}>
         <Text style={ui.strong}>{form.id ? "Modifier le véhicule" : "Nouveau véhicule"}</Text>
@@ -77,13 +77,16 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
         <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label="ENREGISTRER" onPress={() => save()} busy={busy} />
           <Button label="ANNULER" variant="secondary" onPress={() => setForm(null)} disabled={busy} />
+          {form.id && form.values.active && !vehicles.find((item) => item.id === form.id)?.is_default ? <Button label="VÉHICULE PAR DÉFAUT" variant="secondary" onPress={async () => {
+            try { await setDefaultVehicle(form.id!); setForm(null); await reload(); } catch (cause) { setError(errorMessage(cause, "Réglage impossible. La migration 20261127 est-elle exécutée ?")); }
+          }} /> : null}
         </View>
       </View> : <Button label="+ AJOUTER UN VÉHICULE" onPress={() => setForm({ id: null, values: emptyVehicle })} style={{ marginTop: 10 }} />}
       {vehicles.length ? <ListGroup>
         {vehicles.map((vehicle) => <ListRow
           key={vehicle.id}
           icon="car-outline"
-          title={`${vehicle.label}${vehicle.active ? "" : " (retiré)"}`}
+          title={`${vehicle.label}${vehicle.active ? "" : " (retiré)"}${vehicle.is_default ? " · par défaut" : ""}`}
           detail={[vehicle.plate, vehicle.notes].filter(Boolean).join(" · ") || undefined}
           onPress={() => setForm({ id: vehicle.id, values: { label: vehicle.label, plate: vehicle.plate, notes: vehicle.notes, active: vehicle.active } })}
         />)}

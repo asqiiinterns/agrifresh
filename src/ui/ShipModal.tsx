@@ -29,7 +29,8 @@ export function ShipModal({ orders, onClose, onShipped }: {
     void fetchVehicles()
       .then((list) => {
         setVehicles(list);
-        setVehicleId(planned.length === 1 && list.some((item) => item.id === planned[0]) ? planned[0] : list.length === 1 ? list[0].id : null);
+        // Preselected: the planned vehicle, else the default one, else the only one.
+        setVehicleId(planned.length === 1 && list.some((item) => item.id === planned[0]) ? planned[0] : list.find((item) => item.is_default)?.id ?? (list.length === 1 ? list[0].id : null));
       })
       .catch((cause: unknown) => setError(errorMessage(cause, "Impossible de charger la flotte.")))
       .finally(() => setLoading(false));
@@ -37,15 +38,12 @@ export function ShipModal({ orders, onClose, onShipped }: {
 
   async function ship() {
     if (!orders) return;
-    if (vehicles.length && !vehicleId) {
-      setError("Choisissez le véhicule.");
-      return;
-    }
+    // No vehicle chosen: the server takes the planned or the default one (never blocked).
     setBusy(true);
     setError("");
     try {
       const result = await shipOrders(orders.map((order) => order.id), vehicleId);
-      const vehicle = vehicles.find((item) => item.id === vehicleId);
+      const vehicle = vehicles.find((item) => item.id === vehicleId) ?? vehicles.find((item) => item.is_default);
       notify("Expédition enregistrée", result.queued
         ? `Pas de réseau : l’expédition de ${result.count} commande(s) est enregistrée sur le téléphone et sera envoyée dès le retour de la connexion.`
         : `Expédition #${result.shipment_number} : ${result.count} commande(s)${vehicle ? ` dans ${vehicleName(vehicle)}` : ""}. Elles apparaissent dans « À livrer ».`);
@@ -72,7 +70,7 @@ export function ShipModal({ orders, onClose, onShipped }: {
               <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.primary : colors.muted} />
               <Ionicons name="car-outline" size={18} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={ui.strong}>{vehicle.label}{planned.includes(vehicle.id) ? " · prévu" : ""}</Text>
+                <Text style={ui.strong}>{vehicle.label}{planned.includes(vehicle.id) ? " · prévu" : vehicle.is_default ? " · par défaut" : ""}</Text>
                 {vehicle.plate || vehicle.notes ? <Text style={ui.small}>{[vehicle.plate, vehicle.notes].filter(Boolean).join(" · ")}</Text> : null}
               </View>
             </Pressable>;

@@ -2,7 +2,8 @@ import { supabase } from "../lib/supabase";
 import { cacheGet, cacheSet, enqueue, isOnline } from "./offline";
 import type { Signature } from "../ui/SignaturePad";
 
-export type Vehicle = { id: string; label: string; plate: string; notes: string; active: boolean };
+// is_default (20261127): used when nobody chooses a vehicle at shipping.
+export type Vehicle = { id: string; label: string; plate: string; notes: string; active: boolean; is_default?: boolean };
 export type VehicleInput = Pick<Vehicle, "label" | "plate" | "notes" | "active">;
 
 function client() {
@@ -11,7 +12,7 @@ function client() {
 }
 
 export async function fetchVehicles(includeInactive = false): Promise<Vehicle[]> {
-  let query = client().from("vehicles").select("id, label, plate, notes, active").order("label");
+  let query = client().from("vehicles").select("*").order("label");
   if (!includeInactive) query = query.eq("active", true);
   const { data, error } = await query;
   if (error) throw error;
@@ -23,6 +24,11 @@ export async function saveVehicle(id: string | null, input: VehicleInput): Promi
   const { error } = id
     ? await client().from("vehicles").update(values).eq("id", id)
     : await client().from("vehicles").insert(values);
+  if (error) throw error;
+}
+
+export async function setDefaultVehicle(id: string): Promise<void> {
+  const { error } = await client().rpc("set_default_vehicle", { p_vehicle_id: id });
   if (error) throw error;
 }
 
