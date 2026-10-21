@@ -29,7 +29,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
     try {
       setAlerts(await fetchAlerts());
     } catch (cause) {
-      setError(errorMessage(cause, "Impossible de charger les alertes."));
+      setError(errorMessage(cause, "Impossible de charger les notifications."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -54,7 +54,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       setAlerts((current) => current.map((alert) => !ids || ids.includes(alert.id) ? { ...alert, read_at: alert.read_at ?? now } : alert));
       onRead();
     } catch (cause) {
-      setError(errorMessage(cause, "Impossible de marquer les alertes comme lues."));
+      setError(errorMessage(cause, "Impossible de marquer les notifications comme lues."));
     }
   }
 
@@ -71,7 +71,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       await markAlertsUnread([alert.id]);
       onRead();
     } catch (cause) {
-      setError(errorMessage(cause, "Impossible de remettre l’alerte en non lue."));
+      setError(errorMessage(cause, "Impossible de remettre la notification en non lue."));
     }
   }
 
@@ -93,7 +93,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       await setAlertImportant(alert.id, next);
     } catch (cause) {
       setAlerts((current) => current.map((item) => item.id === alert.id ? { ...item, important: !next } : item));
-      setError(errorMessage(cause, "Impossible de marquer l’alerte. La migration 20261028 est-elle exécutée ?"));
+      setError(errorMessage(cause, "Impossible de marquer la notification. La migration 20261028 est-elle exécutée ?"));
     }
   }
 
@@ -113,7 +113,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
   ];
 
   return <View style={ui.screen}>
-    <ScreenHeader eyebrow={`${unread} NON LUE(S)`} title="Alertes" right={unread ? <Button label="TOUT LIRE" variant="secondary" onPress={() => read()} /> : undefined} />
+    <ScreenHeader eyebrow={`${unread} NON LUE(S)`} title="Notifications" right={unread ? <Button label="TOUT LIRE" variant="secondary" onPress={() => read()} /> : undefined} />
     <FilterBar filters={filters} />
     {loading ? <Loading /> : <FlatList
       data={visible}
@@ -121,7 +121,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       contentContainerStyle={ui.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-      ListEmptyComponent={error ? null : <EmptyState title="Aucune alerte" body="Les nouvelles commandes, changements de statut, messages et factures apparaîtront ici." />}
+      ListEmptyComponent={error ? null : <EmptyState title="Aucune notification" body="Les nouvelles commandes, changements de statut, messages et factures apparaîtront ici." />}
       renderItem={({ item }) => <Pressable onPress={() => {
         // Opening an alert marks it read and goes straight to what it is about.
         if (!item.read_at) void read([item.id]);

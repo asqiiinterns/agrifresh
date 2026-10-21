@@ -27,7 +27,7 @@ const accesses: Access[] = [
     get: () => AudioModule.getRecordingPermissionsAsync(), ask: () => AudioModule.requestRecordingPermissionsAsync() },
   { key: "location", label: "Localisation", use: "Seulement si vous acceptez de partager votre position (ci-dessous).", icon: "location-outline",
     get: () => Location.getForegroundPermissionsAsync(), ask: () => Location.requestForegroundPermissionsAsync() },
-  { key: "notifications", label: "Notifications", use: "Recevoir les alertes sur l’écran de verrouillage.", icon: "notifications-outline",
+  { key: "notifications", label: "Notifications", use: "Recevoir les notifications sur l’écran de verrouillage.", icon: "notifications-outline",
     get: () => Notifications.getPermissionsAsync(), ask: () => registerForPush(true) },
 ];
 

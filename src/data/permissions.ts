@@ -17,9 +17,9 @@ export type SettingsBlock = { key: string; title: string; icon: string; audience
 
 // Settings are grouped by theme; each block is set per role, then per user (or per client record).
 export const featureBlocks: SettingsBlock[] = [
-  { key: "home", title: "Accueil et alertes", icon: "home-outline", audience: "team", items: [
+  { key: "home", title: "Accueil et notifications", icon: "home-outline", audience: "team", items: [
     { key: "home.view", label: "Onglet Accueil (tableau de bord)" },
-    { key: "alerts.view", label: "Onglet Alertes" },
+    { key: "alerts.view", label: "Onglet Notifications" },
   ] },
   { key: "orders", title: "Commandes", icon: "receipt-outline", audience: "team", items: [
     { key: "orders.view", label: "Onglet Commandes" },
@@ -74,7 +74,7 @@ export const featureBlocks: SettingsBlock[] = [
     { key: "client.home", label: "Onglet Accueil" },
     { key: "client.order", label: "Onglet Commander" },
     { key: "client.orders", label: "Onglet Mes commandes" },
-    { key: "client.alerts", label: "Onglet Alertes" },
+    { key: "client.alerts", label: "Onglet Notifications" },
     { key: "client.invoices", label: "Onglet Mes factures" },
     { key: "client.messages", label: "Messages" },
     { key: "client.claims", label: "Réclamations" },

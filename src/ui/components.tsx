@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { Children, createContext, isValidElement, useContext, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, TextInput } from "./Text";
 import { colors, ui } from "./theme";
-import { appLocale } from "./i18n";
+import { appLocale, tr } from "./i18n";
 
 export const formatPrice = (amount: number | string) =>
   `${new Intl.NumberFormat(appLocale(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(amount))} TND`;
@@ -87,9 +87,18 @@ export function CloseButton({ onPress }: { onPress: () => void }) {
 }
 
 export function Field({ label, ...props }: { label: string } & ComponentProps<typeof TextInput>) {
+  // Password fields: an eye shows or hides what was typed.
+  const [shown, setShown] = useState(false);
+  const secret = !!props.secureTextEntry;
+  const input = <TextInput style={[ui.input, props.multiline && { minHeight: 70, textAlignVertical: "top" }, secret && { paddingRight: 44 }]} placeholderTextColor={colors.muted} autoCorrect={false} {...props} secureTextEntry={secret && !shown} />;
   return <View style={ui.field}>
     <Text style={ui.fieldLabel}>{label}</Text>
-    <TextInput style={[ui.input, props.multiline && { minHeight: 70, textAlignVertical: "top" }]} placeholderTextColor={colors.muted} autoCorrect={false} {...props} />
+    {secret ? <View style={{ justifyContent: "center" }}>
+      {input}
+      <Pressable onPress={() => setShown((value) => !value)} hitSlop={8} accessibilityRole="button" accessibilityLabel={shown ? "Masquer le mot de passe" : "Afficher le mot de passe"} style={{ position: "absolute", right: 10, padding: 4 }}>
+        <Ionicons name={shown ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} />
+      </Pressable>
+    </View> : input}
   </View>;
 }
 
@@ -189,7 +198,28 @@ export function TriState({ value, inherited, onChange, inheritLabel = "Défaut",
 }
 
 // One line of a menu or a list: icon, title, optional detail, chevron.
-export function ListRow({ icon, title, detail, onPress, right, badge }: { icon?: ComponentProps<typeof Ionicons>["name"]; title: string; detail?: string; onPress?: () => void; right?: ReactNode; badge?: number }) {
+// Menu search: inside <MenuSearch>, rows whose title and detail do not match are hidden
+// (French and the chosen language), and so are groups left empty.
+const MenuQuery = createContext("");
+const foldText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
+const rowMatches = (needle: string, title?: unknown, detail?: unknown, keywords?: unknown) => {
+  if (!needle) return true;
+  const parts = [title, detail, keywords].filter((part): part is string => typeof part === "string");
+  return foldText(parts.flatMap((part) => [part, tr(part)]).join(" ")).includes(needle);
+};
+
+export function MenuSearch({ children, placeholder = "Rechercher un réglage" }: { children: ReactNode; placeholder?: string }) {
+  const [query, setQuery] = useState("");
+  const needle = foldText(query.trim());
+  return <MenuQuery.Provider value={needle}>
+    <TextInput value={query} onChangeText={setQuery} placeholder={placeholder} placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 10 }]} autoCorrect={false} clearButtonMode="while-editing" />
+    {children}
+  </MenuQuery.Provider>;
+}
+
+export function ListRow({ icon, title, detail, onPress, right, badge, keywords }: { icon?: ComponentProps<typeof Ionicons>["name"]; title: string; detail?: string; onPress?: () => void; right?: ReactNode; badge?: number; keywords?: string }) {
+  const needle = useContext(MenuQuery);
+  if (needle && onPress && !rowMatches(needle, title, detail, keywords)) return null;
   return <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [local.listRow, pressed && { opacity: 0.7 }]}>
     {icon ? <View style={local.listIcon}><Ionicons name={icon} size={18} color={colors.primary} /></View> : null}
     <View style={{ flex: 1 }}>
@@ -203,6 +233,12 @@ export function ListRow({ icon, title, detail, onPress, right, badge }: { icon?:
 
 // Group of ListRow inside one rounded box.
 export function ListGroup({ title, children }: { title?: string; children: ReactNode }) {
+  const needle = useContext(MenuQuery);
+  if (needle && !rowMatches(needle, title)) {
+    // Searching: keep the group only if one of its rows matches (a matching group title keeps all).
+    const rows = Children.toArray(children).filter(isValidElement) as { props: { title?: unknown; detail?: unknown; keywords?: unknown; onPress?: unknown } }[];
+    if (!rows.some((row) => !row.props.onPress || rowMatches(needle, row.props.title, row.props.detail, row.props.keywords))) return null;
+  }
   return <View style={{ marginTop: 12 }}>
     {title ? <Text style={local.groupTitle}>{title.toLocaleUpperCase("fr")}</Text> : null}
     <View style={local.group}>{children}</View>

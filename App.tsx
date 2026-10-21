@@ -67,7 +67,7 @@ const TAB = {
   decide: { key: "decide", label: "À décider", icon: "flag-outline", description: "Tout ce qui est en suspens." },
   order: { key: "order", label: "Commander", icon: "add-circle-outline" },
   staffOrder: { key: "staffOrder", label: "Commander", icon: "add-circle-outline", description: "Saisir une commande pour un client." },
-  alerts: { key: "alerts", label: "Alertes", icon: "notifications-outline", description: "Notifications reçues." },
+  alerts: { key: "alerts", label: "Notifications", icon: "notifications-outline", description: "Notifications reçues." },
   orders: { key: "orders", label: "Commandes", icon: "receipt-outline", description: "À décider, en cours, clôturées, réclamations." },
   planning: { key: "planning", label: "Planning", icon: "list-outline", description: "File de production : ordre d’exécution." },
   production: { key: "production", label: "Production", icon: "construct-outline", description: "Commandes, production et planning." },
@@ -81,14 +81,14 @@ const TAB = {
   recurring: { key: "recurring", label: "Commandes récurrentes", icon: "repeat-outline", description: "Commandes créées automatiquement chaque semaine." },
   stats: { key: "stats", label: "Statistiques", icon: "stats-chart-outline", description: "Produits, clients, créneaux, temps de préparation." },
   returns: { key: "returns", label: "Retours et avoirs", icon: "return-down-back-outline", description: "Demandes de retour, réception, avoirs." },
-  admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, alertes." },
+  admin: { key: "admin", label: "Admin", icon: "settings-outline", description: "Comptes, droits, produits, notifications." },
   account: { key: "account", label: "Plus", icon: "grid-outline", description: "Rubriques, personnaliser, compte, autorisations." },
   more: { key: "more", label: "Plus", icon: "grid-outline" },
   pros: { key: "pros", label: "Pros", icon: "business-outline", description: "Valider, suspendre ou réactiver les Pros." },
   platformTeam: { key: "platformTeam", label: "Équipe Appro+", icon: "people-circle-outline", description: "Les comptes de la plateforme et leurs rôles." },
   network: { key: "network", label: "Réseau", icon: "git-network-outline", description: "Vos clients et fournisseurs, l’annuaire des Pros validés." },
   discover: { key: "discover", label: "Découvrir", icon: "compass-outline", description: "Les produits des fournisseurs ouverts à tous." },
-  platformSettings: { key: "platformSettings", label: "Paramétrage", icon: "options-outline", description: "Comptes, modules, modèles de rôles, alertes et e-mails." },
+  platformSettings: { key: "platformSettings", label: "Paramétrage", icon: "options-outline", description: "Comptes, modules, modèles de rôles, notifications et e-mails." },
 } satisfies Record<TabKey, TabDef>;
 
 // Bottom bar: at most five entries, the rest goes into "Plus".
@@ -652,7 +652,7 @@ function Main({ session }: { session: Session }) {
     </View> : null}
     {nav.params?.back && nav.params.back !== current ? <Pressable onPress={() => setTab(nav.params!.back!)} style={styles.backBar}>
       <Ionicons name="chevron-back" size={16} color={colors.primary} />
-      <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
+      <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "notifications"}</Text>
     </Pressable> : null}
     {unavailable ? <Pressable onPress={() => setTab(null)} style={styles.unavailable}>
       <Ionicons name="information-circle-outline" size={16} color={colors.amber} />

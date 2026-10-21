@@ -6,7 +6,7 @@ import { roleLabels, type Role } from "../data/account";
 import { createAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, type AdminAccount } from "../data/admin";
 import type { AccountStatus } from "../data/account";
 import { assignableRoles } from "../data/team";
-import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime } from "../ui/components";
+import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, formatDateTime } from "../ui/components";
 import { useCan } from "../data/permissions";
 import { RolesManager } from "./RolesManager";
 import { SettingsScreen } from "./SettingsScreen";
@@ -32,7 +32,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
 
   if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} onRoles={() => setPage("roles")} />;
   if (page === "alerts") return <View style={ui.screen}>
-    <ScreenHeader eyebrow="ADMINISTRATION" title="Alertes et e-mails" right={<BackButton onPress={() => setPage("menu")} />} />
+    <ScreenHeader eyebrow="ADMINISTRATION" title="Notifications et e-mails" right={<BackButton onPress={() => setPage("menu")} />} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
   </View>;
   if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} onRoles={() => setPage("roles")} />;
@@ -44,11 +44,12 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Admin" />
     <ScrollView contentContainerStyle={ui.content}>
+      <MenuSearch>
       {isAdmin ? <ListGroup title="Comptes et réglages">
         <ListRow icon="person-outline" title="Comptes" detail="Validation des comptes de vos clients, suspension, rôle, ajout d’un membre de l’équipe." onPress={() => setPage("accounts")} />
         <ListRow icon="key-outline" title="Rôles et accès" detail="Qui a quel rôle, ce que chaque rôle permet, voir les droits d’une personne." onPress={() => setPage("roles")} />
         <ListRow icon="options-outline" title="Paramétrage" detail="Onglets et droits par thème, profil et utilisateur ; options des clients ; accueil." onPress={() => setPage("settings")} />
-        <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés et service d’envoi." onPress={() => setPage("alerts")} />
+        <ListRow icon="notifications-outline" title="Notifications et e-mails" detail="Événements notifiés et service d’envoi." onPress={() => setPage("alerts")} />
       </ListGroup> : null}
       <ListGroup title="Exploitation">
         {can("products.manage") ? <ListRow icon="leaf-outline" title="Produits" detail="Catalogue, prix, TVA, stock, nouveautés et origine." onPress={() => setProductsVisible(true)} /> : null}
@@ -57,6 +58,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
         {can("audit.view") ? <ListRow icon="time-outline" title="Journal des actions" detail="Qui a fait quoi et quand, sur tout le système." onPress={() => setPage("audit")} /> : null}
         {can("location.view") ? <ListRow icon="location-outline" title="Localisation" detail="Dernière position des comptes qui la partagent." onPress={() => setPage("location")} /> : null}
       </ListGroup>
+      </MenuSearch>
     </ScrollView>
     <StaffProductsModal visible={productsVisible} onClose={() => setProductsVisible(false)} />
     <PricingModal visible={pricingVisible} onClose={() => setPricingVisible(false)} />

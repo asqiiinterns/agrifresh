@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
 import { company, type CompanyProfile } from "../config/company";
-import { loadCompanyProfile, saveCompanyProfile } from "../data/company";
+import { loadMyOrgProfile, saveCompanyProfile } from "../data/company";
 import { Button, Field, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -15,7 +15,7 @@ export function CompanyPage({ header }: { header: React.ReactNode }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void loadCompanyProfile().then(setProfile).catch(() => undefined).finally(() => setLoading(false));
+    void loadMyOrgProfile().then(({ canEdit: _canEdit, ...next }) => setProfile(next)).catch(() => undefined).finally(() => setLoading(false));
   }, []);
 
   const set = (key: keyof CompanyProfile) => (value: string) => setProfile((current) => ({ ...current, [key]: value }));

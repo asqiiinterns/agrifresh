@@ -20,7 +20,7 @@ export async function registerForPush(askPermission: boolean): Promise<PushStatu
   try {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("alerts", {
-        name: "Alertes Appro+",
+        name: "Notifications Appro+",
         importance: Notifications.AndroidImportance.HIGH,
         lightColor: colors.primary,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,

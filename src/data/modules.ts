@@ -163,6 +163,17 @@ export async function setOrgModule(key: ModuleKey, enabled: boolean): Promise<vo
   listeners.forEach((listener) => listener());
 }
 
+// Appro+: a whole preset of a Pro's plan in one call ("all" also switches back on what the Pro had switched off).
+// Returns false while the migration is not run (the caller then sets module by module).
+export async function setPlanPreset(orgId: string, preset: "all" | "essential" | "default"): Promise<boolean> {
+  const { error } = await client().rpc("platform_set_org_plan", { p_org_id: orgId, p_preset: preset });
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") return false;
+    throw error;
+  }
+  return true;
+}
+
 // Appro+: include (true) or exclude (false) a module in a Pro's plan, or follow the default (null).
 export async function setPlanModule(orgId: string, key: ModuleKey, granted: boolean | null): Promise<void> {
   const { error } = await client().rpc("platform_set_org_module", { p_org_id: orgId, p_key: key, p_granted: granted });

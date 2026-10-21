@@ -181,7 +181,7 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
         refreshControl={refresh}
         ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
           : focused ? <View style={[ui.row, styles.focusBar]}>
-            <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
+            <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une notification.</Text>
             <Button label="VOIR TOUTES" variant="secondary" onPress={() => setFocusId(null)} />
           </View>
           : closedInPeriod || hiddenByDate ? <View>

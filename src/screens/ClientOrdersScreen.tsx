@@ -194,7 +194,7 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text>
         : focused ? <View style={[ui.row, styles.focusBar]}>
-          <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
+          <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une notification.</Text>
           <Button label="VOIR TOUTES" variant="secondary" onPress={() => { setFocusId(null); setSheet(closedStatuses.includes(focused.status) ? "closed" : "open"); }} />
         </View>
         : receptionRequired && shippedCount ? <Text style={[ui.body, styles.banner]}>{shippedCount} commande(s) en route : à l’arrivée du livreur, touchez « QR RÉCEPTION » et présentez le code.</Text> : null}

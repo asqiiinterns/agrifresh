@@ -8,11 +8,11 @@ import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
 const pushStatusText: Record<PushStatus, string> = {
-  registered: "Ce téléphone reçoit les alertes sur l’écran de verrouillage.",
+  registered: "Ce téléphone reçoit les notifications sur l’écran de verrouillage.",
   denied: "Les notifications sont refusées pour Appro+ dans les réglages du téléphone.",
   unavailable: Platform.OS === "web"
-    ? "Sur le web, les alertes s’affichent dans l’onglet Alertes."
-    : "Notifications d’écran de verrouillage indisponibles ici (Expo Go ou configuration en attente) : les alertes restent dans l’onglet Alertes.",
+    ? "Sur le web, les notifications s’affichent dans l’onglet Notifications."
+    : "Notifications d’écran de verrouillage indisponibles ici (Expo Go ou configuration en attente) : les notifications restent dans l’onglet Notifications.",
 };
 
 // Compte → Notifications: each person chooses push and e-mail for their own account.
@@ -45,11 +45,11 @@ export function MyNotificationsCard() {
     <Text style={ui.strong}>Notifications</Text>
     {!prefs ? <Loading /> : <>
       <View style={[ui.row, { marginTop: 10 }]}>
-        <View style={{ flex: 1 }}><Text style={ui.body}>Notifications sur le téléphone</Text><Text style={ui.small}>Alertes affichées sur l’écran de verrouillage.</Text></View>
+        <View style={{ flex: 1 }}><Text style={ui.body}>Notifications sur le téléphone</Text><Text style={ui.small}>Notifications affichées sur l’écran de verrouillage.</Text></View>
         <Switch value={prefs.push} onValueChange={(value) => void save({ ...prefs, push: value })} trackColor={{ true: colors.primary, false: colors.line }} />
       </View>
       <View style={[ui.row, { marginTop: 10 }]}>
-        <View style={{ flex: 1 }}><Text style={ui.body}>E-mails</Text><Text style={ui.small}>Pour les alertes envoyées aussi par e-mail.</Text></View>
+        <View style={{ flex: 1 }}><Text style={ui.body}>E-mails</Text><Text style={ui.small}>Pour les notifications envoyées aussi par e-mail.</Text></View>
         <Switch value={prefs.email} onValueChange={(value) => void save({ ...prefs, email: value })} trackColor={{ true: colors.primary, false: colors.line }} />
       </View>
       {pushStatus ? <Text style={[ui.small, { marginTop: 10, color: pushStatus === "registered" ? colors.primary : colors.amber }]}>{pushStatusText[pushStatus]}</Text> : null}
@@ -87,7 +87,7 @@ export function AlertSettingsPanel() {
     try {
       await task();
       await reload();
-      if (done) notify("Alertes et e-mails", done);
+      if (done) notify("Notifications et e-mails", done);
     } catch (cause) {
       setError(errorMessage(cause, "L’enregistrement a échoué."));
     } finally {
@@ -99,8 +99,8 @@ export function AlertSettingsPanel() {
 
   return <>
     <View style={ui.card}>
-      <Text style={ui.strong}>Alertes par événement</Text>
-      <Text style={ui.small}>Chaque alerte apparaît toujours dans l’onglet Alertes. Choisissez si elle part aussi en notification sur le téléphone et par e-mail.</Text>
+      <Text style={ui.strong}>Notifications par événement</Text>
+      <Text style={ui.small}>Chaque notification apparaît toujours dans l’onglet Notifications. Choisissez si elle est aussi envoyée sur l’écran de verrouillage du téléphone et par e-mail.</Text>
       <View style={[ui.row, { marginTop: 10 }]}>
         <Text style={[ui.small, { flex: 1, fontWeight: "800" }]}>ÉVÉNEMENT</Text>
         <Text style={[ui.small, { width: 64, textAlign: "center", fontWeight: "800" }]}>NOTIF.</Text>

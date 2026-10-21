@@ -32,13 +32,13 @@ export const homeTiles: HomeTileDef[] = [
   { key: "credits", label: "Avoirs ouverts", icon: "receipt-outline", audience: "team", need: "returns.manage", tab: "returns", params: { section: "credits" } },
   { key: "accounts", label: "Comptes à valider", icon: "person-add-outline", audience: "team", need: "admin", tab: "admin", params: { page: "accounts" }, tone: "warn" },
   { key: "messages", label: "Messages non lus", icon: "chatbubbles-outline", audience: "team", need: "messages.manage", tab: "messages", tone: "action" },
-  { key: "alerts", label: "Alertes non lues", icon: "notifications-outline", audience: "team", need: "alerts.view", tab: "alerts", tone: "action" },
+  { key: "alerts", label: "Notifications non lues", icon: "notifications-outline", audience: "team", need: "alerts.view", tab: "alerts", tone: "action" },
   { key: "c_progress", label: "Commandes en cours", icon: "receipt-outline", audience: "customer", need: "client.orders", tab: "orders" },
   { key: "c_reconfirm", label: "À reconfirmer", icon: "help-circle-outline", audience: "customer", need: "client.orders", tab: "orders", tone: "warn" },
   { key: "c_shipped", label: "En route", icon: "car-outline", audience: "customer", need: "client.orders", tab: "orders" },
   { key: "c_invoices", label: "Factures à régler", icon: "document-text-outline", audience: "customer", need: "client.invoices", tab: "invoices", tone: "warn" },
   { key: "c_messages", label: "Messages non lus", icon: "chatbubbles-outline", audience: "customer", need: "client.messages", tab: "messages", tone: "action" },
-  { key: "c_alerts", label: "Alertes non lues", icon: "notifications-outline", audience: "customer", need: "client.alerts", tab: "alerts", tone: "action" },
+  { key: "c_alerts", label: "Notifications non lues", icon: "notifications-outline", audience: "customer", need: "client.alerts", tab: "alerts", tone: "action" },
 ];
 
 export const homeShortcuts: HomeShortcutDef[] = [

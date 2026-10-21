@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Switch, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../ui/Text";
 import {
-  allModules, essentialModules, fetchModuleDefaults, fetchOrgModules, moduleGroups, setModule, setOrgModule, setPlanModule,
+  allModules, essentialModules, fetchModuleDefaults, fetchOrgModules, moduleGroups, setModule, setOrgModule, setPlanModule, setPlanPreset,
   type ModuleDef, type ModuleKey, type ModuleState, type OrgModules,
 } from "../data/modules";
 import { Button, Chip, ListGroup, Loading, ScreenHeader } from "../ui/components";
@@ -67,11 +67,13 @@ export function ModulesPage({ header, mode = { kind: "org" } }: { header: React.
   const toggle = (key: ModuleKey, enabled: boolean) => run(key, () => mode.kind === "platform" ? setModule(key, enabled) : setOrgModule(key, enabled));
   const setPlan = (key: ModuleKey, granted: boolean | null) => mode.kind === "plan" ? run(key, () => setPlanModule(mode.orgId, key, granted)) : undefined;
 
-  function applyPreset(label: string, body: string, valueOf: (key: ModuleKey) => boolean | null) {
+  function applyPreset(label: string, body: string, valueOf: (key: ModuleKey) => boolean | null, preset?: "all" | "essential" | "default") {
     notify(label, body, [
       { text: "Annuler", style: "cancel" },
       { text: "Confirmer", onPress: () => {
         void run("all", async () => {
+          // A plan preset in one server call (also switches back on what the Pro had switched off).
+          if (mode.kind === "plan" && preset && await setPlanPreset(mode.orgId, preset)) return;
           for (const item of allModules) {
             const value = valueOf(item.key);
             if (mode.kind === "plan") {
@@ -100,9 +102,9 @@ export function ModulesPage({ header, mode = { kind: "org" } }: { header: React.
       <Text style={[ui.small, { marginTop: 8 }]}>{intro}</Text>
       <View style={[ui.wrapRow, { marginTop: 10 }]}>
         {mode.kind === "plan" ? <>
-          <Button label="FORMULE ESSENTIEL" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Formule Essentiel", "La formule n’inclura que les livraisons, la facturation et les messages avec les clients.", (key) => essentialModules.includes(key))} />
-          <Button label="TOUT INCLURE" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Tout inclure", "Tous les modules seront inclus dans la formule de ce Pro.", () => true)} />
-          <Button label="PAR DÉFAUT" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Revenir aux valeurs par défaut", "Chaque module suivra de nouveau le réglage d’Appro+ pour tous les Pros.", () => null)} />
+          <Button label="FORMULE ESSENTIEL" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Formule Essentiel", "La formule n’inclura que les livraisons, la facturation et les messages avec les clients.", (key) => essentialModules.includes(key), "essential")} />
+          <Button label="TOUT INCLURE" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Tout inclure", "Tous les modules seront inclus dans la formule de ce Pro et réactivés pour lui, y compris ceux que le Pro avait désactivés.", () => true, "all")} />
+          <Button label="PAR DÉFAUT" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Revenir aux valeurs par défaut", "Chaque module suivra de nouveau le réglage d’Appro+ pour tous les Pros.", () => null, "default")} />
         </> : <>
           <Button label="MODE ESSENTIEL" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Mode essentiel", "Seuls les modules essentiels resteront visibles : livraisons, facturation et messages avec les clients. Les données des autres modules sont conservées.", (key) => essentialModules.includes(key))} />
           <Button label="TOUT ACTIVER" variant="secondary" busy={busy === "all"} onPress={() => applyPreset("Tout activer", mode.kind === "org" ? "Tous les modules de votre formule redeviennent visibles pour les comptes qui en ont le droit." : "Tous les modules redeviennent actifs par défaut.", () => true)} />

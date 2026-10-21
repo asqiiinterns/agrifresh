@@ -9,7 +9,7 @@ import {
   optionToBool, setClientDefault, setRolePermission, setUserPermission,
   type ClientOptionKey, type Feature, type SettingsBlock,
 } from "../data/permissions";
-import { BackButton, Button, Chip, Field, ListGroup, ListRow, Loading, ScreenHeader, Sheets, TriState } from "../ui/components";
+import { BackButton, Button, Chip, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, Sheets, TriState } from "../ui/components";
 import { supabase } from "../lib/supabase";
 import { docTypeLabels, fetchNumbering, previewNumber, saveNumbering, type Numbering } from "../data/numbering";
 import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
@@ -126,7 +126,7 @@ export function SettingsScreen({ onBack, onRoles }: { onBack: () => void; onRole
   if (page.kind === "modules") return <ModulesPage header={back} />;
   if (page.kind === "autoDeliver") return <AutoDeliverPage header={back} />;
   if (page.kind === "alerts") return <View style={ui.screen}>
-    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Notifications et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
   </View>;
 
@@ -139,6 +139,7 @@ export function SettingsScreen({ onBack, onRoles }: { onBack: () => void; onRole
     {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content}>
       {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}
       <Text style={[ui.small, { marginTop: 8 }]}>Chaque thème se règle par profil, puis par utilisateur (exception). Les clients suivent un réglage commun, que chaque fiche peut adapter. L’administrateur garde tous les droits.</Text>
+      <MenuSearch>
       <ListGroup title="Fonctions de l’application">
         <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction de votre formule pour votre équipe et vos clients (remises, retours, statistiques…)." onPress={() => setPage({ kind: "modules" })} />
       </ListGroup>
@@ -160,7 +161,7 @@ export function SettingsScreen({ onBack, onRoles }: { onBack: () => void; onRole
         <ListRow icon="checkmark-done-outline" title="Clôture automatique des livraisons" detail="Délai après lequel une commande expédiée passe en « Livrée » pour les clients qui ont l’option (Livraison et remise)." onPress={() => setPage({ kind: "autoDeliver" })} />
       </ListGroup>
       <ListGroup title="Communication">
-        <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi." onPress={() => setPage({ kind: "alerts" })} />
+        <ListRow icon="notifications-outline" title="Notifications et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi." onPress={() => setPage({ kind: "alerts" })} />
       </ListGroup>
       <ListGroup title="Documents">
         <ListRow icon="business-outline" title="Entreprise" detail="Raison sociale, adresse, matricule fiscal, RIB et couleur imprimés sur vos documents." onPress={() => setPage({ kind: "company" })} />
@@ -169,6 +170,7 @@ export function SettingsScreen({ onBack, onRoles }: { onBack: () => void; onRole
       <ListGroup title="Accueil">
         <ListRow icon="home-outline" title="Accueil par profil" detail="Chiffres et raccourcis proposés à chaque profil ; chacun peut ensuite personnaliser le sien." onPress={() => setPage({ kind: "home" })} />
       </ListGroup>
+      </MenuSearch>
     </ScrollView>}
   </View>;
 }

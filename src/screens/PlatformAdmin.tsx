@@ -11,7 +11,7 @@ import { confirmWithPassword } from "../ui/PasswordConfirm";
 import { InviteModal } from "../ui/InviteModal";
 import { setProStatus } from "../data/platform";
 import { allModules } from "../data/modules";
-import { BackButton, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDay } from "../ui/components";
+import { BackButton, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, formatDay } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { RolesManager, rightLabel } from "./RolesManager";
@@ -173,12 +173,13 @@ export function PlatformSettingsScreen() {
   if (page === "accounts") return <PlatformAccountsPage header={back} />;
   if (page === "categories") return <CategoriesPage header={back} />;
   if (page === "alerts") return <View style={ui.screen}>
-    <ScreenHeader eyebrow="APPRO+ · PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
+    <ScreenHeader eyebrow="APPRO+ · PARAMÉTRAGE" title="Notifications et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
   </View>;
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="APPRO+" title="Paramétrage" subtitle="Réglages de toute la plateforme. Chaque Pro règle ensuite ses propres options." />
     <ScrollView contentContainerStyle={ui.content}>
+      <MenuSearch>
       <ListGroup title="Comptes">
         <ListRow icon="people-outline" title="Tous les comptes" detail="Rechercher, valider les inscriptions, suspendre ou réactiver un compte." onPress={() => setPage("accounts")} />
         <ListRow icon="person-add-outline" title="Nouveaux inscrits et invitations" detail="Période d’essai des nouveaux espaces (commande possible avant validation) et adresse des liens d’invitation." onPress={() => setPage("signup")} />
@@ -191,8 +192,9 @@ export function PlatformSettingsScreen() {
         <ListRow icon="pricetags-outline" title="Catégories" detail="La liste commune où chaque Pro range ses produits ; elle rend les produits comparables entre fournisseurs." onPress={() => setPage("categories")} />
       </ListGroup>
       <ListGroup title="Communication">
-        <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi des e-mails." onPress={() => setPage("alerts")} />
+        <ListRow icon="notifications-outline" title="Notifications et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi des e-mails." onPress={() => setPage("alerts")} />
       </ListGroup>
+      </MenuSearch>
     </ScrollView>
   </View>;
 }

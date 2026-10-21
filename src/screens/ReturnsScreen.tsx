@@ -111,7 +111,7 @@ function ReturnsList({ returns, refreshControl, onChanged, focused, onShowAll }:
 
   return <View style={{ flex: 1 }}>
     {focused ? <View style={[ui.row, styles.focusBar]}>
-      <Text style={[ui.small, { flex: 1, color: colors.text }]}>Retour ouvert depuis une alerte.</Text>
+      <Text style={[ui.small, { flex: 1, color: colors.text }]}>Retour ouvert depuis une notification.</Text>
       <Button label="VOIR TOUS" variant="secondary" onPress={() => { setState("todo"); onShowAll?.(); }} />
     </View> : <FilterBar search={search} onSearch={setSearch} placeholder="N°, client ou produit" filters={filters} />}
     <FlatList

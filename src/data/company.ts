@@ -23,6 +23,22 @@ export async function loadCompanyProfile(): Promise<CompanyProfile> {
   return { ...company };
 }
 
+// Paramétrage → Entreprise: the person's own Pro (not the supplier it orders from), so a buyer
+// Pro sees and edits its own raison sociale. Before 20261126: the profile used for documents.
+export async function loadMyOrgProfile(): Promise<CompanyProfile & { canEdit: boolean }> {
+  if (supabase) {
+    const { data, error } = await supabase.rpc("my_org_profile");
+    if (!error && data) {
+      const row = data as Partial<Row> & { can_edit?: boolean };
+      return {
+        name: row.name ?? "", tagline: row.tagline ?? "", address: row.address ?? "", phone: row.phone ?? "", email: row.email ?? "",
+        taxId: row.tax_id ?? "", rib: row.rib ?? "", brandColor: row.brand_color ?? "", canEdit: row.can_edit !== false,
+      };
+    }
+  }
+  return { ...(await loadCompanyProfile()), canEdit: true };
+}
+
 export async function saveCompanyProfile(profile: CompanyProfile): Promise<void> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
   const { error } = await supabase.rpc("set_company_profile", { p_profile: {
@@ -30,5 +46,6 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<void>
     tax_id: profile.taxId, rib: profile.rib, brand_color: profile.brandColor,
   } });
   if (error) throw error;
-  applyCompanyProfile(profile);
+  // Refresh what documents print (the acting supplier, which is this Pro for a supplier).
+  await loadCompanyProfile().catch(() => undefined);
 }

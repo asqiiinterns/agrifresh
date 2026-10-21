@@ -56,7 +56,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
     { key: "clients", icon: "people-outline", title: "Clients", detail: "Fiches, points de livraison, QR codes, options.", allowed: active && can("clients.view") },
     { key: "team", icon: "people-outline", title: "Mon équipe", detail: "Collaborateurs, rôles et droits de votre Pro.", allowed: active && account?.role === "customer" && !!myPro },
     { key: "profile", icon: "person-circle-outline", title: "Mon profil et mot de passe", detail: account?.client ? "Votre fiche, vos points de livraison, votre mot de passe." : "Vos informations et votre mot de passe.", allowed: true },
-    { key: "notifications", icon: "notifications-outline", title: "Notifications", detail: "Alertes sur le téléphone et par e-mail.", allowed: active },
+    { key: "notifications", icon: "notifications-outline", title: "Notifications", detail: "Notifications sur le téléphone et par e-mail.", allowed: active },
     { key: "display", icon: "text-outline", title: "Affichage et langue", detail: "Taille du texte, langue, présentation des produits.", allowed: true },
     { key: "home", icon: "options-outline", title: "Personnaliser l’accueil", detail: "Chiffres et raccourcis de votre page d’accueil.", allowed: hasHome && mod("home_custom") },
     { key: "permissions", icon: "shield-checkmark-outline", title: "Autorisations du téléphone", detail: "Appareil photo, micro, position, notifications.", allowed: true },
@@ -74,7 +74,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
     { page: "accounts", icon: "person-outline" as const, title: "Comptes", detail: "Comptes de vos clients et de votre équipe : validation, suspension, ajout.", allowed: isAdmin },
     { page: "roles", icon: "key-outline" as const, title: "Rôles et accès", detail: "Qui a quel rôle, ce que chaque rôle permet, voir les droits d’une personne.", allowed: isAdmin },
     { page: "settings", icon: "options-outline" as const, title: "Paramétrage", detail: "Modules, droits par profil, options des clients, entreprise, numérotation, accueil.", allowed: isAdmin },
-    { page: "alerts", icon: "notifications-outline" as const, title: "Alertes et e-mails", detail: "Événements notifiés et service d’envoi.", allowed: isAdmin },
+    { page: "alerts", icon: "notifications-outline" as const, title: "Notifications et e-mails", detail: "Événements notifiés et service d’envoi.", allowed: isAdmin },
     { page: "fleet", icon: "car-outline" as const, title: "Flotte", detail: "Véhicules proposés au livreur à l’expédition.", allowed: can("fleet.manage") },
     { page: "audit", icon: "time-outline" as const, title: "Journal des actions", detail: "Qui a fait quoi et quand, sur tout le système.", allowed: can("audit.view") },
     { page: "location", icon: "location-outline" as const, title: "Localisation", detail: "Dernière position des comptes qui la partagent.", allowed: can("location.view") },
@@ -103,7 +103,7 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
     return <View style={ui.screen}>
       {header}
       <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
-        {current.key === "profile" ? <><ProfileCard session={session} account={account} /><PasswordCard /></> : null}
+        {current.key === "profile" ? <><ProfileCard session={session} account={account} onChanged={onLayoutChanged} /><PasswordCard /></> : null}
         {current.key === "permissions" ? <PermissionsCard /> : null}
         {current.key === "home" && account ? <HomeCustomizeCard account={account} onLayoutChanged={onLayoutChanged ?? (() => {})} /> : null}
         {current.key === "display" ? <DisplaySettingsCard showProducts={account?.role === "customer"} /> : null}
@@ -129,9 +129,30 @@ export function AccountScreen({ session, account, sections = [], initialSheet, o
   </View>;
 }
 
-function ProfileCard({ session, account }: { session: Session; account: Account | null }) {
+function ProfileCard({ session, account, onChanged }: { session: Session; account: Account | null; onChanged?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // My information: name and phone (20261126 set_my_profile).
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(account?.full_name ?? "");
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.from("profiles").select("phone").eq("id", session.user.id).maybeSingle()
+      .then(({ data }) => setPhone(((data as { phone?: string | null } | null)?.phone) ?? ""), () => undefined);
+  }, [session.user.id]);
+  useEffect(() => { setName(account?.full_name ?? ""); }, [account?.full_name]);
+
+  async function saveInfo() {
+    if (!supabase) return;
+    setSaving(true); setError(""); setSaved("");
+    const { error: rpcError } = await supabase.rpc("set_my_profile", { p_full_name: name.trim(), p_phone: phone.trim() || null });
+    if (rpcError) setError(errorMessage(rpcError, "Vos informations n’ont pas pu être enregistrées. La migration 20261126 est-elle exécutée ?"));
+    else { setSaved("Vos informations sont enregistrées."); setEditing(false); onChanged?.(); }
+    setSaving(false);
+  }
 
   async function signOut() {
     if (!supabase) return;
@@ -146,7 +167,17 @@ function ProfileCard({ session, account }: { session: Session; account: Account 
   return <>
     <View style={ui.card}>
       <Text style={ui.strong}>{account?.full_name || session.user.email}</Text>
-      <Text style={ui.small}>{session.user.email} · {account ? roleLabels[account.role] : "Profil en cours de chargement"}</Text>
+      <Text style={ui.small}>{session.user.email} · {account ? roleLabels[account.role] : "Profil en cours de chargement"}{phone && !editing ? ` · ${phone}` : ""}</Text>
+      {editing ? <>
+        <Field label="Nom et prénom" value={name} onChangeText={setName} autoCapitalize="words" />
+        <Field label="Téléphone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+        <Text style={[ui.small, { marginTop: 6 }]}>L’adresse e-mail sert à vous connecter : pour la changer, contactez votre administrateur.</Text>
+        <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          <Button label="ENREGISTRER" onPress={() => saveInfo()} busy={saving} />
+          <Button label="ANNULER" variant="secondary" onPress={() => { setEditing(false); setName(account?.full_name ?? ""); }} />
+        </View>
+      </> : <Button label="MODIFIER MES INFORMATIONS" variant="secondary" onPress={() => { setSaved(""); setEditing(true); }} style={{ marginTop: 10 }} />}
+      {saved ? <Text style={[ui.success, { marginTop: 6 }]}>{saved}</Text> : null}
       {client ? <View style={ui.divider}>
         <Text style={ui.strong}>{client.business_name}</Text>
         <Text style={ui.small}>{formatClientNumber(client.client_number)}{client.contact_name ? ` · ${client.contact_name}` : ""}{client.phone ? ` · ${client.phone}` : ""}</Text>
