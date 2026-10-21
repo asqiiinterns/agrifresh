@@ -35,13 +35,15 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [section, setSection] = useState<Section>(mode === "closed" ? "done" : isSection(initialSection) && !(mode === "open" && initialSection === "done") ? initialSection : "decide");
+  const [section, setSection] = useState<Section>(mode === "closed" ? "done" : initialSection === "today" ? "queue" : isSection(initialSection) && !(mode === "open" && initialSection === "done") ? initialSection : "decide");
   const [search, setSearch] = useState("");
   const [delivery, setDelivery] = useState<DateFilterValue>(null);
   // Orders of the day by default (closed orders: closed today, even if placed earlier); the chip clears it in one tap.
   const dateTitle = mode === "closed" ? "Clôturées le" : "Commandes du";
   const dateOf = (order: StaffOrder) => mode === "closed" ? closedAt(order) : order.created_at;
-  const [placed, setPlaced] = useState<DateFilterValue>(() => presets.today.value());
+  // Open orders: all of them by default (an order placed yesterday and still in progress must show); the
+  // "Commandes du jour" tile asks for today's only. Closed orders: closed today by default.
+  const [placed, setPlaced] = useState<DateFilterValue>(() => mode === "closed" || initialSection === "today" ? presets.today.value() : null);
   const [shipping, setShipping] = useState<StaffOrder[] | null>(null);
   const { navigate } = useNav();
   const [stage, setStage] = useState<string>("all");

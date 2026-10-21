@@ -20,7 +20,7 @@ export const homeTiles: HomeTileDef[] = [
   { key: "outstanding", label: "Reste à encaisser (TND)", icon: "wallet-outline", audience: "team", need: "invoices.manage", tab: "invoices" },
   { key: "overdue", label: "Factures en retard", icon: "time-outline", audience: "team", need: "invoices.manage", tab: "invoices", tone: "warn" },
   { key: "toInvoice", label: "Clients à facturer", icon: "document-text-outline", audience: "team", need: "invoices.manage", tab: "decide", tone: "action" },
-  { key: "placedToday", label: "Commandes du jour", icon: "today-outline", audience: "team", need: "orders.view", tab: "orders", params: { section: "queue" } },
+  { key: "placedToday", label: "Commandes du jour", icon: "today-outline", audience: "team", need: "orders.view", tab: "orders", params: { section: "today" } },
   { key: "queue", label: "En file de production", icon: "list-outline", audience: "team", need: "orders.plan", tab: "planning" },
   { key: "prepare", label: "À préparer", icon: "construct-outline", audience: "team", need: "production.view", tab: "production", params: { section: "prepare" } },
   { key: "ready", label: "Prêtes à expédier", icon: "cube-outline", audience: "team", need: "orders.ship", tab: "deliveries" },
