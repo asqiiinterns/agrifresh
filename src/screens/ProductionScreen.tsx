@@ -4,7 +4,7 @@ import { Text } from "../ui/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { executionQueue, fetchAllOrders, preparationTotals, updateOrderStatus, type StaffOrder } from "../data/staff";
-import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
+import { Button, Chip, EmptyState, Loading, ScreenHeader, StatusBadge, formatDateTime, formatDay, formatQuantity, statusStyles, toDayKey } from "../ui/components";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { errorMessage, notify } from "../ui/notify";
@@ -234,7 +234,7 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
       </View>
       {item.customer_note ? <Text style={[ui.small, { color: colors.orange, marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
       {status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.primary, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
-        : !canUpdate ? null : <Button label={status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
+        : !canUpdate ? null : <Button label={status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} color={statusStyles[status === "confirmed" ? "preparing" : "ready"].color} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
     </View>; }}
   />;
 }

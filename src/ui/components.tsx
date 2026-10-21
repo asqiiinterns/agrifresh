@@ -101,13 +101,15 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
 
 // Anti double-submit: while the action returned by onPress runs (or for a short moment after a
 // synchronous one), further taps are ignored and the button shows a spinner.
-export function Button({ label, onPress, variant = "primary", busy, disabled, style }: {
+export function Button({ label, onPress, variant = "primary", busy, disabled, style, color }: {
   label: string;
   onPress: () => unknown;
   variant?: "primary" | "secondary" | "danger";
   busy?: boolean;
   disabled?: boolean;
   style?: ComponentProps<typeof View>["style"];
+  // A primary button in another colour (e.g. the colour of the order step it leads to).
+  color?: string;
 }) {
   const primary = variant === "primary";
   const locked = useRef(false);
@@ -130,7 +132,7 @@ export function Button({ label, onPress, variant = "primary", busy, disabled, st
   return <Pressable
     onPress={press}
     disabled={disabled || waiting}
-    style={[primary ? ui.primaryButton : ui.secondaryButton, variant === "danger" && ui.dangerButton, (disabled || waiting) && ui.disabled, style]}
+    style={[primary ? ui.primaryButton : ui.secondaryButton, variant === "danger" && ui.dangerButton, primary && color ? { backgroundColor: color, borderColor: color } : null, (disabled || waiting) && ui.disabled, style]}
   >
     {waiting ? <ActivityIndicator color={primary ? colors.white : colors.primary} /> : <Text style={[primary ? ui.primaryButtonText : ui.secondaryButtonText, variant === "danger" && ui.dangerButtonText]}>{label}</Text>}
   </Pressable>;

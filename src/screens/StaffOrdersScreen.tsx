@@ -13,7 +13,7 @@ import { useCan, type Feature } from "../data/permissions";
 
 const actionFeature = (status: OrderStatus): Feature =>
   status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
-import { Button, Chip, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel } from "../ui/components";
+import { Button, Chip, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel, statusStyles } from "../ui/components";
 import { ShipModal } from "../ui/ShipModal";
 import { RecurringModal } from "./RecurringScreen";
 import { useNav } from "../ui/navigation";
@@ -355,7 +355,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     </> : null}
 
     <View style={styles.actions}>
-      {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
+      {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} color={statusStyles[action.status]?.color} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
       {position && can("orders.plan") ? <Button label="PLANIFIER" variant="secondary" onPress={() => onPlan("move")} /> : null}
       {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => printDeliveryNote()} /> : null}
     </View>
