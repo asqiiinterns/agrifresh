@@ -1,9 +1,10 @@
 // Identical requests started at the same time (home tiles, the « À décider » badge, the decision board)
 // share one network call. Only requests still in flight are shared: a later call always reloads.
+// fresh: after a change (made here or announced live), a request started before it is not reused.
 const inFlight = new Map<string, Promise<unknown>>();
 
-export function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
-  let promise = inFlight.get(key) as Promise<T> | undefined;
+export function shared<T>(key: string, load: () => Promise<T>, fresh = false): Promise<T> {
+  let promise = fresh ? undefined : inFlight.get(key) as Promise<T> | undefined;
   if (!promise) {
     const started: Promise<T> = load().finally(() => { if (inFlight.get(key) === started) inFlight.delete(key); });
     inFlight.set(key, started);

@@ -110,4 +110,5 @@ export function preparationTotals(orders: StaffOrder[]): PreparationLine[] {
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
-export const fetchAllOrders = () => shared("fetchAllOrders", loadAllOrders);
+// fresh: always a new request (pull to refresh, after a change made or announced live).
+export const fetchAllOrders = (fresh = false) => shared("fetchAllOrders", loadAllOrders, fresh);

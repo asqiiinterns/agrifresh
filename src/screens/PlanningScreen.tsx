@@ -131,11 +131,11 @@ export function PlanningTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  async function reload(refresh = false) {
+  async function reload(refresh = false, fresh = refresh) {
     if (refresh) setRefreshing(true);
     setError("");
     try {
-      setOrders(await fetchAllOrders());
+      setOrders(await fetchAllOrders(fresh));
     } catch (cause) {
       setError(errorMessage(cause, "Impossible de charger la file de production."));
     } finally {
@@ -149,7 +149,7 @@ export function PlanningTab() {
     void reload();
     if (!realtime) return;
     const channel = realtime.channel("planning-tab")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(false, true); })
       .subscribe();
     return () => { void realtime.removeChannel(channel); };
   }, []);

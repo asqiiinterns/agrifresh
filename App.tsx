@@ -292,7 +292,8 @@ function Main({ session }: { session: Session }) {
   const [nav, setNav] = useState<{ tab: TabKey | null; params?: NavParams; nonce: number }>({ tab: null, nonce: 0 });
   const tab = nav.tab;
   const [ordersKey, setOrdersKey] = useState(0);
-  // A tile or shortcut opens a tab at a given section; each call remounts the target screen.
+  // A tile, a shortcut or a menu button opens a tab (at a given section); each call remounts the target
+  // screen, so tapping the open tab again reloads it.
   const navigate = useCallback((next: TabKey, params?: NavParams) => setNav((state) => ({ tab: next, params, nonce: state.nonce + 1 })), []);
   const setTab = useCallback((next: TabKey | null) => setNav((state) => ({ tab: next, nonce: state.nonce })), []);
   const navValue = useMemo(() => ({ navigate }), [navigate]);
@@ -488,8 +489,8 @@ function Main({ session }: { session: Session }) {
       {topTabs.map((item) => {
         const selected = item.key === current;
         const badge = badgeFor(item.key);
-        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={isModuleOn(modules, "needs_reply") ? needsReply : 0} onPress={() => setTab(item.key)} />;
-        return <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
+        if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={isModuleOn(modules, "needs_reply") ? needsReply : 0} onPress={() => navigate(item.key)} />;
+        return <Pressable key={item.key} onPress={() => navigate(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
           <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.text} />
           {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
         </Pressable>;
@@ -557,7 +558,7 @@ function Main({ session }: { session: Session }) {
       {bar.map((item) => {
         const selected = item.key === barCurrent;
         const badge = badgeFor(item.key);
-        return <Pressable key={item.key} onPress={() => setTab(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}>
+        return <Pressable key={item.key} onPress={() => navigate(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}>
           <View style={[styles.tabPill, selected && styles.tabPillActive]}>
             <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.muted} />
             {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}

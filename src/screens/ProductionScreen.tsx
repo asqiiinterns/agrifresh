@@ -36,7 +36,7 @@ export function ProductionScreen() {
     if (mode === "refresh") setRefreshing(true);
     setError("");
     try {
-      setOrders(await fetchAllOrders());
+      setOrders(await fetchAllOrders(mode !== "initial"));
     } catch (cause) {
       setError(errorMessage(cause, "Impossible de charger la production."));
     } finally {
@@ -83,7 +83,7 @@ export function ProductionScreen() {
     <View>
       <View style={styles.tabs}>
         <Chip label="À préparer (totaux)" selected={tab === "totals"} onPress={() => setTab("totals")} />
-        <Chip label={`File d’exécution (${queue.length})`} selected={tab === "queue"} onPress={() => setTab("queue")} />
+        <Chip label={`File d’exécution (${toPrepare.length})`} selected={tab === "queue"} onPress={() => setTab("queue")} />
         <Chip label="Historique" selected={tab === "history"} onPress={() => setTab("history")} />
       </View>
     </View>

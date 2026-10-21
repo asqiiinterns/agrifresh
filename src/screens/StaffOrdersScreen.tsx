@@ -50,7 +50,7 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
     if (mode === "refresh") setRefreshing(true);
     setError("");
     try {
-      const [nextOrders, nextClaims] = await Promise.all([fetchAllOrders(), fetchClaims().catch(() => [] as Claim[])]);
+      const [nextOrders, nextClaims] = await Promise.all([fetchAllOrders(mode !== "initial"), fetchClaims().catch(() => [] as Claim[])]);
       setOrders(nextOrders);
       setClaims(nextClaims);
     } catch (cause) {
