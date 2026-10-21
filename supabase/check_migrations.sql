@@ -26,6 +26,9 @@ from (values
   (22, '20261115_multi_supplier_cart.sql',        to_regprocedure('public.place_multi_order(jsonb, date, text)') is not null),
   (23, '20261116_catalog_numbers.sql',           to_regclass('public.org_counters') is not null),
   (24, '20261117_buyer_journey.sql',             to_regprocedure('public.client_cancel_order(uuid, text)') is not null),
-  (25, '20261118_pro_modules_pricing.sql',       to_regclass('public.pricing_rules') is not null and to_regprocedure('public.platform_set_org_module(uuid,text,boolean)') is not null and to_regprocedure('public.buyer_price_cart(jsonb)') is not null)
+  (25, '20261118_pro_modules_pricing.sql',       to_regclass('public.pricing_rules') is not null and to_regprocedure('public.platform_set_org_module(uuid,text,boolean)') is not null and to_regprocedure('public.buyer_price_cart(jsonb)') is not null),
+  (26, '20261119_write_guard_fixes.sql',         coalesce(pg_get_functiondef(to_regprocedure('public.buyer_thread(uuid)')) like '%appro.link_write%', false)
+                                                 and coalesce(pg_get_functiondef(to_regprocedure('public.org_write_guard()')) like '%pas actif%', false)
+                                                 and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'products' and column_name = 'org_id' and column_default like '%acting_or_legacy_org_id%'))
 ) as checks(position, migration, installed)
 order by position;

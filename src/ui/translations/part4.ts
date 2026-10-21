@@ -473,6 +473,8 @@ export const part4: [string, string, string][] = [
   ["Un des destinataires n’est pas votre client.", "One of the recipients is not your client.", "أحد المرسَل إليهم ليس حريفك."],
   ["Conversation introuvable.", "Conversation not found.", "المحادثة غير موجودة."],
   ["Commande introuvable.", "Order not found.", "الطلب غير موجود."],
+  ["Cette donnée appartient à un autre Pro.", "This data belongs to another Pro.", "هذه البيانات تابعة لمهني آخر."],
+  ["Votre espace Pro n’est pas actif (en attente de validation par Appro+ ou suspendu) : vous ne pouvez pas encore modifier ses données.", "Your Pro space is not active (waiting for Appro+'s approval or suspended): you cannot change its data yet.", "فضاؤك المهني غير مفعّل (في انتظار مصادقة Appro+ أو موقوف): لا يمكنك تعديل بياناته بعد."],
   ["Total estimé TTC", "Estimated total incl. VAT", "المجموع التقديري مع الأداءات"],
   ["Catégories", "Categories", "الأصناف"],
   ["La liste commune où chaque Pro range ses produits ; elle rend les produits comparables entre fournisseurs.", "The shared list where each Pro files its products; it makes products comparable between suppliers.", "القائمة المشتركة التي يرتب فيها كل محترف منتجاته؛ تجعل المنتجات قابلة للمقارنة بين المورّدين."],

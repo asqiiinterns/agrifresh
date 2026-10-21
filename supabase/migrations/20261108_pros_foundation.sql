@@ -183,7 +183,8 @@ GRANT EXECUTE ON FUNCTION public.default_org_id() TO authenticated;
 
 alter table public.products add column if not exists org_id uuid references public.organizations(id) on delete cascade;
 update public.products set org_id = public.legacy_org_id() where org_id is null;
-alter table public.products alter column org_id set default public.legacy_org_id();
+-- Rerun after 20261111: keep its default (the acting Pro).
+DO $$ BEGIN IF to_regprocedure('public.acting_or_legacy_org_id()') IS NULL THEN EXECUTE 'alter table public.products alter column org_id set default public.legacy_org_id()'; END IF; END $$;
 create index if not exists products_org_idx on public.products(org_id);
 
 alter table public.orders add column if not exists supplier_org_id uuid references public.organizations(id) on delete cascade;
@@ -211,11 +212,13 @@ create trigger orders_fill_supplier before insert on public.orders for each row 
 
 alter table public.vehicles add column if not exists org_id uuid references public.organizations(id) on delete cascade;
 update public.vehicles set org_id = public.legacy_org_id() where org_id is null;
-alter table public.vehicles alter column org_id set default public.legacy_org_id();
+-- Rerun after 20261111: keep its default (the acting Pro).
+DO $$ BEGIN IF to_regprocedure('public.acting_or_legacy_org_id()') IS NULL THEN EXECUTE 'alter table public.vehicles alter column org_id set default public.legacy_org_id()'; END IF; END $$;
 
 alter table public.team_conversations add column if not exists org_id uuid references public.organizations(id) on delete cascade;
 update public.team_conversations set org_id = public.legacy_org_id() where org_id is null;
-alter table public.team_conversations alter column org_id set default public.legacy_org_id();
+-- Rerun after 20261111: keep its default (the acting Pro).
+DO $$ BEGIN IF to_regprocedure('public.acting_or_legacy_org_id()') IS NULL THEN EXECUTE 'alter table public.team_conversations alter column org_id set default public.legacy_org_id()'; END IF; END $$;
 
 -- Read access for now: every signed-in account sees the Pros' public card (name, roles,
 -- status); legal details stay readable since they are printed on documents. Tightened in step 2.
