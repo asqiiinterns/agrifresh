@@ -1,5 +1,5 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261129 are installed
--- (generated from the test database, 350 functions). Read-only: do not run it. New migrations copy a function from here
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261202 are installed
+-- (generated from the test database, 365 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
 -- ===== accept_invitation
@@ -1426,7 +1426,8 @@ AS $function$
           from public.order_items i where i.order_id = o.id), '[]'::jsonb),
         'order_status_history', coalesce((select jsonb_agg(jsonb_build_object(
             'status', h.status, 'note', h.note, 'changed_by', h.changed_by, 'changed_by_name', h.changed_by_name, 'created_at', h.created_at) order by h.created_at)
-          from public.order_status_history h where h.order_id = o.id), '[]'::jsonb)) as o
+          from public.order_status_history h where h.order_id = o.id
+            and (h.note is null or h.note not like 'Étape « %' or public.workflow_of(o.supplier_org_id) ->> 'client_sees_steps' <> 'false')), '[]'::jsonb)) as o
     from public.buyer_relations('client.orders') c
     join public.organizations s on s.id = c.supplier_org_id
     join public.orders o on o.client_id = c.id
@@ -1783,6 +1784,18 @@ AS $function$
   select (public.org_visible(public.client_org(p_client_id))
           and (public.has_feature('invoices.manage') or (p_client_id = public.current_client_id() and public.has_feature('client.invoices'))))
       or public.buyer_relation_can(p_client_id, 'client.invoices');
+$function$
+;
+
+-- ===== category_fields
+CREATE OR REPLACE FUNCTION public.category_fields(p_category_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce((select p.attributes from public.categories c join public.categories p on p.id = c.parent_id where c.id = p_category_id), '[]'::jsonb)
+      || coalesce((select c.attributes from public.categories c where c.id = p_category_id), '[]'::jsonb);
 $function$
 ;
 
@@ -3361,6 +3374,30 @@ end;
 $function$
 ;
 
+-- ===== fill_product_code
+CREATE OR REPLACE FUNCTION public.fill_product_code()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if new.platform_code is null then
+    new.platform_code := 'AP-' || lpad(nextval('public.product_code_seq')::text, 6, '0');
+  end if;
+  new.sku := nullif(btrim(coalesce(new.sku, '')), '');
+  new.gtin := nullif(regexp_replace(coalesce(new.gtin, ''), '\s', '', 'g'), '');
+  if new.gtin is not null and new.gtin !~ '^(\d{8}|\d{12}|\d{13}|\d{14})$' then
+    raise exception using errcode = '22023', message = 'Code-barres invalide : 8, 12, 13 ou 14 chiffres.';
+  end if;
+  if new.sku is not null and char_length(new.sku) > 40 then
+    raise exception using errcode = '22023', message = 'Référence trop longue (40 caractères au plus).';
+  end if;
+  return new;
+end;
+$function$
+;
+
 -- ===== format_document_number
 CREATE OR REPLACE FUNCTION public.format_document_number(p_prefix text, p_with_year boolean, p_digits integer, p_number bigint, p_year integer)
  RETURNS text
@@ -4038,10 +4075,12 @@ AS $function$
                   where a.user_id = pr.id and a.expires_at > now() and public.assisted_org() is not null),
     'disabled', pr.account_status <> 'active',
     'status', pr.account_status,
-    'home_layout', coalesce(pr.home_layout, (select hl.layout from public.home_layouts hl
+    'home_layout', coalesce(pr.home_layout, public.my_role_layout() -> 'home', (select hl.layout from public.home_layouts hl
       where hl.role = (case when pr.role = 'staff' then 'supervisor' else pr.role end)::public.app_role)),
-    'role_home_layout', (select hl.layout from public.home_layouts hl
-      where hl.role = (case when pr.role = 'staff' then 'supervisor' else pr.role end)::public.app_role),
+    'role_home_layout', coalesce(public.my_role_layout() -> 'home', (select hl.layout from public.home_layouts hl
+      where hl.role = (case when pr.role = 'staff' then 'supervisor' else pr.role end)::public.app_role)),
+    -- 20261201: the bottom bar chosen for the person's role (null: the built-in order).
+    'menu', public.my_role_layout() -> 'menu',
     'client', case when c.id is null or not c.active or public.assisted_org() is not null then null else jsonb_build_object(
       'id', c.id,
       'client_number', c.client_number,
@@ -4067,6 +4106,15 @@ AS $function$
   left join public.clients c on c.id = pr.client_id
   where pr.id = (select auth.uid());
 $function$
+;
+
+-- ===== my_catalog_presets
+CREATE OR REPLACE FUNCTION public.my_catalog_presets()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$ select coalesce((select o.catalog_presets from public.organizations o where o.id = public.acting_supplier_org_id()), '[]'::jsonb); $function$
 ;
 
 -- ===== my_client_history
@@ -4247,6 +4295,24 @@ AS $function$
 $function$
 ;
 
+-- ===== my_role_layout
+CREATE OR REPLACE FUNCTION public.my_role_layout()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select jsonb_build_object('home', l.home, 'menu', l.menu, 'role', r.name)
+  from public.member_roles mr
+  join public.org_roles r on r.id = mr.role_id and r.org_id = public.current_org_id()
+  join public.org_role_layouts l on l.role_id = r.id
+  left join public.role_templates t on t.id = r.template_id
+  where mr.user_id = (select auth.uid())
+  order by coalesce(t.key in ('supplier_owner', 'buyer_owner'), false), r.name
+  limit 1;
+$function$
+;
+
 -- ===== my_spaces
 CREATE OR REPLACE FUNCTION public.my_spaces()
  RETURNS jsonb
@@ -4284,7 +4350,10 @@ CREATE OR REPLACE FUNCTION public.my_workflow_settings()
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO ''
-AS $function$ select jsonb_build_object('auto_deliver_hours', o.auto_deliver_hours) from public.organizations o where o.id = public.current_org_id(); $function$
+AS $function$
+  select jsonb_build_object('auto_deliver_hours', o.auto_deliver_hours) || public.workflow_of(o.id)
+  from public.organizations o where o.id = public.acting_supplier_org_id();
+$function$
 ;
 
 -- ===== next_billing_date
@@ -4861,6 +4930,27 @@ begin
   update public.profiles set org_id = null, client_id = null, role = 'customer' where id = p_user_id;
   delete from public.pro_memberships where user_id = p_user_id and org_id = v_org;
   perform set_config('appro.link_write', 'off', true);
+end;
+$function$
+;
+
+-- ===== org_role_layouts_list
+CREATE OR REPLACE FUNCTION public.org_role_layouts_list(p_org_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := coalesce(p_org_id, public.current_org_id());
+begin
+  if v_org is null or not public.can_manage_org_roles(v_org, false) then
+    raise exception using errcode = '42501', message = 'Réservé aux personnes qui gèrent les rôles de ce Pro et à l’équipe Appro+.';
+  end if;
+  return jsonb_build_object(
+    'allowed', public.platform_can('platform.pros.manage') or public.module_enabled_for(v_org, 'home_custom'),
+    'layouts', coalesce((select jsonb_agg(jsonb_build_object('role_id', l.role_id, 'home', l.home, 'menu', l.menu))
+      from public.org_role_layouts l join public.org_roles r on r.id = l.role_id where r.org_id = v_org), '[]'::jsonb));
 end;
 $function$
 ;
@@ -5493,7 +5583,7 @@ CREATE OR REPLACE FUNCTION public.platform_categories()
  SET search_path TO ''
 AS $function$
   select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'parent_id', c.parent_id, 'sort_order', c.sort_order, 'active', c.active,
-    'products', (select count(*) from public.products p where p.category_id = c.id)) order by c.sort_order, c.name), '[]'::jsonb)
+    'attributes', c.attributes, 'products', (select count(*) from public.products p where p.category_id = c.id)) order by c.sort_order, c.name), '[]'::jsonb)
   from public.categories c where public.platform_can('platform.catalog');
 $function$
 ;
@@ -5734,6 +5824,53 @@ begin
   update public.profiles set account_status = p_status where id = p_user_id and role <> 'platform';
   if not found then
     raise exception using errcode = 'P0002', message = 'Compte introuvable (les comptes Appro+ se gèrent dans Équipe Appro+).';
+  end if;
+end;
+$function$
+;
+
+-- ===== platform_set_category_fields
+CREATE OR REPLACE FUNCTION public.platform_set_category_fields(p_category_id uuid, p_fields jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_field jsonb;
+  v_keys text[] := '{}';
+  v_clean jsonb := '[]'::jsonb;
+  v_key text;
+begin
+  if not public.platform_can('platform.catalog') then
+    raise exception using errcode = '42501', message = 'Seule l’équipe Appro+ gère les fiches produits.';
+  end if;
+  if jsonb_typeof(p_fields) is distinct from 'array' or jsonb_array_length(p_fields) > 20 then
+    raise exception using errcode = '22023', message = 'Vingt champs au plus.';
+  end if;
+  for v_field in select * from jsonb_array_elements(p_fields) loop
+    if char_length(btrim(coalesce(v_field ->> 'label', ''))) not between 1 and 40 then
+      raise exception using errcode = '22023', message = 'Chaque champ a un nom de 1 à 40 caractères.';
+    end if;
+    if coalesce(v_field ->> 'type', 'list') not in ('list', 'number', 'text') then
+      raise exception using errcode = '22023', message = 'Type de champ inconnu.';
+    end if;
+    if coalesce(v_field ->> 'type', 'list') = 'list' and (jsonb_typeof(v_field -> 'options') is distinct from 'array' or jsonb_array_length(v_field -> 'options') = 0) then
+      raise exception using errcode = '22023', message = format('« %s » : ajoutez les choix de la liste.', v_field ->> 'label');
+    end if;
+    v_key := coalesce(nullif(btrim(v_field ->> 'key'), ''),
+      trim(both '_' from regexp_replace(lower(translate(btrim(v_field ->> 'label'), 'àâäçéèêëîïôöùûüÿœæ', 'aaaceeeeiioouuuyoa')), '[^a-z0-9]+', '_', 'g')));
+    if v_key = any(v_keys) then
+      raise exception using errcode = '22023', message = format('Deux champs s’appellent « %s ».', v_field ->> 'label');
+    end if;
+    v_keys := v_keys || v_key;
+    v_clean := v_clean || jsonb_build_array(jsonb_strip_nulls(jsonb_build_object('key', v_key, 'label', btrim(v_field ->> 'label'),
+      'type', coalesce(v_field ->> 'type', 'list'), 'options', case when coalesce(v_field ->> 'type', 'list') = 'list' then v_field -> 'options' end,
+      'unit', nullif(btrim(coalesce(v_field ->> 'unit', '')), ''))));
+  end loop;
+  update public.categories set attributes = v_clean, updated_at = now() where id = p_category_id;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'Catégorie introuvable.';
   end if;
 end;
 $function$
@@ -6078,6 +6215,110 @@ AS $function$
         'granted', (select coalesce(jsonb_agg(tp.permission order by tp.permission), '[]'::jsonb) from public.role_template_permissions tp where tp.template_id = t.id),
         'roles', (select count(*) from public.org_roles r where r.template_id = t.id)
       ) order by t.sort_order), '[]'::jsonb) from public.role_templates t)) end;
+$function$
+;
+
+-- ===== prep_step
+CREATE OR REPLACE FUNCTION public.prep_step(p_order_id uuid, p_step text, p_done boolean)
+ RETURNS text[]
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_order public.orders%rowtype;
+  v_flow jsonb;
+  v_done text[];
+begin
+  if not public.has_feature('production.update') then
+    raise exception using errcode = '42501', message = 'Votre profil ne permet pas de faire avancer la préparation.';
+  end if;
+  select * into v_order from public.orders where id = p_order_id for update;
+  if v_order.id is null or v_order.supplier_org_id is distinct from public.acting_supplier_org_id() then
+    raise exception using errcode = 'P0002', message = 'Commande introuvable.';
+  end if;
+  v_flow := public.workflow_of(v_order.supplier_org_id);
+  if not ((v_flow -> 'steps') ? p_step) then
+    raise exception using errcode = '22023', message = 'Étape inconnue : actualisez la liste.';
+  end if;
+  if v_order.status not in ('confirmed', 'preparing') then
+    raise exception using errcode = '22023', message = 'Cette commande n’est plus en préparation.';
+  end if;
+  if v_order.status = 'confirmed' and coalesce(p_done, false) and (v_flow ->> 'preparing')::boolean then
+    perform public.staff_update_order_status(p_order_id, 'preparing', null);
+  end if;
+  v_done := case when coalesce(p_done, false) then array(select distinct x from unnest(v_order.prep_done || p_step) x)
+                 else array_remove(v_order.prep_done, p_step) end;
+  update public.orders set prep_done = v_done, updated_at = now() where id = p_order_id;
+  insert into public.order_status_history (order_id, status, note, changed_by)
+  values (p_order_id, (select o.status from public.orders o where o.id = p_order_id),
+          format('Étape « %s » %s', p_step, case when coalesce(p_done, false) then 'terminée' else 'annulée' end), auth.uid());
+  return v_done;
+end;
+$function$
+;
+
+-- ===== prep_tick
+CREATE OR REPLACE FUNCTION public.prep_tick(p_item_ids uuid[], p_done boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.acting_supplier_org_id();
+  v_flow jsonb := public.workflow_of(public.acting_supplier_org_id());
+  v_order record;
+  v_status text;
+  v_started uuid[] := '{}';
+  v_ready uuid[] := '{}';
+begin
+  if v_org is null or not public.has_feature('production.update') then
+    raise exception using errcode = '42501', message = 'Votre profil ne permet pas de cocher la préparation.';
+  end if;
+  if exists (select 1 from public.order_items i join public.orders o on o.id = i.order_id
+             where i.id = any(p_item_ids) and (o.supplier_org_id is distinct from v_org or o.status not in ('confirmed', 'preparing', 'ready'))) then
+    raise exception using errcode = '22023', message = 'Une commande n’est plus à préparer : actualisez la liste.';
+  end if;
+  if not coalesce(p_done, false) then
+    delete from public.order_item_ticks where order_item_id = any(p_item_ids);
+    return jsonb_build_object('started', '[]'::jsonb, 'ready', '[]'::jsonb);
+  end if;
+  insert into public.order_item_ticks (order_item_id, order_id, org_id, done_by)
+  select i.id, i.order_id, v_org, auth.uid() from public.order_items i where i.id = any(p_item_ids)
+  on conflict (order_item_id) do nothing;
+  for v_order in
+    select o.id, o.status::text as status,
+      not exists (select 1 from public.order_items i where i.order_id = o.id
+                  and not exists (select 1 from public.order_item_ticks t where t.order_item_id = i.id)) as complete
+    from public.orders o where o.id in (select i.order_id from public.order_items i where i.id = any(p_item_ids))
+  loop
+    v_status := v_order.status;
+    if v_status = 'confirmed' and (v_flow ->> 'preparing')::boolean then
+      perform public.staff_update_order_status(v_order.id, 'preparing', 'Préparation commencée (produits cochés).');
+      v_started := v_started || v_order.id;
+      v_status := 'preparing';
+    end if;
+    if v_order.complete and (v_flow ->> 'auto_ready')::boolean and v_status in ('confirmed', 'preparing') then
+      perform public.staff_update_order_status(v_order.id, 'ready', 'Préparée : tous les produits sont cochés.');
+      v_ready := v_ready || v_order.id;
+    end if;
+  end loop;
+  return jsonb_build_object('started', to_jsonb(v_started), 'ready', to_jsonb(v_ready));
+end;
+$function$
+;
+
+-- ===== prep_ticks
+CREATE OR REPLACE FUNCTION public.prep_ticks()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(jsonb_agg(t.order_item_id), '[]'::jsonb)
+  from public.order_item_ticks t join public.orders o on o.id = t.order_id
+  where t.org_id = public.acting_supplier_org_id() and o.status in ('confirmed', 'preparing', 'ready');
 $function$
 ;
 
@@ -6663,6 +6904,147 @@ begin
     'tax_id', case when coalesce((v ->> 'tax_id')::boolean, false) then v_org.tax_id end,
     'clients', case when coalesce((v ->> 'relations')::boolean, true) then (select count(*) from public.clients c where c.supplier_org_id = v_org.id and c.link_status = 'active') end,
     'suppliers', case when coalesce((v ->> 'relations')::boolean, true) then (select count(*) from public.clients c where c.buyer_org_id = v_org.id and c.link_status = 'active') end);
+end;
+$function$
+;
+
+-- ===== product_import_history
+CREATE OR REPLACE FUNCTION public.product_import_history()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(jsonb_agg(jsonb_build_object('id', i.id, 'imported_at', i.imported_at, 'by', public.location_name(i.imported_by), 'file_name', i.file_name,
+      'created', i.created, 'updated', i.updated, 'unchanged', i.unchanged, 'ignored', i.ignored, 'changes', i.changes) order by i.imported_at desc), '[]'::jsonb)
+  from (select * from public.product_imports x where x.org_id = public.acting_supplier_org_id() order by x.imported_at desc limit 50) i
+  where public.has_feature('products.manage');
+$function$
+;
+
+-- ===== products_import
+CREATE OR REPLACE FUNCTION public.products_import(p_file text, p_rows jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.acting_supplier_org_id();
+  v_row jsonb;
+  v_index int := 0;
+  v_product public.products%rowtype;
+  v_found boolean;
+  v_category uuid;
+  v_before jsonb;
+  v_after jsonb;
+  v_text_keys text[] := array['name', 'description', 'unit_label', 'sku', 'gtin', 'origin_producer', 'origin_region', 'origin_label', 'origin_note'];
+  v_key text;
+  v_changes jsonb := '[]'::jsonb;
+  v_ignored jsonb := '[]'::jsonb;
+  v_created int := 0;
+  v_updated int := 0;
+  v_unchanged int := 0;
+  v_import uuid;
+  v_num numeric;
+begin
+  if v_org is null or not public.has_feature('products.manage') then
+    raise exception using errcode = '42501', message = 'Votre profil ne permet pas de gérer les produits.';
+  end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' or jsonb_array_length(p_rows) > 2000 then
+    raise exception using errcode = '22023', message = 'Fichier invalide (2000 lignes au plus).';
+  end if;
+  for v_row in select * from jsonb_array_elements(p_rows) loop
+    v_index := v_index + 1;
+    begin
+      v_found := false;
+      if nullif(v_row ->> 'id', '') is not null then
+        select * into v_product from public.products p where p.org_id = v_org and p.id::text = v_row ->> 'id';
+        v_found := found;
+      end if;
+      if not v_found and nullif(btrim(v_row ->> 'sku'), '') is not null then
+        select * into v_product from public.products p where p.org_id = v_org and lower(p.sku) = lower(btrim(v_row ->> 'sku'));
+        v_found := found;
+      end if;
+      if not v_found and nullif(btrim(v_row ->> 'gtin'), '') is not null then
+        select * into v_product from public.products p where p.org_id = v_org and p.gtin = regexp_replace(v_row ->> 'gtin', '\s', '', 'g') limit 1;
+        v_found := found;
+      end if;
+      if not v_found then
+        if nullif(btrim(v_row ->> 'name'), '') is null or nullif(v_row ->> 'price', '') is null then
+          v_ignored := v_ignored || jsonb_build_object('line', v_index, 'reason', 'Produit introuvable : pour le créer, indiquez au moins le nom et le prix.');
+          continue;
+        end if;
+        insert into public.products (org_id, name, slug, price, unit_label)
+        values (v_org, btrim(v_row ->> 'name'),
+          trim(both '-' from regexp_replace(lower(translate(btrim(v_row ->> 'name'), 'àâäçéèêëîïôöùûüÿœæ', 'aaaceeeeiioouuuyoa')), '[^a-z0-9]+', '-', 'g')) || '-' || substr(md5(random()::text), 1, 6),
+          0, 'unité')
+        returning * into v_product;
+      end if;
+      v_before := to_jsonb(v_product);
+      -- Category: by name (Appro+'s list), else unchanged.
+      v_category := v_product.category_id;
+      if v_row ? 'category' and nullif(btrim(v_row ->> 'category'), '') is not null then
+        select c.id into v_category from public.categories c where lower(c.name) = lower(btrim(regexp_replace(v_row ->> 'category', '^.*›\s*', ''))) and c.active limit 1;
+        if v_category is null then
+          raise exception 'Catégorie inconnue : %', v_row ->> 'category';
+        end if;
+      end if;
+      foreach v_key in array v_text_keys loop
+        if v_row ? v_key then
+          execute format('update public.products set %I = $1 where id = $2', v_key)
+            using case when v_key in ('name', 'unit_label') then coalesce(nullif(btrim(v_row ->> v_key), ''), case when v_key = 'name' then v_product.name else 'unité' end)
+                       when v_key = 'description' then coalesce(btrim(v_row ->> v_key), '')
+                       else nullif(btrim(coalesce(v_row ->> v_key, '')), '') end, v_product.id;
+        end if;
+      end loop;
+      if v_row ? 'price' then
+        v_num := replace(v_row ->> 'price', ',', '.')::numeric;
+        if v_num < 0 then raise exception 'Prix négatif'; end if;
+        update public.products set price = v_num where id = v_product.id;
+      end if;
+      if v_row ? 'vat_rate' then
+        v_num := replace(v_row ->> 'vat_rate', ',', '.')::numeric;
+        if v_num not in (0, 7, 13, 19) then raise exception 'TVA invalide (0, 7, 13 ou 19)'; end if;
+        update public.products set vat_rate = v_num where id = v_product.id;
+      end if;
+      if v_row ? 'stock_quantity' then
+        v_num := replace(v_row ->> 'stock_quantity', ',', '.')::numeric;
+        if v_num < 0 then raise exception 'Stock négatif'; end if;
+        update public.products set stock_quantity = v_num where id = v_product.id;
+      end if;
+      if v_row ? 'active' then
+        update public.products set active = lower(v_row ->> 'active') in ('true', 'oui', 'yes', '1', 'x', 'vrai') where id = v_product.id;
+      end if;
+      if v_row ? 'attributes' and jsonb_typeof(v_row -> 'attributes') = 'object' then
+        update public.products set attributes = jsonb_strip_nulls(attributes || (v_row -> 'attributes')) where id = v_product.id;
+      end if;
+      update public.products set category_id = v_category where id = v_product.id and category_id is distinct from v_category;
+      select to_jsonb(p) into v_after from public.products p where p.id = v_product.id;
+      if v_found and v_after - 'updated_at' = v_before - 'updated_at' then
+        v_unchanged := v_unchanged + 1;
+      else
+        update public.products set updated_at = now() where id = v_product.id;
+        -- What changed, before and after (the history of the import).
+        v_changes := v_changes || jsonb_build_object('product_id', v_product.id, 'name', v_after ->> 'name', 'created', not v_found,
+          'before', case when v_found then (select coalesce(jsonb_object_agg(k, v_before -> k), '{}'::jsonb) from jsonb_object_keys(v_after) k
+                                            where k <> 'updated_at' and v_before -> k is distinct from v_after -> k) else '{}'::jsonb end,
+          'after', (select coalesce(jsonb_object_agg(k, v_after -> k), '{}'::jsonb) from jsonb_object_keys(v_after) k
+                    where k not in ('updated_at', 'id', 'org_id', 'slug', 'created_at') and v_before -> k is distinct from v_after -> k));
+        if v_found then
+          v_updated := v_updated + 1;
+        else
+          v_created := v_created + 1;
+        end if;
+      end if;
+    exception when others then
+      v_ignored := v_ignored || jsonb_build_object('line', v_index, 'reason', sqlerrm);
+    end;
+  end loop;
+  insert into public.product_imports (org_id, imported_by, file_name, created, updated, unchanged, ignored, changes)
+  values (v_org, auth.uid(), left(coalesce(p_file, ''), 200), v_created, v_updated, v_unchanged, jsonb_array_length(v_ignored), v_changes)
+  returning id into v_import;
+  return jsonb_build_object('import_id', v_import, 'created', v_created, 'updated', v_updated, 'unchanged', v_unchanged, 'ignored', v_ignored);
 end;
 $function$
 ;
@@ -7543,6 +7925,25 @@ end;
 $function$
 ;
 
+-- ===== set_catalog_presets
+CREATE OR REPLACE FUNCTION public.set_catalog_presets(p_presets jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if public.acting_supplier_org_id() is null or not public.has_feature('products.manage') then
+    raise exception using errcode = '42501', message = 'Votre profil ne permet pas de gérer le catalogue.';
+  end if;
+  if jsonb_typeof(p_presets) is distinct from 'array' or jsonb_array_length(p_presets) > 10 then
+    raise exception using errcode = '22023', message = 'Dix modèles au plus.';
+  end if;
+  update public.organizations set catalog_presets = p_presets, updated_at = now() where id = public.acting_supplier_org_id();
+end;
+$function$
+;
+
 -- ===== set_company_profile
 CREATE OR REPLACE FUNCTION public.set_company_profile(p_profile jsonb)
  RETURNS void
@@ -7784,6 +8185,41 @@ end;
 $function$
 ;
 
+-- ===== set_org_role_layout
+CREATE OR REPLACE FUNCTION public.set_org_role_layout(p_role_id uuid, p_home jsonb, p_menu jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_role public.org_roles%rowtype;
+begin
+  select * into v_role from public.org_roles where id = p_role_id;
+  if v_role.id is null or not public.can_manage_org_roles(v_role.org_id, true) then
+    raise exception using errcode = '42501', message = 'Vous ne pouvez pas modifier ce rôle.';
+  end if;
+  if not public.platform_can('platform.pros.manage') and not public.module_enabled_for(v_role.org_id, 'home_custom') then
+    raise exception using errcode = '42501', message = 'La personnalisation de l’accueil n’est pas incluse dans votre formule : contactez l’équipe Appro+.';
+  end if;
+  if p_home is not null and (jsonb_typeof(p_home -> 'tiles') is distinct from 'array' or jsonb_typeof(p_home -> 'shortcuts') is distinct from 'array'
+      or jsonb_array_length(p_home -> 'tiles') > 30 or jsonb_array_length(p_home -> 'shortcuts') > 40) then
+    raise exception using errcode = '22023', message = 'Accueil invalide.';
+  end if;
+  if p_menu is not null and (jsonb_typeof(p_menu -> 'bar') is distinct from 'array' or jsonb_array_length(p_menu -> 'bar') > 5) then
+    raise exception using errcode = '22023', message = 'Cinq entrées au plus dans la barre du bas.';
+  end if;
+  if p_home is null and p_menu is null then
+    delete from public.org_role_layouts where role_id = p_role_id;
+  else
+    insert into public.org_role_layouts (role_id, home, menu, updated_at, updated_by)
+    values (p_role_id, p_home, p_menu, now(), auth.uid())
+    on conflict (role_id) do update set home = excluded.home, menu = excluded.menu, updated_at = now(), updated_by = auth.uid();
+  end if;
+end;
+$function$
+;
+
 -- ===== set_pro_visibility
 CREATE OR REPLACE FUNCTION public.set_pro_visibility(p_catalog text DEFAULT NULL::text, p_listed boolean DEFAULT NULL::boolean, p_messages boolean DEFAULT NULL::boolean)
  RETURNS jsonb
@@ -7841,6 +8277,47 @@ begin
       'tax_id', coalesce((p_visibility ->> 'tax_id')::boolean, (profile_visibility ->> 'tax_id')::boolean, false),
       'relations', coalesce((p_visibility ->> 'relations')::boolean, (profile_visibility ->> 'relations')::boolean, true)), updated_at = now()
   where id = v_org;
+end;
+$function$
+;
+
+-- ===== set_workflow
+CREATE OR REPLACE FUNCTION public.set_workflow(p_workflow jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.current_org_id();
+  v_steps jsonb := '[]'::jsonb;
+  v_step text;
+begin
+  if v_org is null or not (public.is_admin() or public.is_org_owner(v_org)) then
+    raise exception using errcode = '42501', message = 'Seul l’administrateur règle les étapes de production.';
+  end if;
+  if p_workflow ? 'steps' then
+    if jsonb_typeof(p_workflow -> 'steps') <> 'array' or jsonb_array_length(p_workflow -> 'steps') > 10 then
+      raise exception using errcode = '22023', message = 'Dix étapes au plus.';
+    end if;
+    for v_step in select btrim(x) from jsonb_array_elements_text(p_workflow -> 'steps') x loop
+      if char_length(v_step) not between 1 and 40 then
+        raise exception using errcode = '22023', message = 'Chaque étape a un nom de 1 à 40 caractères.';
+      end if;
+      if not v_steps ? v_step then
+        v_steps := v_steps || to_jsonb(v_step);
+      end if;
+    end loop;
+  end if;
+  update public.organizations set workflow = public.workflow_of(v_org)
+    || jsonb_strip_nulls(jsonb_build_object(
+      'preparing', case when p_workflow ? 'preparing' then (p_workflow ->> 'preparing')::boolean end,
+      'auto_ready', case when p_workflow ? 'auto_ready' then (p_workflow ->> 'auto_ready')::boolean end,
+      'client_sees_steps', case when p_workflow ? 'client_sees_steps' then (p_workflow ->> 'client_sees_steps')::boolean end))
+    || case when p_workflow ? 'steps' then jsonb_build_object('steps', v_steps) else '{}'::jsonb end,
+    updated_at = now()
+  where id = v_org;
+  return public.workflow_of(v_org);
 end;
 $function$
 ;
@@ -8720,7 +9197,9 @@ begin
     when 'on_hold' then array['confirmed', 'declined']::public.order_status[]
     when 'declined' then array['awaiting_client']::public.order_status[]
     when 'awaiting_client' then array['cancelled']::public.order_status[]
-    when 'confirmed' then array['preparing', 'cancelled']::public.order_status[]
+    -- Without the « En préparation » step (Pro setting), an accepted order is marked prepared directly.
+    when 'confirmed' then case when public.workflow_of(v_order.supplier_org_id) ->> 'preparing' = 'false'
+      then array['ready', 'cancelled']::public.order_status[] else array['preparing', 'cancelled']::public.order_status[] end
     when 'preparing' then array['ready', 'cancelled']::public.order_status[]
     when 'ready' then array['out_for_delivery', 'cancelled']::public.order_status[]
     else array[]::public.order_status[]
@@ -9495,5 +9974,17 @@ AS $function$
     and jsonb_array_length(coalesce(p_layout -> 'tiles', '[]'::jsonb)) <= 30
     and jsonb_array_length(coalesce(p_layout -> 'shortcuts', '[]'::jsonb)) <= 30
   );
+$function$
+;
+
+-- ===== workflow_of
+CREATE OR REPLACE FUNCTION public.workflow_of(p_org_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select jsonb_build_object('preparing', true, 'auto_ready', false, 'steps', '[]'::jsonb, 'client_sees_steps', true)
+    || coalesce((select o.workflow from public.organizations o where o.id = p_org_id), '{}'::jsonb);
 $function$
 ;

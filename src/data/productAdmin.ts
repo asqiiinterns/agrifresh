@@ -16,9 +16,16 @@ export type AdminProduct = {
   origin_label: string | null;
   origin_note: string | null;
   created_at: string;
+  // 20261202: the Pro's reference, the barcode, the Appro+ code and the sheet's fields (category template).
+  sku?: string | null;
+  gtin?: string | null;
+  platform_code?: string | null;
+  attributes?: Record<string, string>;
 };
 
-export type Category = { id: string; name: string };
+// fields: the product sheet of this category (its parent's fields, then its own), defined by Appro+.
+export type CategoryField = { key: string; label: string; type: "list" | "number" | "text"; options?: string[]; unit?: string };
+export type Category = { id: string; name: string; fields?: CategoryField[] };
 
 export type ProductInput = {
   category_id: string | null;
@@ -34,6 +41,9 @@ export type ProductInput = {
   origin_region: string;
   origin_label: string;
   origin_note: string;
+  sku?: string;
+  gtin?: string;
+  attributes?: Record<string, string>;
 };
 
 export const VAT_RATES = [0, 7, 13, 19];
@@ -44,25 +54,32 @@ function client() {
 }
 
 // RLS: staff see inactive products too.
+const PRODUCT_FIELDS = "id, category_id, name, description, image_url, unit_label, price, vat_rate, stock_quantity, active, origin_producer, origin_region, origin_label, origin_note, created_at";
 export async function fetchAdminProducts(): Promise<AdminProduct[]> {
-  const { data, error } = await client()
-    .from("products")
-    .select("id, category_id, name, description, image_url, unit_label, price, vat_rate, stock_quantity, active, origin_producer, origin_region, origin_label, origin_note, created_at")
-    .order("name");
+  const query = (extra: string) => client().from("products").select(`${PRODUCT_FIELDS}${extra}`).order("name");
+  // Identifiers and sheet fields exist once 20261202 is run.
+  let { data, error } = await query(", sku, gtin, platform_code, attributes");
+  if (error?.code === "42703") ({ data, error } = await query(""));
   if (error) throw error;
-  return (data ?? []) as AdminProduct[];
+  return (data ?? []) as unknown as AdminProduct[];
 }
 
 // Appro+'s shared list: visible categories, sub-categories shown as "Category › Sub-category".
 export async function fetchCategories(): Promise<Category[]> {
-  const { data, error } = await client().from("categories").select("id, name, parent_id, active, sort_order").order("sort_order");
+  const query = (extra: string) => client().from("categories").select(`id, name, parent_id, active, sort_order${extra}`).order("sort_order");
+  let { data, error } = await query(", attributes");
+  if (error?.code === "42703") ({ data, error } = await query(""));
   if (error) throw error;
-  const rows = (data ?? []) as { id: string; name: string; parent_id: string | null; active: boolean; sort_order: number }[];
+  const rows = (data ?? []) as unknown as { id: string; name: string; parent_id: string | null; active: boolean; sort_order: number; attributes?: CategoryField[] }[];
   const byId = new Map(rows.map((row) => [row.id, row]));
   const rank = (row: { parent_id: string | null; sort_order: number }) => row.parent_id ? (byId.get(row.parent_id)?.sort_order ?? 0) : row.sort_order;
   return rows.filter((row) => row.active)
     .sort((a, b) => rank(a) - rank(b) || Number(!!a.parent_id) - Number(!!b.parent_id) || a.sort_order - b.sort_order)
-    .map((row) => ({ id: row.id, name: row.parent_id ? `${byId.get(row.parent_id)?.name ?? ""} › ${row.name}` : row.name }));
+    .map((row) => ({
+      id: row.id,
+      name: row.parent_id ? `${byId.get(row.parent_id)?.name ?? ""} › ${row.name}` : row.name,
+      fields: [...((row.parent_id ? byId.get(row.parent_id)?.attributes : null) ?? []), ...(row.attributes ?? [])],
+    }));
 }
 
 const slugify = (name: string) => name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -82,11 +99,13 @@ export async function saveProduct(id: string | null, input: ProductInput): Promi
     origin_region: input.origin_region.trim() || null,
     origin_label: input.origin_label.trim() || null,
     origin_note: input.origin_note.trim() || null,
+    ...(input.sku !== undefined ? { sku: input.sku.trim() || null, gtin: input.gtin?.replace(/\s/g, "") || null, attributes: input.attributes ?? {} } : {}),
     updated_at: new Date().toISOString(),
   };
   const query = id
     ? client().from("products").update(values).eq("id", id)
     : client().from("products").insert({ ...values, slug: `${slugify(input.name) || "produit"}-${Date.now().toString(36)}` });
   const { error } = await query;
+  if (error?.code === "23505" && /sku/.test(error.message)) throw new Error("Cette référence est déjà utilisée par un autre de vos produits.");
   if (error) throw error;
 }

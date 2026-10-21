@@ -1,7 +1,9 @@
 import { supabase } from "../lib/supabase";
 
 // The shared list of categories, managed by Appro+ (20261116_catalog_numbers.sql).
-export type PlatformCategory = { id: string; name: string; parent_id: string | null; sort_order: number; active: boolean; products: number };
+import type { CategoryField } from "./productAdmin";
+// attributes (20261202): the fields of the product sheet of this category.
+export type PlatformCategory = { id: string; name: string; parent_id: string | null; sort_order: number; active: boolean; products: number; attributes?: CategoryField[] };
 
 function client() {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
@@ -20,4 +22,10 @@ export async function saveCategory(id: string | null, input: { name: string; par
   });
   if (error) throw error;
   return data as string;
+}
+
+// The product sheet of a category: its fields (a list of choices, a number or a text), in order.
+export async function saveCategoryFields(id: string, fields: Omit<CategoryField, "key">[] & { key?: string }[]): Promise<void> {
+  const { error } = await client().rpc("platform_set_category_fields", { p_category_id: id, p_fields: fields });
+  if (error) throw error;
 }

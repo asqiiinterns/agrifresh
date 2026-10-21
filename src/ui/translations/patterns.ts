@@ -1,6 +1,20 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" Colonnes ignorées : {0}.", " Ignored columns: {0}.", " أعمدة متجاهلة: {0}."],
+  [" · EAN {0}", " · EAN {0}", " · EAN {0}"],
+  [", {0} ligne(s) ignorée(s) :\n{1}", ", {0} line(s) ignored:\n{1}", "، {0} سطر(أسطر) متجاهلة:\n{1}"],
+  ["APPLIQUER ({0})", "APPLY ({0})", "تطبيق ({0})"],
+  ["Champ {0}", "Field {0}", "الحقل {0}"],
+  ["Code Appro+ {0}", "Appro+ code {0}", "رمز Appro+ {0}"],
+  ["EAN {0}", "EAN {0}", "EAN {0}"],
+  ["Elle complète les champs de « {0} » : {1}. ", "It adds to the fields of « {0} »: {1}. ", "تكمّل حقول « {0} »: {1}. "],
+  ["FICHE PRODUIT{0}", "PRODUCT SHEET{0}", "بطاقة المنتج{0}"],
+  ["Fiche de « {0} » enregistrée.", "Sheet of « {0} » saved.", "تم حفظ بطاقة « {0} »."],
+  ["Réf. {0}", "Ref. {0}", "مرجع {0}"],
+  ["ligne {0} : {1}", "line {0}: {1}", "السطر {0}: {1}"],
+  ["{0} nouveau(x) · {1} modifié(s) · {2} inchangé(s) · {3} ignoré(s)", "{0} new · {1} changed · {2} unchanged · {3} ignored", "{0} جديد · {1} معدّل · {2} دون تغيير · {3} متجاهل"],
+  ["{0} produit(s) créé(s), {1} mis à jour, {2} inchangé(s){3}", "{0} product(s) created, {1} updated, {2} unchanged{3}", "أُنشئ {0} منتج(ات)، حُدّث {1}، دون تغيير {2}{3}"],
   ["ACCUEIL DE CE RÔLE{0}", "HOME OF THIS ROLE{0}", "الرئيسية لهذا الدور{0}"],
   ["BARRE DU BAS{0}", "BOTTOM BAR{0}", "الشريط السفلي{0}"],
   [" → En préparation{0}", " → In preparation{0}", " ← قيد التحضير{0}"],
