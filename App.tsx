@@ -549,7 +549,7 @@ function Main({ session }: { session: Session }) {
           reason={account.role !== "customer" ? "Passez dans votre espace Acheteur pour commander." : "Votre espace doit être actif pour commander."}
           onOrdered={() => void loadAccount()} />;
       case "admin":
-        return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
+        return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} initialSection={nav.params?.section} />;
       default:
         return <View style={{ flex: 1 }}>
           {kind === "unlinked" ? <View style={[ui.card, { marginHorizontal: 18, marginTop: 18 }]}>

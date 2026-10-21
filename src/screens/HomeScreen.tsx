@@ -19,6 +19,7 @@ import { useNav } from "../ui/navigation";
 import { colors, ui } from "../ui/theme";
 import { useModules } from "../data/modules";
 import { HomeEditor } from "./HomeEditor";
+import { HomeSearch } from "../ui/HomeSearch";
 import { appLocale } from "../ui/i18n";
 
 // Home: the figures that need attention and the user's shortcuts, both configurable.
@@ -152,7 +153,11 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
       onReset={async () => { await setMyHomeLayout(null); onLayoutChanged(); }}
       onClose={() => setEditing(false)}
     />
-    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
+    {/* Search: any function, setting, order or client, in one place. */}
+    <View style={[ui.pageInner, { paddingHorizontal: 14 }]}>
+      <HomeSearch audience={audience} can={can} isAdmin={isAdmin} moduleOn={moduleOn} />
+    </View>
+    {loading ? <Loading /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}>
       {tiles.length ? <View style={styles.grid}>
         {tiles.map((tile) => {
           const value = valueOf(tile.key);

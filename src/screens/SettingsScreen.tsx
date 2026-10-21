@@ -25,9 +25,11 @@ import type { IconName } from "../ui/navigation";
 type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" } | { kind: "autoDeliver" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
-export function SettingsScreen({ onBack, onRoles }: { onBack: () => void; onRoles?: () => void }) {
+// initialPage: opened straight from the home search (e.g. "company", "modules").
+const directPages = ["home", "numbering", "alerts", "company", "modules", "autoDeliver", "clientOptions"] as const;
+export function SettingsScreen({ onBack, onRoles, initialPage }: { onBack: () => void; onRoles?: () => void; initialPage?: string }) {
   const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
-  const [page, setPage] = useState<Page>({ kind: "menu" });
+  const [page, setPage] = useState<Page>(() => directPages.includes(initialPage as typeof directPages[number]) ? { kind: initialPage as typeof directPages[number] } as Page : { kind: "menu" });
   const [rolePerms, setRolePerms] = useState<Record<string, boolean>>({});
   const [userPerms, setUserPerms] = useState<Record<string, boolean>>({});
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);

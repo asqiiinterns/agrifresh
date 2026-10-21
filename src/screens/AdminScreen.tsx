@@ -24,10 +24,11 @@ type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "l
 const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location", "roles", "invitations"];
 
 // Administration home: each button opens its own page.
-export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean; initialPage?: string } = {}) {
+// initialSection: a page of Paramétrage opened straight (home search); "products" / "pricing" open the catalogue.
+export function AdminScreen({ isAdmin = true, initialPage, initialSection }: { isAdmin?: boolean; initialPage?: string; initialSection?: string } = {}) {
   const [page, setPage] = useState<Page>(pages.includes(initialPage as Page) ? initialPage as Page : "menu");
-  const [productsVisible, setProductsVisible] = useState(false);
-  const [pricingVisible, setPricingVisible] = useState(false);
+  const [productsVisible, setProductsVisible] = useState(initialPage === "products");
+  const [pricingVisible, setPricingVisible] = useState(initialPage === "pricing");
   const can = useCan();
   const pricingOn = useModules()("pricing");
 
@@ -36,7 +37,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
     <ScreenHeader eyebrow="ADMINISTRATION" title="Notifications et e-mails" right={<BackButton onPress={() => setPage("menu")} />} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
   </View>;
-  if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} onRoles={() => setPage("roles")} />;
+  if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} onRoles={() => setPage("roles")} initialPage={initialSection} />;
   if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
   if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
   if (page === "location") return <LocationPage onBack={() => setPage("menu")} isAdmin={isAdmin} />;
