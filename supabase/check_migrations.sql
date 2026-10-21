@@ -35,6 +35,7 @@ from (values
   (28, '20261121_lot5_workflow.sql',             to_regprocedure('public.staff_revert_order(uuid,text)') is not null and to_regprocedure('public.auto_deliver_orders()') is not null
                                                  and coalesce(pg_get_functiondef(to_regprocedure('public.driver_ship_orders(uuid[],uuid)')) like '%planned_vehicle_id%', false)),
   (29, '20261122_cleanup.sql',                   to_regprocedure('public.buyer_returns()') is not null and to_regprocedure('public.buyer_save_recurring(uuid,uuid,jsonb,uuid,int[],int,text,boolean)') is not null),
-  (30, '20261123_location.sql',                  to_regclass('public.location_requests') is not null and to_regprocedure('public.location_request_status(uuid)') is not null)
+  (30, '20261123_location.sql',                  to_regclass('public.location_requests') is not null and to_regprocedure('public.location_request_status(uuid)') is not null),
+  (31, '20261124_rights.sql',                    to_regclass('public.platform_assist') is not null and to_regprocedure('public.rights_catalogue(uuid)') is not null)
 ) as checks(position, migration, installed)
 order by position;
