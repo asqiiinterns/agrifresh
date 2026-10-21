@@ -173,7 +173,7 @@ export function SettingsScreen({ onBack, onRoles, initialPage }: { onBack: () =>
         <ListRow icon="barcode-outline" title="Numérotation des documents" detail="Format et numéro de départ des bons de livraison, factures, avoirs et retours." onPress={() => setPage({ kind: "numbering" })} />
       </ListGroup>
       <ListGroup title="Accueil">
-        <ListRow icon="home-outline" title="Accueil par profil" detail="Chiffres et raccourcis proposés à chaque profil ; chacun peut ensuite personnaliser le sien." onPress={() => setPage({ kind: "home" })} />
+        <ListRow icon="home-outline" title="Accueil par profil" detail="Par profil (ancien réglage). Par rôle de votre équipe : Rôles et accès → un rôle → Accueil de ce rôle et Barre du bas." onPress={() => setPage({ kind: "home" })} />
       </ListGroup>
       </MenuSearch>
     </ScrollView>}

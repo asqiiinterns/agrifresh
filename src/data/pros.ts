@@ -56,6 +56,12 @@ export const fetchProCard = (orgId: string) => call<ProCard>("platform_pro", { p
 export const saveProAsPlatform = (orgId: string | null, input: ProInput) => call<string>("platform_save_pro", { p_org_id: orgId, p_profile: input });
 
 export const fetchRolesMatrix = (orgId?: string | null) => call<RolesMatrix>("org_roles_matrix", { p_org_id: orgId ?? null });
+
+// Home and bottom bar per role (20261201). allowed: the Pro's plan includes « Accueil personnalisable » (or Appro+).
+export type RoleLayout = { role_id: string; home: { tiles: string[]; shortcuts: string[] } | null; menu: { bar: string[] } | null };
+export const fetchRoleLayouts = (orgId?: string | null) => call<{ allowed: boolean; layouts: RoleLayout[] }>("org_role_layouts_list", { p_org_id: orgId ?? null });
+export const setRoleLayout = (roleId: string, home: RoleLayout["home"], menu: RoleLayout["menu"]) =>
+  call<void>("set_org_role_layout", { p_role_id: roleId, p_home: home, p_menu: menu });
 export const setRolePermission = (roleId: string, permission: string, allowed: boolean | null) =>
   call<void>("org_set_role_permission", { p_role_id: roleId, p_permission: permission, p_allowed: allowed });
 export const createRole = (orgId: string | null, name: string, side: "supplier" | "buyer", fromRole: string | null) =>

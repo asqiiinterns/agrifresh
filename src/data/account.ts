@@ -60,6 +60,8 @@ export type Account = {
   role_home_layout?: HomeLayout | null;
   // 20261124: functions not allowed but shown locked; Appro+ assisting a Pro.
   locked_features?: string[];
+  // 20261201: the bottom bar chosen for the person's role (null: the built-in order).
+  menu?: { bar: string[] } | null;
   assisting?: { org_id: string; org_name: string; can_edit: boolean; expires_at: string; reason: string | null } | null;
 };
 

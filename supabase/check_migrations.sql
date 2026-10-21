@@ -42,6 +42,7 @@ from (values
   (34, '20261127_default_vehicle.sql',           to_regprocedure('public.set_default_vehicle(uuid)') is not null),
   (35, '20261128_plan_presets.sql',             to_regprocedure('public.platform_set_org_plan(uuid,text)') is not null),
   (36, '20261129_review.sql',                   to_regprocedure('public.member_is_owner(uuid,uuid)') is not null),
-  (37, '20261130_workflow_steps.sql',           to_regprocedure('public.prep_tick(uuid[],boolean)') is not null)
+  (37, '20261130_workflow_steps.sql',           to_regprocedure('public.prep_tick(uuid[],boolean)') is not null),
+  (38, '20261201_role_layouts.sql',             to_regprocedure('public.set_org_role_layout(uuid,jsonb,jsonb)') is not null)
 ) as checks(position, migration, installed)
 order by position;

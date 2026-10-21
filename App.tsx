@@ -152,7 +152,12 @@ function tabsFor(account: Account, modules: ModuleState = {}, pro: MyPro | null 
 }
 
 // "Compte" closes the bar; the sections that do not fit are listed in Compte → Rubriques.
-function splitBar(tabs: TabDef[]): { bar: TabDef[]; overflow: TabDef[] } {
+// preferred: the bottom bar chosen for the person's role (Rôles et accès); the other entries go into « Plus ».
+function splitBar(tabs: TabDef[], preferred?: string[] | null): { bar: TabDef[]; overflow: TabDef[] } {
+  if (preferred?.length) {
+    const pinned = preferred.map((key) => tabs.find((item) => item.key === key && item.key !== "account")).filter((item): item is TabDef => !!item).slice(0, MAX_BAR - 1);
+    if (pinned.length) return { bar: [...pinned, tabs.find((item) => item.key === "account") ?? TAB.account], overflow: tabs.filter((item) => !pinned.includes(item) && item.key !== "account") };
+  }
   if (tabs.length <= MAX_BAR) return { bar: tabs, overflow: [] };
   const main = tabs.filter((item) => item.key !== "account");
   return { bar: [...main.slice(0, MAX_BAR - 1), TAB.account], overflow: main.slice(MAX_BAR - 1) };
@@ -390,7 +395,7 @@ function Main({ session }: { session: Session }) {
   const { kind, tabs } = account ? tabsFor(account, modules, myPro) : { kind: null, tabs: [] as TabDef[] };
   // Every buyer screen covers all its suppliers (20261122): no "selected supplier" pill any more.
   const supplierPill = false;
-  const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)));
+  const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)), account?.menu?.bar);
   // Commandes / Planning requested by a tile, an alert or a button open the matching sheet of "Production".
   const hub = kind === "team" && tabs.some((item) => item.key === "production");
   // Former "Plus" and client records now live in Compte.

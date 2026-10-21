@@ -1,6 +1,8 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["ACCUEIL DE CE RÔLE{0}", "HOME OF THIS ROLE{0}", "الرئيسية لهذا الدور{0}"],
+  ["BARRE DU BAS{0}", "BOTTOM BAR{0}", "الشريط السفلي{0}"],
   [" → En préparation{0}", " → In preparation{0}", " ← قيد التحضير{0}"],
   ["{0} : marquer la commande « Préparée » quand même ?", "{0}: mark the order « Prepared » anyway?", "{0}: تعليم الطلبية « جاهزة » رغم ذلك؟"],
   ["{0} commande(s) entièrement cochée(s) : marquée(s) « Préparée ».", "{0} order(s) fully ticked: marked « Prepared ».", "{0} طلبية(ات) مُعلَّمة بالكامل: أصبحت « جاهزة »."],

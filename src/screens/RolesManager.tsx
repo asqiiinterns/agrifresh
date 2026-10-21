@@ -13,6 +13,10 @@ import { Button, Chip, CloseButton, EmptyState, Field, ListGroup, Loading, Scree
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { RightsMatrix } from "./RightsMatrix";
+import { HomeEditor } from "./HomeEditor";
+import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
+import { customerMenu, teamMenu } from "../ui/menuCatalog";
+import { fetchRoleLayouts, setRoleLayout, type RoleLayout } from "../data/pros";
 
 // Labels of the rights, as shown in Paramétrage (the key when a right has no label yet).
 const rightLabels: Record<string, string> = Object.fromEntries(featureBlocks.flatMap((block) => block.items.map((item) => [item.key, item.label])));
@@ -29,8 +33,13 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
   const [tab, setTab] = useState<"matrix" | "roles" | "people">("matrix");
   const [creating, setCreating] = useState(false);
   const [seeing, setSeeing] = useState<OrgMember | null>(null);
+  // Home and bottom bar per role (20261201), when the plan includes « Accueil personnalisable ».
+  const [layouts, setLayouts] = useState<{ allowed: boolean; layouts: RoleLayout[] } | null>(null);
+  const [editingHome, setEditingHome] = useState(false);
+  const [editingMenu, setEditingMenu] = useState(false);
 
   async function reload() {
+    void fetchRoleLayouts(orgId).then(setLayouts).catch(() => setLayouts(null));
     try {
       const next = await fetchRolesMatrix(orgId);
       setMatrix(next);
@@ -96,6 +105,10 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
       {role ? <View style={ui.card}>
         <Text style={ui.strong}>{role.name}</Text>
         <Text style={ui.small}>{role.template ? `Suit le modèle « ${role.template} »${Object.keys(role.overrides).length ? ` avec ${Object.keys(role.overrides).length} différence(s)` : ""}.` : "Rôle sur mesure."} {role.granted.length} droit(s).</Text>
+        {layouts?.allowed && matrix.can_edit ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          <Button label={`ACCUEIL DE CE RÔLE${layoutOf(role.id)?.home ? " ✎" : ""}`} variant="secondary" onPress={() => setEditingHome(true)} />
+          <Button label={`BARRE DU BAS${layoutOf(role.id)?.menu ? " ✎" : ""}`} variant="secondary" onPress={() => setEditingMenu(true)} />
+        </View> : null}
         {groups.map(([module, perms]) => <View key={module} style={styles.group}>
           <Text style={styles.groupTitle}>{moduleLabel(module || null)}</Text>
           {perms.map((perm) => {
@@ -145,7 +158,60 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
       setRoleId(id);
     }} />
     <SeeAsModal member={seeing} onClose={() => setSeeing(null)} />
+    {role ? <HomeEditor
+      visible={editingHome}
+      title={`Accueil · ${role.name}`}
+      tiles={homeTiles.filter((tile) => tile.audience === (role.side === "buyer" ? "customer" : "team")).map(({ key, label, icon }) => ({ key, label, icon }))}
+      shortcuts={homeShortcuts.filter((item) => item.audience === (role.side === "buyer" ? "customer" : "team")).map(({ key, label, icon }) => ({ key, label, icon }))}
+      value={layoutOf(role.id)?.home ?? defaultLayout(role.side === "buyer" ? "customer" : "team")}
+      resetLabel="REVENIR À L’ACCUEIL PAR DÉFAUT"
+      onSave={async (home) => { await setRoleLayout(role.id, home, layoutOf(role.id)?.menu ?? null); await reload(); }}
+      onReset={async () => { await setRoleLayout(role.id, null, layoutOf(role.id)?.menu ?? null); await reload(); }}
+      onClose={() => setEditingHome(false)}
+    /> : null}
+    {role ? <MenuModal visible={editingMenu} roleName={role.name} side={role.side} value={layoutOf(role.id)?.menu?.bar ?? []}
+      onSave={async (bar) => { await setRoleLayout(role.id, layoutOf(role.id)?.home ?? null, bar.length ? { bar } : null); await reload(); setEditingMenu(false); }}
+      onClose={() => setEditingMenu(false)} /> : null}
   </View>;
+
+  function layoutOf(id: string) { return layouts?.layouts.find((item) => item.role_id === id) ?? null; }
+}
+
+// The bottom bar of a role: up to five entries, in the order tapped; the rest stays in « Plus ».
+function MenuModal({ visible, roleName, side, value, onSave, onClose }: {
+  visible: boolean; roleName: string; side: "supplier" | "buyer"; value: string[];
+  onSave: (bar: string[]) => Promise<void>; onClose: () => void;
+}) {
+  const [bar, setBar] = useState<string[]>(value);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { if (visible) { setBar(value); setError(""); } }, [visible]);
+  const entries = side === "buyer" ? customerMenu : teamMenu;
+  const toggle = (key: string) => setBar((current) => current.includes(key) ? current.filter((item) => item !== key) : current.length >= 5 ? current : [...current, key]);
+  async function save(next: string[]) {
+    setBusy(true);
+    setError("");
+    try { await onSave(next); } catch (cause) { setError(errorMessage(cause, "La barre n’a pas pu être enregistrée. La migration 20261201 est-elle exécutée ?")); } finally { setBusy(false); }
+  }
+  return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SafeAreaView style={ui.modalSafe}>
+      <ScreenHeader eyebrow="BARRE DU BAS" title={roleName} subtitle="Touchez les entrées dans l’ordre voulu (cinq au plus) ; les autres restent dans « Plus »." right={<CloseButton onPress={onClose} />} />
+      <ScrollView contentContainerStyle={ui.content}>
+        <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          {entries.map((entry) => {
+            const index = bar.indexOf(entry.key);
+            return <Chip key={entry.key} label={index >= 0 ? `${index + 1}. ${entry.label}` : entry.label} selected={index >= 0} onPress={() => toggle(entry.key)} />;
+          })}
+        </View>
+        <Text style={[ui.small, { marginTop: 10 }]}>Une entrée pour laquelle la personne n’a pas le droit n’apparaît pas. Messages et notifications restent en haut de l’écran ; « Plus » est toujours à droite.</Text>
+        {error ? <Text style={[ui.error, { marginTop: 8 }]}>{error}</Text> : null}
+        <View style={[ui.wrapRow, { marginTop: 14 }]}>
+          <Button label="ENREGISTRER" onPress={() => save(bar)} busy={busy} />
+          <Button label="REVENIR À L’ORDRE PAR DÉFAUT" variant="secondary" onPress={() => save([])} disabled={busy} />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  </Modal>;
 }
 
 // A collaborator: an account its owner created (and Appro+ validated), added with a role.
