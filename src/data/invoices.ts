@@ -1,3 +1,4 @@
+import { shared } from "./shared";
 import { supabase } from "../lib/supabase";
 import { company } from "../config/company";
 import { formatClientNumber } from "./account";
@@ -49,7 +50,7 @@ function client() {
   return supabase;
 }
 
-export async function fetchInvoices(): Promise<InvoiceWithOrders[]> {
+async function loadInvoices(): Promise<InvoiceWithOrders[]> {
   const { data, error } = await client()
     .from("client_invoices")
     .select(`${INVOICE_FIELDS}, orders(${ORDER_FIELDS})`)
@@ -96,7 +97,7 @@ export type BillingBoard = {
   due: { client_id: string; business_name: string; frequency: string; every_days: number; month_day: number; next_date: string; orders: number; amount: number }[];
   overdue: { invoice_id: string; invoice_number: string; client_id: string; business_name: string; balance: number; due_date: string; days_late: number; reminder_count: number; last_reminder_at: string | null; reminders: boolean }[];
 };
-export async function fetchBillingBoard(): Promise<BillingBoard> {
+async function loadBillingBoard(): Promise<BillingBoard> {
   const { data, error } = await client().rpc("billing_board");
   if (error) throw error;
   return data as BillingBoard;
@@ -191,3 +192,7 @@ export async function shareInvoice(invoice: InvoiceWithOrders): Promise<void> {
 
   await outputPdf(html, invoice.invoice_number ?? `brouillon-${invoice.id.slice(0, 8)}`, `Facture ${invoiceLabel(invoice)}`);
 }
+
+export const fetchInvoices = () => shared("fetchInvoices", loadInvoices);
+
+export const fetchBillingBoard = () => shared("fetchBillingBoard", loadBillingBoard);

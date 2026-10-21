@@ -9,6 +9,7 @@ import { loadCompanyProfile } from "./src/data/company";
 import { confirmSignOut } from "./src/ui/signOut";
 import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
 import { PermissionsContext } from "./src/data/permissions";
+import { clearShared } from "./src/data/shared";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
@@ -305,12 +306,13 @@ function Main({ session }: { session: Session }) {
   const [choosing, setChoosing] = useState(false);
   const loadAccount = useCallback(async () => {
     setAccountError("");
+    clearShared();
     try {
-      const [next, nextModules, nextPro] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro()]);
+      // All in parallel: each request costs a round trip to the server.
+      const [next, nextModules, nextPro, nextSuppliers, nextSpaces] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro(), fetchMySuppliers(), fetchMySpaces()]);
       setModules(nextModules);
       setMyPro(nextPro);
-      setSuppliers(next.role === "customer" ? await fetchMySuppliers() : []);
-      const nextSpaces = await fetchMySpaces();
+      setSuppliers(next.role === "customer" ? nextSuppliers : []);
       setSpaces(nextSpaces);
       // Several spaces: choose one when signing in (once per session).
       if (nextSpaces.length > 1 && !spaceAsked.current) { spaceAsked.current = true; setSpacePicker(true); }

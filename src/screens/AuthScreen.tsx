@@ -57,7 +57,7 @@ export function AuthScreen() {
   return <KeyboardAvoidingView style={ui.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[ui.content, { paddingTop: 40, maxWidth: 520, width: "100%", alignSelf: "center" }]} keyboardShouldPersistTaps="handled">
       <View style={{ alignItems: "center", marginBottom: 26 }}>
-        <Text style={{ color: colors.primaryDark, fontSize: 34, fontWeight: "800", letterSpacing: -1 }}>agri<Text style={{ color: colors.orange }}>fresh</Text></Text>
+        <Text style={{ color: colors.primaryDark, fontSize: 34, fontWeight: "800", letterSpacing: -1 }}>Appro<Text style={{ color: colors.accent, fontWeight: "900" }}>+</Text></Text>
         <Text style={[ui.eyebrow, { marginTop: 4 }]}>ESPACE COMMANDES PROFESSIONNELLES</Text>
       </View>
 

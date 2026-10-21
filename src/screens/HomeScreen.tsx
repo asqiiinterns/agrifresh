@@ -53,18 +53,15 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     try {
       if (audience === "team") {
         const needsOrders = ["decide", "placedToday", "queue", "prepare", "ready", "shipping", "dueToday"].some(shows);
-        const [orders, claims, accounts] = await Promise.all([
+        const money = ["invoicedMonth", "collectedMonth", "outstanding", "overdue", "toInvoice"].some(shows);
+        const decisions = ["pending", "special", "reschedule", "waitingReply", "toInvoice"].some(shows);
+        // One wave: the decision board shares the orders, claims, returns and accounts requested here.
+        const [orders, claims, accounts, returns, credits, invoices, board] = await Promise.all([
           needsOrders ? fetchAllOrders().catch(() => []) : Promise.resolve([]),
           shows("claims") ? fetchClaims().catch(() => []) : Promise.resolve([]),
           shows("accounts") ? fetchAccounts().catch(() => []) : Promise.resolve([]),
-        ]);
-        const [returns, credits] = await Promise.all([
           shows("returns") ? fetchReturns().catch(() => []) : Promise.resolve([]),
           shows("credits") ? fetchCreditNotes().catch(() => []) : Promise.resolve([]),
-        ]);
-        const money = ["invoicedMonth", "collectedMonth", "outstanding", "overdue", "toInvoice"].some(shows);
-        const decisions = ["pending", "special", "reschedule", "waitingReply", "toInvoice"].some(shows);
-        const [invoices, board] = await Promise.all([
           money ? fetchInvoices().catch(() => []) : Promise.resolve([]),
           decisions ? fetchDecisionBoard(can, isAdmin).catch(() => null) : Promise.resolve(null),
         ]);

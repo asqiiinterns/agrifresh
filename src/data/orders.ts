@@ -1,3 +1,4 @@
+import { shared } from "./shared";
 import { supabase } from "../lib/supabase";
 import { QR, qrSvg } from "../ui/Qr";
 import { company } from "../config/company";
@@ -122,7 +123,7 @@ export async function fetchClientOrders(clientId: string): Promise<Order[]> {
 }
 
 // RLS limits customers to their own orders.
-export async function fetchMyOrders(): Promise<Order[]> {
+async function loadMyOrders(): Promise<Order[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
   const { data, error } = await supabase
     .from("orders")
@@ -200,3 +201,5 @@ export async function shareDeliveryNote(order: Order, options: { showPrices: boo
 
   await outputPdf(html, number, `Bon de livraison ${number}`);
 }
+
+export const fetchMyOrders = () => shared("fetchMyOrders", loadMyOrders);

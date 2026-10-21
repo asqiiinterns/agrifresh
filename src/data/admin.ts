@@ -1,3 +1,4 @@
+import { shared } from "./shared";
 import { createIsolatedClient, supabase } from "../lib/supabase";
 import type { AccountStatus, Role } from "./account";
 
@@ -18,7 +19,7 @@ function client() {
   return supabase;
 }
 
-export async function fetchAccounts(): Promise<AdminAccount[]> {
+async function loadAccounts(): Promise<AdminAccount[]> {
   const { data, error } = await client().rpc("admin_list_accounts");
   if (error) throw error;
   return (data ?? []) as AdminAccount[];
@@ -57,3 +58,5 @@ export async function createAccount(input: { email: string; fullName: string; ro
   await setAccountStatus(data.user.id, "active");
   if (input.role !== "customer") await setAccountRole(email, input.role);
 }
+
+export const fetchAccounts = () => shared("fetchAccounts", loadAccounts);

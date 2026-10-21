@@ -1,3 +1,4 @@
+import { shared } from "./shared";
 import { supabase } from "../lib/supabase";
 
 export type ClaimReason = "missing" | "quantity" | "quality" | "late" | "other";
@@ -43,7 +44,7 @@ function client() {
 }
 
 // RLS: clients get their own claims, staff get all of them.
-export async function fetchClaims(): Promise<Claim[]> {
+async function loadClaims(): Promise<Claim[]> {
   const { data, error } = await client().from("claims").select(FIELDS).order("created_at", { ascending: false }).limit(300);
   if (error) throw error;
   return (data ?? []) as unknown as Claim[];
@@ -58,3 +59,5 @@ export async function updateClaim(claimId: string, status: ClaimStatus, response
   const { error } = await client().rpc("staff_update_claim", { p_claim_id: claimId, p_status: status, p_response: response?.trim() || null });
   if (error) throw error;
 }
+
+export const fetchClaims = () => shared("fetchClaims", loadClaims);

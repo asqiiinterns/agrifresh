@@ -38,16 +38,15 @@ async function fetchWaitingMessages(): Promise<WaitingMessages> {
 
 export async function fetchDecisionBoard(can: (feature: Feature) => boolean, isAdmin: boolean): Promise<DecisionBoard> {
   const ordersAllowed = can("orders.view") || can("orders.decide") || can("orders.plan");
-  const [orders, claims, messages, billing, returns, accounts] = await Promise.all([
+  const today = new Date().toISOString().slice(0, 10);
+  // One wave: every list is requested at the same time.
+  const [orders, claims, messages, billing, returns, accounts, leaves, incidents] = await Promise.all([
     ordersAllowed ? fetchAllOrders().catch(() => [] as StaffOrder[]) : Promise.resolve([] as StaffOrder[]),
     can("claims.manage") ? fetchClaims().catch(() => [] as Claim[]) : Promise.resolve([] as Claim[]),
     can("messages.manage") || can("team.messages") ? fetchWaitingMessages() : Promise.resolve({ clients: [], team: [] }),
     can("invoices.manage") ? fetchBillingBoard().catch(() => ({ due: [], overdue: [] })) : Promise.resolve({ due: [], overdue: [] }),
     can("returns.manage") ? fetchReturns().catch(() => [] as ProductReturn[]) : Promise.resolve([] as ProductReturn[]),
     isAdmin ? fetchAccounts().catch(() => []) : Promise.resolve([]),
-  ]);
-  const today = new Date().toISOString().slice(0, 10);
-  const [leaves, incidents] = await Promise.all([
     can("leave.manage") || isAdmin ? fetchLeaves(today, "2100-01-01").catch(() => [] as Leave[]) : Promise.resolve([] as Leave[]),
     can("incidents.manage") ? fetchIncidents().catch(() => [] as Incident[]) : Promise.resolve([] as Incident[]),
   ]);

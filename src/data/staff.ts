@@ -1,3 +1,4 @@
+import { shared } from "./shared";
 import { supabase } from "../lib/supabase";
 import { ORDER_FIELDS, type Order } from "./orders";
 
@@ -35,7 +36,7 @@ export type StaffOrder = Order & {
   delivered_by_profile: { full_name: string } | null;
 };
 
-export async function fetchAllOrders(): Promise<StaffOrder[]> {
+async function loadAllOrders(): Promise<StaffOrder[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
   const { data, error } = await supabase
     .from("orders")
@@ -108,3 +109,5 @@ export function preparationTotals(orders: StaffOrder[]): PreparationLine[] {
     .map((line) => ({ ...line, clients: line.clients.sort((a, b) => b.quantity - a.quantity) }))
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
+
+export const fetchAllOrders = () => shared("fetchAllOrders", loadAllOrders);

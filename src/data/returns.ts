@@ -1,3 +1,4 @@
+import { shared } from "./shared";
 import { supabase } from "../lib/supabase";
 import { company } from "../config/company";
 import { formatClientNumber } from "./account";
@@ -76,7 +77,7 @@ function client() {
   return supabase;
 }
 
-export async function fetchReturns(): Promise<ProductReturn[]> {
+async function loadReturns(): Promise<ProductReturn[]> {
   const { data, error } = await client()
     .from("returns")
     .select("id, return_number, client_id, order_id, status, reason, description, staff_note, restocked, created_at, received_at, return_items(id, product_id, product_name, unit, quantity, unit_price, vat_rate), clients(business_name), orders(order_number, delivery_note_number), credit_notes(id, credit_number, status)")
@@ -86,7 +87,7 @@ export async function fetchReturns(): Promise<ProductReturn[]> {
   return (data ?? []) as unknown as ProductReturn[];
 }
 
-export async function fetchCreditNotes(): Promise<CreditNote[]> {
+async function loadCreditNotes(): Promise<CreditNote[]> {
   const { data, error } = await client()
     .from("credit_notes")
     .select("id, credit_number, client_id, return_id, invoice_id, status, reason, client_snapshot, total_ht, total_vat, total_ttc, created_at, issued_at, settled_at, credit_note_items(id, label, quantity, unit, unit_price, vat_rate), clients(business_name, client_number), client_invoices(invoice_number)")
@@ -163,3 +164,7 @@ export async function shareCreditNote(credit: CreditNote): Promise<void> {
   </body></html>`;
   await outputPdf(html, credit.credit_number ?? `avoir-brouillon-${credit.id.slice(0, 8)}`, `Avoir ${creditLabel(credit)}`);
 }
+
+export const fetchReturns = () => shared("fetchReturns", loadReturns);
+
+export const fetchCreditNotes = () => shared("fetchCreditNotes", loadCreditNotes);
