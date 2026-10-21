@@ -9,7 +9,8 @@ export type Feature =
   | "messages.manage" | "team.messages" | "claims.manage" | "returns.manage" | "client.returns"
   | "client.recurring" | "location.share" | "location.view" | "leave.request" | "leave.manage" | "calendar.view" | "incidents.report" | "incidents.manage" | "stats.view" | "deliveries" | "fleet.manage" | "audit.view"
   | "client.home" | "client.order" | "client.orders" | "client.alerts"
-  | "client.invoices" | "client.messages" | "client.claims";
+  | "client.invoices" | "client.messages" | "client.claims"
+  | "orders.revert" | "orders.delivery_note";
 
 export type Audience = "team" | "customer";
 export type SettingsBlock = { key: string; title: string; icon: string; audience: Audience; items: { key: Feature; label: string }[] };
@@ -23,7 +24,9 @@ export const featureBlocks: SettingsBlock[] = [
   { key: "orders", title: "Commandes", icon: "receipt-outline", audience: "team", items: [
     { key: "orders.view", label: "Onglet Commandes" },
     { key: "orders.create", label: "Passer une commande pour un client" },
-    { key: "orders.decide", label: "Accepter, décliner, mettre en attente" },
+    { key: "orders.decide", label: "Accepter, décliner, mettre en attente, arrêter une commande" },
+    { key: "orders.revert", label: "Revenir à l’étape précédente d’une commande" },
+    { key: "orders.delivery_note", label: "Imprimer les bons de livraison" },
     { key: "orders.plan", label: "Planifier la file de production (onglet Planning)" },
     { key: "claims.manage", label: "Traiter les réclamations" },
   ] },
@@ -90,7 +93,7 @@ export const configurableRoles: { role: Role; label: string; short: string; audi
 // Client options: one value for all clients, which a client record may override.
 export type ClientOptionKey = "show_prices" | "show_origin" | "show_stock" | "stock_managed" | "invoice_mode" | "reception_qr"
   | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr" | "payment_reminders" | "reminder_opt_out_allowed" | "delivery_signature"
-  | "driver_prices";
+  | "driver_prices" | "auto_accept" | "auto_deliver" | "delivery_note_client";
 export const clientOptionBlocks: { title: string; icon: string; items: { key: ClientOptionKey; label: string; hint: string }[] }[] = [
   { title: "Affichage", icon: "eye-outline", items: [
     { key: "show_prices", label: "Afficher les prix", hint: "Dans l’application et sur les bons de livraison." },
@@ -99,6 +102,7 @@ export const clientOptionBlocks: { title: string; icon: string; items: { key: Cl
   ] },
   { title: "Commandes", icon: "receipt-outline", items: [
     { key: "stock_managed", label: "Commandes limitées au stock", hint: "Sinon : production à la demande, sans limite." },
+    { key: "auto_accept", label: "Commandes acceptées automatiquement", hint: "La commande passe directement en « Acceptée » et entre dans la file de production." },
     { key: "history_enabled", label: "Historique visible par le client", hint: "Commandes livrées ou annulées et suivi détaillé." },
     { key: "reconfirm_declined", label: "Reconfirmation par le client", hint: "Désactivée : une commande rouverte repasse directement en acceptée." },
   ] },
@@ -108,6 +112,8 @@ export const clientOptionBlocks: { title: string; icon: string; items: { key: Cl
     { key: "reception_qr", label: "QR de réception dans l’appli du client", hint: "Remplace le QR collé au point de livraison." },
     { key: "delivery_signature", label: "Signature du client à la livraison", hint: "Le client signe sur l’écran du livreur ; la signature figure sur le bon de livraison." },
     { key: "driver_prices", label: "Montants visibles par le livreur", hint: "Le livreur voit le montant TTC de chaque bon, pour encaisser un paiement à la livraison." },
+    { key: "auto_deliver", label: "Livrée automatiquement après l’expédition", hint: "Sans confirmation du livreur, la commande passe en « Livrée » après le délai fixé dans Paramétrage → Clôture automatique." },
+    { key: "delivery_note_client", label: "Bon de livraison visible par le client", hint: "Le client peut ouvrir et imprimer ses bons de livraison." },
   ] },
   { title: "Facturation et relances", icon: "document-text-outline", items: [
     { key: "invoice_mode", label: "Facture automatique à l’acceptation", hint: "Sinon : factures regroupées par l’équipe (fréquence réglée sur la fiche)." },

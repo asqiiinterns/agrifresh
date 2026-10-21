@@ -1,6 +1,8 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" (motif : {0})", " (reason: {0})", " (السبب: {0})"],
+  ["Commande #{0} de {1} : « {2} » sera annulée{3}.", "Order #{0} of {1}: “{2}” will be undone{3}.", "الطلبية رقم {0} لـ {1}: سيُلغى «{2}»{3}."],
   ["\n\nEnsuite, remise détaillée pour : {0}.", "\n\nThen, detailed hand-over for: {0}.", "\n\nبعد ذلك، تسليم مفصّل لـ: {0}."],
   [" · {0} TTC", " · {0} incl. VAT", " · {0} مع الأداءات"],
   ["Ajouter {0}", "Add {0}", "إضافة {0}"],

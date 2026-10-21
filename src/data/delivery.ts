@@ -76,6 +76,8 @@ export type Pickup = {
   city: string;
   phone: string;
   items: { name: string; quantity: number | string; unit: string }[];
+  // 20261121: the vehicle planned when the order was accepted.
+  planned_vehicle_id?: string | null;
 };
 
 // Orders prepared and waiting for the driver.

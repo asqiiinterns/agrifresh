@@ -31,6 +31,8 @@ from (values
                                                  and coalesce(pg_get_functiondef(to_regprocedure('public.org_write_guard()')) like '%pas actif%', false)
                                                  and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'products' and column_name = 'org_id' and column_default like '%acting_or_legacy_org_id%')),
   (27, '20261120_lot4.sql',                      to_regprocedure('public.order_from_public(uuid,jsonb,date,text)') is not null and to_regprocedure('public.accept_invitation(text)') is not null
-                                                 and to_regprocedure('public.driver_deliver_v3(uuid[],uuid[],text,uuid,jsonb,text,numeric,text)') is not null and to_regclass('public.org_messages') is not null)
+                                                 and to_regprocedure('public.driver_deliver_v3(uuid[],uuid[],text,uuid,jsonb,text,numeric,text)') is not null and to_regclass('public.org_messages') is not null),
+  (28, '20261121_lot5_workflow.sql',             to_regprocedure('public.staff_revert_order(uuid,text)') is not null and to_regprocedure('public.auto_deliver_orders()') is not null
+                                                 and coalesce(pg_get_functiondef(to_regprocedure('public.driver_ship_orders(uuid[],uuid)')) like '%planned_vehicle_id%', false))
 ) as checks(position, migration, installed)
 order by position;

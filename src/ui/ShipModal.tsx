@@ -10,10 +10,12 @@ import { colors, ui } from "./theme";
 
 // Ships the selected prepared orders together, in the vehicle chosen from the fleet.
 export function ShipModal({ orders, onClose, onShipped }: {
-  orders: { id: string; order_number: number; business_name: string }[] | null;
+  orders: { id: string; order_number: number; business_name: string; planned_vehicle_id?: string | null }[] | null;
   onClose: () => void;
   onShipped: () => void;
 }) {
+  // Vehicles planned when the orders were accepted: preselected; another choice is traced ("condition forcée").
+  const planned = [...new Set((orders ?? []).map((order) => order.planned_vehicle_id).filter((id): id is string => !!id))];
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ export function ShipModal({ orders, onClose, onShipped }: {
     void fetchVehicles()
       .then((list) => {
         setVehicles(list);
-        setVehicleId(list.length === 1 ? list[0].id : null);
+        setVehicleId(planned.length === 1 && list.some((item) => item.id === planned[0]) ? planned[0] : list.length === 1 ? list[0].id : null);
       })
       .catch((cause: unknown) => setError(errorMessage(cause, "Impossible de charger la flotte.")))
       .finally(() => setLoading(false));
@@ -70,12 +72,15 @@ export function ShipModal({ orders, onClose, onShipped }: {
               <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.primary : colors.muted} />
               <Ionicons name="car-outline" size={18} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={ui.strong}>{vehicle.label}</Text>
+                <Text style={ui.strong}>{vehicle.label}{planned.includes(vehicle.id) ? " · prévu" : ""}</Text>
                 {vehicle.plate || vehicle.notes ? <Text style={ui.small}>{[vehicle.plate, vehicle.notes].filter(Boolean).join(" · ")}</Text> : null}
               </View>
             </Pressable>;
           })}
         </View> : <Text style={[ui.small, { marginTop: 6 }]}>Aucun véhicule dans la flotte : l’expédition est enregistrée sans véhicule. L’administrateur peut ajouter la flotte dans Admin → Flotte.</Text>}
+        {planned.length && vehicleId && planned.some((id) => id !== vehicleId) ? <Text style={[ui.small, { marginTop: 8, color: colors.amber, fontWeight: "700" }]}>
+          Ce n’est pas le véhicule prévu{planned.length > 1 ? " pour toutes ces commandes" : ""} : le changement sera noté dans l’historique et signalé à l’équipe.
+        </Text> : null}
         <Text style={[ui.fieldLabel, { marginTop: 14 }]}>Commandes</Text>
         <Text style={ui.body}>{(orders ?? []).map((order) => `#${order.order_number} ${order.business_name}`).join("\n")}</Text>
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}

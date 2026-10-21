@@ -78,7 +78,7 @@ export const featureModule: Partial<Record<Feature, ModuleKey>> = {
   "location.share": "location", "location.view": "location", "stats.view": "stats", "audit.view": "audit",
 };
 export const optionModule: Partial<Record<ClientOptionKey, ModuleKey>> = {
-  delivery_signature: "signature", driver_prices: "delivery", payment_reminders: "reminders", reminder_opt_out_allowed: "reminders",
+  delivery_signature: "signature", driver_prices: "delivery", auto_deliver: "delivery", payment_reminders: "reminders", reminder_opt_out_allowed: "reminders",
   scan_delivery_note: "delivery_qr", scan_client_qr: "delivery_qr", reception_qr: "delivery_qr",
   show_origin: "origin", show_stock: "stock", stock_managed: "stock", reconfirm_declined: "reconfirm", invoice_mode: "invoicing",
 };

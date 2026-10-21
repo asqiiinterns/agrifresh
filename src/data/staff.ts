@@ -19,10 +19,32 @@ export const staffActions: Partial<Record<OrderStatus, StaffAction[]>> = {
   ],
   declined: [{ status: "awaiting_client", label: "PROPOSER À RECONFIRMER", variant: "secondary", askReason: true }],
   awaiting_client: [{ status: "cancelled", label: "ANNULER", variant: "danger", askReason: true }],
-  confirmed: [{ status: "preparing", label: "COMMENCER LA PRÉPARATION", variant: "primary" }],
-  preparing: [{ status: "ready", label: "MARQUER PRÉPARÉE", variant: "primary" }],
-  ready: [{ status: "out_for_delivery", label: "EXPÉDIER", variant: "primary" }],
+  // Stopping an accepted order (not shipped yet): cancelled, with a reason the client sees.
+  confirmed: [{ status: "preparing", label: "COMMENCER LA PRÉPARATION", variant: "primary" }, { status: "cancelled", label: "ARRÊTER ET ANNULER", variant: "danger", askReason: true }],
+  preparing: [{ status: "ready", label: "MARQUER PRÉPARÉE", variant: "primary" }, { status: "cancelled", label: "ARRÊTER ET ANNULER", variant: "danger", askReason: true }],
+  ready: [{ status: "out_for_delivery", label: "EXPÉDIER", variant: "primary" }, { status: "cancelled", label: "ARRÊTER ET ANNULER", variant: "danger", askReason: true }],
 };
+
+// One step back (20261121): préparée → en préparation → acceptée → à décider; expédiée → préparée.
+export const revertableStatuses = ["confirmed", "preparing", "ready", "out_for_delivery"];
+export async function revertOrder(orderId: string, note?: string): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("staff_revert_order", { p_order_id: orderId, p_note: note?.trim() || null });
+  if (error) throw error;
+}
+
+// The vehicle planned when deciding (the driver may take another one: it is traced).
+export async function planVehicle(orderId: string, vehicleId: string | null): Promise<void> {
+  if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const { error } = await supabase.rpc("staff_plan_vehicle", { p_order_id: orderId, p_vehicle_id: vehicleId });
+  if (error) throw error;
+}
+
+// Orders shipped long enough ago are marked delivered for the clients with that option.
+export async function autoDeliverOrders(): Promise<void> {
+  if (!supabase) return;
+  await supabase.rpc("auto_deliver_orders");
+}
 
 export const statusGroups = {
   decide: ["pending", "on_hold", "awaiting_client"],
@@ -45,19 +67,24 @@ export type StaffOrder = Order & {
   clients: { business_name: string; client_number: number; show_prices: boolean; show_origin: boolean; reconfirm_declined?: boolean } | null;
   client_invoices: { invoice_number: string | null; status: string } | null;
   delivered_by_profile: { full_name: string } | null;
+  planned_vehicle_id?: string | null;
 };
 
 // Every order still open (whatever its age), and the orders closed or changed in the last two months.
 // (The 300 latest orders used before could leave out an old open order, or one delivered today but placed long ago.)
 async function loadAllOrders(): Promise<StaffOrder[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const client = supabase;
   const since = new Date(Date.now() - 62 * 86400000).toISOString();
-  const { data, error } = await supabase
+  // The planned vehicle exists once 20261121 is installed; before, the list loads without it.
+  const query = (extra: string) => client
     .from("orders")
-    .select(`${ORDER_FIELDS}, clients(business_name, client_number, show_prices, show_origin, reconfirm_declined), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
+    .select(`${ORDER_FIELDS}${extra}, clients(business_name, client_number, show_prices, show_origin, reconfirm_declined), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
     .or(`status.not.in.(${statusGroups.done.join(",")}),updated_at.gte.${since},created_at.gte.${since}`)
     .order("created_at", { ascending: false })
     .limit(1500);
+  let { data, error } = await query(", planned_vehicle_id");
+  if (error?.code === "42703") ({ data, error } = await query(""));
   if (error) throw error;
   return (data ?? []) as unknown as StaffOrder[];
 }

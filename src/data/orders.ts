@@ -135,7 +135,9 @@ async function loadMyOrders(): Promise<Order[]> {
 }
 
 // A buyer's orders with all its suppliers (20261115): each order carries its supplier's display rules.
-export type BuyerOrder = Order & { supplier_name: string; show_prices: boolean; show_origin: boolean; history_enabled: boolean };
+export type BuyerOrder = Order & { supplier_name: string; show_prices: boolean; show_origin: boolean; history_enabled: boolean;
+  // 20261121: the supplier lets this client print its delivery notes.
+  delivery_note?: boolean };
 // Null before 20261115: the screen keeps the current supplier's orders.
 export async function fetchBuyerOrders(): Promise<BuyerOrder[] | null> {
   if (!supabase) return null;

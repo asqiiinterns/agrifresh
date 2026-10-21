@@ -44,6 +44,10 @@ export type ClientRecord = {
   delivery_signature: boolean;
   // The driver sees the amount of each delivery note (20261120).
   driver_prices: boolean;
+  // 20261121: accepted automatically, delivered automatically after shipping, delivery note visible to the client.
+  auto_accept: boolean;
+  auto_deliver: boolean;
+  delivery_note_client: boolean;
   reminder_opt_out_allowed: boolean;
   reminder_opt_out: boolean;
   // Billing frequency and payment terms (20261031_billing_decisions.sql).
@@ -72,7 +76,7 @@ function client() {
 export async function fetchClients(): Promise<ClientRecord[]> {
   const { data, error } = await client()
     .from("clients")
-    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, history_enabled, reconfirm_declined, scan_delivery_note, scan_client_qr, payment_reminders, delivery_signature, driver_prices, reminder_opt_out_allowed, reminder_opt_out, payment_terms_days, reminder_interval_days, billing_frequency, billing_every_days, billing_start, billing_month_day, custom_settings, feature_overrides, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
+    .select("id, client_number, business_name, contact_name, email, phone, notes, tax_id, active, show_prices, show_origin, show_stock, stock_managed, invoice_mode, reception_qr, history_enabled, reconfirm_declined, scan_delivery_note, scan_client_qr, payment_reminders, delivery_signature, driver_prices, auto_accept, auto_deliver, delivery_note_client, reminder_opt_out_allowed, reminder_opt_out, payment_terms_days, reminder_interval_days, billing_frequency, billing_every_days, billing_start, billing_month_day, custom_settings, feature_overrides, client_delivery_points(id, client_id, label, address_line, city, phone, instructions, qr_token, active, created_at), profiles(id)")
     .order("business_name");
   if (error) throw error;
   type Row = Omit<ClientRecord, "has_account"> & {

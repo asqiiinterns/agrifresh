@@ -35,6 +35,8 @@ export type ClientSummary = {
   reception_token: string | null;
   // Off: finished orders and order timelines are hidden from the client.
   history_enabled?: boolean;
+  // 20261121: false when the supplier keeps its delivery notes for itself.
+  delivery_note?: boolean;
   delivery_points: DeliveryPointSummary[];
 };
 

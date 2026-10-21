@@ -32,7 +32,7 @@ const filters = [
   { key: "refused", label: "Déclinées / annulées", statuses: ["declined", "cancelled"] },
 ] as const;
 
-type ListedOrder = Order & Partial<Pick<BuyerOrder, "supplier_name" | "show_prices" | "show_origin" | "history_enabled">>;
+type ListedOrder = Order & Partial<Pick<BuyerOrder, "supplier_name" | "show_prices" | "show_origin" | "history_enabled" | "delivery_note">>;
 
 // Orders of all the buyer's suppliers in one list; acting on another supplier's order switches to it first (onOpenSupplier).
 export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupplier }: { session: Session; client: ClientSummary; initialOrderId?: string; onOpenSupplier?: (clientId: string, orderId: string) => void }) {
@@ -260,7 +260,8 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
           <Button label={`OUVRIR CHEZ ${(item.supplier_name ?? "CE FOURNISSEUR").toLocaleUpperCase("fr")}`} variant="secondary" onPress={() => onOpenSupplier?.(item.client_id as string, item.id)} disabled={!onOpenSupplier} />
           <Text style={[ui.small, { flexBasis: "100%" }]}>{item.status === "awaiting_client" ? "Pour reconfirmer ou refuser, passez sur ce fournisseur." : "Bon de livraison, réclamation, retour : passez sur ce fournisseur."}</Text>
         </View> : item.status !== "declined" && item.status !== "cancelled" && item.status !== "awaiting_client" ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
-          <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => share(item)} busy={sharingId === item.id} />
+          {/* The supplier may keep its delivery notes for itself (option « Bon de livraison visible par le client »). */}
+          {(item.delivery_note ?? client.delivery_note) !== false ? <Button label={sharingId === item.id ? "Préparation…" : "BON DE LIVRAISON"} variant="secondary" onPress={() => share(item)} busy={sharingId === item.id} /> : null}
           {canClaim ? <Button label="SIGNALER UN PROBLÈME" variant="secondary" onPress={() => setClaimOrder(item)} /> : null}
           {canReturn && item.status === "delivered" ? <Button label="DEMANDER UN RETOUR" variant="secondary" onPress={() => setReturnOrder(item)} /> : null}
           {canRecurring ? <Button label="RÉPÉTER AUTOMATIQUEMENT" variant="secondary" onPress={() => setRecurringOrder(item)} /> : null}

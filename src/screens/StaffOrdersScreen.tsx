@@ -5,7 +5,8 @@ import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { claimReasonLabel, claimStatusStyle, fetchClaims, updateClaim, type Claim, type ClaimStatus } from "../data/claims";
 import { deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/orders";
-import { closedAt, executionQueue, fetchAllOrders, groupOf, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
+import { fetchVehicles, vehicleName, type Vehicle } from "../data/fleet";
+import { closedAt, executionQueue, fetchAllOrders, groupOf, planVehicle, revertOrder, revertableStatuses, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { PlanningScreen } from "./PlanningScreen";
@@ -62,6 +63,10 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
       setRefreshing(false);
     }
   }
+
+  // The fleet, to plan the vehicle of an order when deciding.
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  useEffect(() => { void fetchVehicles().then(setVehicles).catch(() => undefined); }, []);
 
   useEffect(() => {
     const realtime = supabase;
@@ -194,11 +199,12 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
           defaultExpanded={item.id === focusId}
           onChanged={() => void reload("silent")}
           onLocalUpdate={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))}
+          vehicles={vehicles}
         />}
       />}
 
     <ShipModal
-      orders={shipping ? shipping.map((order) => ({ id: order.id, order_number: order.order_number, business_name: order.clients?.business_name ?? order.address_snapshot?.business_name ?? "Client" })) : null}
+      orders={shipping ? shipping.map((order) => ({ id: order.id, order_number: order.order_number, business_name: order.clients?.business_name ?? order.address_snapshot?.business_name ?? "Client", planned_vehicle_id: order.planned_vehicle_id ?? null })) : null}
       onClose={() => setShipping(null)}
       onShipped={() => void reload("silent")}
     />
@@ -212,8 +218,9 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
   </View>;
 }
 
-function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocalUpdate, defaultExpanded }: {
+function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocalUpdate, defaultExpanded, vehicles }: {
   defaultExpanded?: boolean;
+  vehicles: Vehicle[];
   order: StaffOrder;
   position: number | undefined;
   claims: Claim[];
@@ -235,6 +242,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
       ? { ...action, label: "ROUVRIR ET ACCEPTER", askReason: true }
       : action);
   const needsReason = actions.some((action) => action.askReason);
+  const canRevert = can("orders.revert") && revertableStatuses.includes(order.status);
   const address = order.address_snapshot ?? {};
   const clientName = order.clients?.business_name ?? address.business_name ?? address.recipient_name ?? "Client";
   const openClaims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress").length;
@@ -291,6 +299,37 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     ]);
   }
 
+  // One step back, for the roles allowed to (the reason typed above goes into the history).
+  function revert() {
+    notify("Revenir à l’étape précédente", `Commande #${order.order_number} de ${clientName} : « ${statusLabel(order.status)} » sera annulée${reason.trim() ? ` (motif : ${reason.trim()})` : ""}.`, [
+      { text: "Retour", style: "cancel" },
+      { text: "Revenir en arrière", style: "destructive", onPress: () => void (async () => {
+        setBusy(true);
+        try {
+          await revertOrder(order.id, reason);
+          setReason("");
+          onChanged();
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (cause) {
+          notify("Retour en arrière impossible", errorMessage(cause, "L’étape n’a pas pu être annulée. La migration 20261121 est-elle exécutée ?"));
+        } finally {
+          setBusy(false);
+        }
+      })() },
+    ]);
+  }
+
+  async function chooseVehicle(vehicleId: string | null) {
+    const previous = order.planned_vehicle_id ?? null;
+    onLocalUpdate({ ...order, planned_vehicle_id: vehicleId });
+    try {
+      await planVehicle(order.id, vehicleId);
+    } catch (cause) {
+      onLocalUpdate({ ...order, planned_vehicle_id: previous });
+      notify("Véhicule", errorMessage(cause, "Le véhicule n’a pas pu être enregistré. La migration 20261121 est-elle exécutée ?"));
+    }
+  }
+
   async function printDeliveryNote() {
     setPrinting(true);
     try {
@@ -345,7 +384,15 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
         {mod("recurring") && can("orders.create") ? <Chip label="⟳ Répéter automatiquement" selected={false} onPress={() => setRepeating(true)} /> : null}
       </View>
 
-      {needsReason ? <TextInput
+      {vehicles.length && (can("orders.decide") || can("orders.plan")) && ["pending", "on_hold", "confirmed", "preparing", "ready"].includes(order.status) ? <View style={{ marginTop: 8 }}>
+        <Text style={ui.small}>Véhicule prévu (le livreur peut en changer : ce sera signalé)</Text>
+        <View style={[ui.wrapRow, { marginTop: 4 }]}>
+          <Chip label="Aucun" selected={!order.planned_vehicle_id} onPress={() => void chooseVehicle(null)} />
+          {vehicles.map((vehicle) => <Chip key={vehicle.id} label={vehicleName(vehicle)} selected={order.planned_vehicle_id === vehicle.id} onPress={() => void chooseVehicle(vehicle.id)} />)}
+        </View>
+      </View> : null}
+
+      {needsReason || canRevert ? <TextInput
         value={reason}
         onChangeText={setReason}
         placeholder={order.status === "declined" ? "Message au client (visible) : pourquoi reconfirmer ?" : "Motif (facultatif, visible par le client)"}
@@ -357,7 +404,8 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     <View style={styles.actions}>
       {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} color={statusStyles[action.status]?.color} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
       {position && can("orders.plan") ? <Button label="PLANIFIER" variant="secondary" onPress={() => onPlan("move")} /> : null}
-      {expanded && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => printDeliveryNote()} /> : null}
+      {expanded && canRevert ? <Button label="↩ ÉTAPE PRÉCÉDENTE" variant="secondary" disabled={busy} onPress={revert} /> : null}
+      {expanded && can("orders.delivery_note") && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => printDeliveryNote()} /> : null}
     </View>
     {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En route : en attente de la remise au client par le livreur.</Text> : null}
     {order.status === "awaiting_client" ? <Text style={[ui.small, { marginTop: 6, color: "#9a4f0f" }]}>En attente de la reconfirmation du client.</Text> : null}

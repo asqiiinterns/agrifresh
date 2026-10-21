@@ -10,6 +10,7 @@ import { confirmSignOut } from "./src/ui/signOut";
 import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
 import { PermissionsContext } from "./src/data/permissions";
 import { clearShared } from "./src/data/shared";
+import { autoDeliverOrders } from "./src/data/staff";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
@@ -317,7 +318,7 @@ function Main({ session }: { session: Session }) {
     clearShared();
     try {
       // All in parallel: each request costs a round trip to the server. Trials over are closed in the same wave.
-      const [next, nextModules, nextPro, nextSuppliers, nextSpaces] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro(), fetchMySuppliers(), fetchMySpaces(), expireTrials().catch(() => undefined)]);
+      const [next, nextModules, nextPro, nextSuppliers, nextSpaces] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro(), fetchMySuppliers(), fetchMySpaces(), expireTrials().catch(() => undefined), autoDeliverOrders().catch(() => undefined)]);
       setModules(nextModules);
       setMyPro(nextPro);
       setSuppliers(next.role === "customer" ? nextSuppliers : []);

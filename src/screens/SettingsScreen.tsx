@@ -9,7 +9,8 @@ import {
   optionToBool, setClientDefault, setRolePermission, setUserPermission,
   type ClientOptionKey, type Feature, type SettingsBlock,
 } from "../data/permissions";
-import { BackButton, Button, Field, ListGroup, ListRow, Loading, ScreenHeader, Sheets, TriState } from "../ui/components";
+import { BackButton, Button, Chip, Field, ListGroup, ListRow, Loading, ScreenHeader, Sheets, TriState } from "../ui/components";
+import { supabase } from "../lib/supabase";
 import { docTypeLabels, fetchNumbering, previewNumber, saveNumbering, type Numbering } from "../data/numbering";
 import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { errorMessage, notify } from "../ui/notify";
@@ -21,7 +22,7 @@ import { useVisibleSettings } from "../data/modules";
 import { AlertSettingsPanel } from "./NotificationSettings";
 import type { IconName } from "../ui/navigation";
 
-type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" };
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" } | { kind: "autoDeliver" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
@@ -123,6 +124,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   if (page.kind === "numbering") return <NumberingPage header={back} />;
   if (page.kind === "company") return <CompanyPage header={back} />;
   if (page.kind === "modules") return <ModulesPage header={back} />;
+  if (page.kind === "autoDeliver") return <AutoDeliverPage header={back} />;
   if (page.kind === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="PARAMÉTRAGE" title="Alertes et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
@@ -156,6 +158,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           return <ListRow key={block.title} icon={block.icon as IconName} title={block.title} detail={`${block.items.map((item) => item.label.toLocaleLowerCase("fr")).join(", ")}${custom ? ` · ${custom} fiche(s) adaptée(s)` : ""}`} onPress={() => setPage({ kind: "clientOptions", theme: block.title })} />;
         })}
       </ListGroup>
+      <ListGroup title="Commandes">
+        <ListRow icon="checkmark-done-outline" title="Clôture automatique des livraisons" detail="Délai après lequel une commande expédiée passe en « Livrée » pour les clients qui ont l’option (Livraison et remise)." onPress={() => setPage({ kind: "autoDeliver" })} />
+      </ListGroup>
       <ListGroup title="Communication">
         <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi." onPress={() => setPage({ kind: "alerts" })} />
       </ListGroup>
@@ -167,6 +172,44 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <ListRow icon="home-outline" title="Accueil par profil" detail="Chiffres et raccourcis proposés à chaque profil ; chacun peut ensuite personnaliser le sien." onPress={() => setPage({ kind: "home" })} />
       </ListGroup>
     </ScrollView>}
+  </View>;
+}
+
+// Orders shipped and not confirmed by the driver: marked delivered after this delay (clients with the option).
+function AutoDeliverPage({ header }: { header: React.ReactNode }) {
+  const [hours, setHours] = useState<string>("");
+  const [saved, setSaved] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    void supabase?.rpc("my_workflow_settings").then(({ data, error: rpcError }) => {
+      if (rpcError) { setError(errorMessage(rpcError, "Réglage indisponible. La migration 20261121 est-elle exécutée ?")); return; }
+      const value = Number((data as { auto_deliver_hours?: number } | null)?.auto_deliver_hours ?? 24);
+      setSaved(value); setHours(String(value));
+    });
+  }, []);
+  async function save() {
+    if (!supabase) return;
+    setBusy(true); setError("");
+    const value = Math.round(Number(hours));
+    const { error: rpcError } = await supabase.rpc("set_auto_deliver_hours", { p_hours: value });
+    if (rpcError) setError(errorMessage(rpcError, "Le délai n’a pas pu être enregistré."));
+    else { setSaved(value); notify("Paramétrage", "Délai enregistré."); }
+    setBusy(false);
+  }
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Clôture automatique" right={header} />
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      <View style={ui.card}>
+        <Text style={ui.small}>Pour les clients dont l’option « Livrée automatiquement après l’expédition » est activée (Paramétrage → Livraison et remise, ou leur fiche), une commande expédiée passe en « Livrée » après ce délai, même si le livreur ne l’a pas signalée. L’historique le précise.</Text>
+        <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          {[2, 6, 12, 24, 48].map((value) => <Chip key={value} label={`${value} h`} selected={Number(hours) === value} onPress={() => setHours(String(value))} />)}
+        </View>
+        <Field label="Délai (heures, 1 à 720)" value={hours} onChangeText={setHours} keyboardType="number-pad" />
+        {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
+        <Button label="ENREGISTRER LE DÉLAI" onPress={save} busy={busy} disabled={!hours || Number(hours) === saved} style={{ marginTop: 8 }} />
+      </View>
+    </ScrollView>
   </View>;
 }
 
