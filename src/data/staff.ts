@@ -121,7 +121,8 @@ export const executionQueue = <T extends Order>(orders: T[]) => orders
   .filter((order) => (queueStatuses as readonly string[]).includes(order.status))
   .sort((a, b) => Number(a.production_rank ?? Number.MAX_SAFE_INTEGER) - Number(b.production_rank ?? Number.MAX_SAFE_INTEGER) || a.order_number - b.order_number);
 
-export type PreparationClient = { key: string; name: string; quantity: number; orders: number[]; day: string | null };
+// items: the order lines behind this quantity (their ticks are shared by the team, 20261130).
+export type PreparationClient = { key: string; name: string; quantity: number; orders: number[]; day: string | null; items: string[] };
 export type PreparationLine = { key: string; name: string; unit: string; quantity: number; orders: number; clients: PreparationClient[] };
 
 // Totals per product across accepted orders for the production team, with the
@@ -139,11 +140,12 @@ export function preparationTotals(orders: StaffOrder[]): PreparationLine[] {
       product.orders += 1;
       let entry = product.clients.find((item) => item.key === clientKey);
       if (!entry) {
-        entry = { key: clientKey, name: point ? `${clientName} · ${point}` : clientName, quantity: 0, orders: [], day: order.requested_delivery_date };
+        entry = { key: clientKey, name: point ? `${clientName} · ${point}` : clientName, quantity: 0, orders: [], day: order.requested_delivery_date, items: [] };
         product.clients.push(entry);
       }
       entry.quantity += Number(line.quantity);
       entry.orders.push(order.order_number);
+      if (line.id) entry.items.push(line.id);
       if (order.requested_delivery_date && (!entry.day || order.requested_delivery_date < entry.day)) entry.day = order.requested_delivery_date;
       totals.set(key, product);
     }

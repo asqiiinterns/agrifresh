@@ -10,6 +10,7 @@ import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { useCan } from "../data/permissions";
+import { fetchPrepTicks, prepStep, prepTick, useWorkflow } from "../data/workflow";
 
 type Tab = "totals" | "queue" | "history";
 
@@ -90,7 +91,7 @@ export function ProductionScreen() {
     <FilterBar search={search} onSearch={setSearch} placeholder="Produit, client ou n° de commande" filters={filters} />
     {error ? <Text style={[ui.error, { paddingHorizontal: 18, marginTop: 8 }]}>{error}</Text> : null}
 
-    {loading ? <Loading /> : tab === "totals" ? <TotalsView orders={toPrepare} refreshControl={refresh} />
+    {loading ? <Loading /> : tab === "totals" ? <TotalsView orders={toPrepare} refreshControl={refresh} onChanged={() => void reload("silent")} />
       : tab === "queue" ? <QueueView queue={queue} refreshControl={refresh} onChanged={() => void reload("silent")} />
       : <FlatList
         data={history}
@@ -115,37 +116,59 @@ export function ProductionScreen() {
 }
 
 // Ticking a product ticks every client; unticking one client recalculates what is done.
-function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshControl: ReactElement<ComponentProps<typeof RefreshControl>> }) {
+// Ticks are shared by the whole team (on the server, one per order line); before 20261130, kept on this phone.
+function TotalsView({ orders, refreshControl, onChanged }: { orders: StaffOrder[]; refreshControl: ReactElement<ComponentProps<typeof RefreshControl>>; onChanged: () => void }) {
   const totals = useMemo(() => preparationTotals(orders), [orders]);
+  const workflow = useWorkflow();
+  const canTick = useCan()("production.update");
   const [open, setOpen] = useState<string[]>([]);
   const [checked, setChecked] = useState<string[]>([]);
+  const [shared, setShared] = useState<boolean | null>(null);
   const storageKey = `agrifresh-prep-client-checks-${toDayKey(new Date())}`;
 
-  // Ticks are a picking aid for the day, kept on this device only.
   useEffect(() => {
-    void AsyncStorage.getItem(storageKey).then((stored) => { if (stored) setChecked(JSON.parse(stored) as string[]); }).catch(() => {});
-  }, [storageKey]);
+    let active = true;
+    void fetchPrepTicks().then((ticks) => {
+      if (!active) return;
+      if (ticks) { setShared(true); setChecked(ticks); return; }
+      setShared(false);
+      void AsyncStorage.getItem(storageKey).then((stored) => { if (stored && active) setChecked(JSON.parse(stored) as string[]); }).catch(() => {});
+    });
+    // Colleagues' ticks show up within 20 s.
+    const timer = setInterval(() => { void fetchPrepTicks().then((ticks) => { if (ticks && active) setChecked(ticks); }); }, 20000);
+    return () => { active = false; clearInterval(timer); };
+  }, [storageKey, orders]);
 
-  const keyOf = (product: string, client: string) => `${product}§${client}`;
-  function save(next: string[]) {
-    void AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
-    return next;
+  // Shared: keys are order lines. On this phone only (before the migration): product § client.
+  const keysOf = (line: (typeof totals)[number], entry: (typeof totals)[number]["clients"][number]) => shared ? entry.items : [`${line.key}§${entry.key}`];
+  const isOn = (line: (typeof totals)[number], entry: (typeof totals)[number]["clients"][number]) => { const keys = keysOf(line, entry); return keys.length > 0 && keys.every((key) => checked.includes(key)); };
+
+  function apply(keys: string[], done: boolean) {
+    if (!canTick) { notify("Production", "Votre profil ne permet pas de cocher la préparation."); return; }
+    const previous = checked;
+    const next = done ? [...new Set([...checked, ...keys])] : checked.filter((key) => !keys.includes(key));
+    setChecked(next);
+    if (!shared) { void AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {}); return; }
+    void prepTick(keys, done).then((result) => {
+      if (result.started.length || result.ready.length) onChanged();
+      if (result.ready.length) notify("Production", `${result.ready.length} commande(s) entièrement cochée(s) : marquée(s) « Préparée ».`);
+    }).catch((cause: unknown) => { setChecked(previous); notify("Production", errorMessage(cause, "La coche n’a pas pu être enregistrée.")); });
   }
   function toggleProduct(line: (typeof totals)[number]) {
-    const keys = line.clients.map((entry) => keyOf(line.key, entry.key));
-    setChecked((current) => save(keys.every((key) => current.includes(key)) ? current.filter((key) => !keys.includes(key)) : [...new Set([...current, ...keys])]));
+    const keys = line.clients.flatMap((entry) => keysOf(line, entry));
+    apply(keys, !line.clients.every((entry) => isOn(line, entry)));
   }
-  function toggleClient(line: (typeof totals)[number], clientKey: string) {
-    const key = keyOf(line.key, clientKey);
-    setChecked((current) => save(current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+  function toggleClient(line: (typeof totals)[number], entry: (typeof totals)[number]["clients"][number]) {
+    apply(keysOf(line, entry), !isOn(line, entry));
   }
 
   const toggleOpen = (key: string) => setOpen((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
-  const doneOf = (line: (typeof totals)[number]) => line.clients.filter((entry) => checked.includes(keyOf(line.key, entry.key))).reduce((sum, entry) => sum + entry.quantity, 0);
-  const done = totals.filter((line) => line.clients.every((entry) => checked.includes(keyOf(line.key, entry.key)))).length;
+  const doneOf = (line: (typeof totals)[number]) => line.clients.filter((entry) => isOn(line, entry)).reduce((sum, entry) => sum + entry.quantity, 0);
+  const done = totals.filter((line) => line.clients.every((entry) => isOn(line, entry))).length;
 
   return <ScrollView contentContainerStyle={ui.content} refreshControl={refreshControl}>
-    <Text style={[ui.small, { marginTop: 8 }]}>{orders.length} commande(s) acceptée(s) ou en préparation · {done}/{totals.length} produit(s) terminés. Cocher un produit coche tous ses clients ; dépliez pour décocher un client.</Text>
+    <Text style={[ui.small, { marginTop: 8 }]}>{orders.length} commande(s) acceptée(s) ou en préparation · {done}/{totals.length} produit(s) terminés. Cocher un produit coche tous ses clients ; dépliez pour décocher un client.
+      {shared ? " Les coches sont partagées avec toute l’équipe." : ""}{shared && workflow.auto_ready ? " Une commande dont tous les produits sont cochés passe en « Préparée »." : ""}</Text>
     {totals.length === 0 ? <EmptyState title="Rien à préparer" body="Les commandes acceptées apparaîtront ici." /> : <View style={ui.card}>
       {totals.map((line) => {
         const expanded = open.includes(line.key);
@@ -171,8 +194,8 @@ function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshC
           {partial || made > 0 ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.min(100, (made / line.quantity) * 100)}%` }]} /></View> : null}
           {expanded ? <View style={styles.clientList}>
             {line.clients.map((entry) => {
-              const on = checked.includes(keyOf(line.key, entry.key));
-              return <Pressable key={entry.key} onPress={() => toggleClient(line, entry.key)} style={[ui.row, { paddingVertical: 5 }]}>
+              const on = isOn(line, entry);
+              return <Pressable key={entry.key} onPress={() => toggleClient(line, entry)} style={[ui.row, { paddingVertical: 5 }]}>
                 <View style={[styles.smallBox, on && styles.checkboxChecked]}>{on ? <Text style={[styles.checkmark, { fontSize: 11 }]}>✓</Text> : null}</View>
                 <View style={{ flex: 1 }}>
                   <Text style={[ui.body, on && styles.doneText]}>{entry.name}</Text>
@@ -193,12 +216,44 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
   // The step just made is shown at once, and a second tap right after it is ignored (double tap).
   const [local, setLocal] = useState<Record<string, StaffOrder["status"]>>({});
   const canUpdate = useCan()("production.update");
+  const workflow = useWorkflow();
   const statusOf = (order: StaffOrder) => local[order.id] ?? order.status;
-  useEffect(() => { setLocal({}); }, [queue]);
+  // The Pro's own steps done per order (shown at once, saved on the server).
+  const [steps, setSteps] = useState<Record<string, string[]>>({});
+  const stepsOf = (order: StaffOrder) => steps[order.id] ?? order.prep_done ?? [];
+  useEffect(() => { setLocal({}); setSteps({}); }, [queue]);
+  // Without « En préparation » (Pro setting), an accepted order is marked prepared directly.
+  const nextOf = (order: StaffOrder) => statusOf(order) === "confirmed" && workflow.preparing ? "preparing" : "ready";
 
-  async function advance(order: StaffOrder) {
+  async function toggleStep(order: StaffOrder, step: string) {
+    const before = stepsOf(order);
+    const done = !before.includes(step);
+    setSteps((current) => ({ ...current, [order.id]: done ? [...before, step] : before.filter((item) => item !== step) }));
+    try {
+      const saved = await prepStep(order.id, step, done);
+      setSteps((current) => ({ ...current, [order.id]: saved }));
+      if (statusOf(order) === "confirmed") onChanged();
+    } catch (cause) {
+      setSteps((current) => ({ ...current, [order.id]: before }));
+      notify("Production", errorMessage(cause, "L’étape n’a pas pu être enregistrée."));
+    }
+  }
+
+  function advance(order: StaffOrder) {
+    const missing = workflow.steps.filter((step) => !stepsOf(order).includes(step));
+    if (nextOf(order) === "ready" && missing.length) {
+      notify("Étapes non terminées", `${missing.join(", ")} : marquer la commande « Préparée » quand même ?`, [
+        { text: "Retour", style: "cancel" },
+        { text: "Marquer préparée", onPress: () => void doAdvance(order) },
+      ]);
+      return;
+    }
+    void doAdvance(order);
+  }
+
+  async function doAdvance(order: StaffOrder) {
     if (busyId) return;
-    const next = statusOf(order) === "confirmed" ? "preparing" : "ready";
+    const next = nextOf(order);
     setBusyId(order.id);
     try {
       await updateOrderStatus(order.id, next);
@@ -233,8 +288,11 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
         {item.order_items.map((line, lineIndex) => <Text key={`${item.id}-${lineIndex}`} style={ui.body}><Text style={{ fontWeight: "800" }}>{formatQuantity(line.quantity)} {line.unit_snapshot}</Text> · {line.product_name_snapshot}</Text>)}
       </View>
       {item.customer_note ? <Text style={[ui.small, { color: colors.orange, marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
+      {workflow.steps.length && status !== "ready" ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
+        {workflow.steps.map((step) => <Chip key={step} label={`${stepsOf(item).includes(step) ? "✓ " : ""}${step}`} selected={stepsOf(item).includes(step)} onPress={() => { if (canUpdate) void toggleStep(item, step); }} />)}
+      </View> : null}
       {status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.primary, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
-        : !canUpdate ? null : <Button label={status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} color={statusStyles[status === "confirmed" ? "preparing" : "ready"].color} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
+        : !canUpdate ? null : <Button label={nextOf(item) === "preparing" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} color={statusStyles[nextOf(item)].color} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
     </View>; }}
   />;
 }

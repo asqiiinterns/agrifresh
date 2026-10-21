@@ -5,6 +5,7 @@ import { company } from "../config/company";
 import { documentStyles, escapeHtml, outputPdf, pdfAmount, pdfDate, pdfQuantity, sellerBlock } from "./pdf";
 
 export type OrderLine = {
+  id?: string;
   product_id: string | null;
   product_name_snapshot: string;
   quantity: number | string;
@@ -23,6 +24,8 @@ export type ProductOrigin = { producer?: string; region?: string; label?: string
 export type StatusEvent = { status: string; note: string | null; changed_by: string | null; changed_by_name?: string | null; created_at: string };
 
 export type Order = {
+  // 20261130: the Pro's own preparation steps done for this order.
+  prep_done?: string[];
   id: string;
   order_number: number;
   status: string;

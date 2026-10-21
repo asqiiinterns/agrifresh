@@ -8,6 +8,7 @@ import { collectedByDriver, deliveryNoteNumber, formatOrigin, shareDeliveryNote 
 import { fetchVehicles, vehicleName, type Vehicle } from "../data/fleet";
 import { closedAt, executionQueue, fetchAllOrders, groupOf, planVehicle, revertOrder, revertableStatuses, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterBar, type Filter } from "../ui/FilterBar";
+import { useWorkflow } from "../data/workflow";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { PlanningScreen } from "./PlanningScreen";
 import { useCan, type Feature } from "../data/permissions";
@@ -234,11 +235,15 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   const [expanded, setExpanded] = useState(defaultExpanded || order.status === "pending");
   const can = useCan();
   const mod = useModules();
+  const workflow = useWorkflow();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
   // Reopening a declined order accepts it at once (no client reconfirmation any more).
-  const actions = (staffActions[order.status as OrderStatus] ?? []).filter((action) => can(actionFeature(action.status)));
+  // Without « En préparation » (Pro setting, 20261130): an accepted order is marked prepared directly.
+  const actions = (staffActions[order.status as OrderStatus] ?? [])
+    .map((action) => action.status === "preparing" && !workflow.preparing ? { ...action, status: "ready" as OrderStatus, label: "MARQUER PRÉPARÉE" } : action)
+    .filter((action) => can(actionFeature(action.status)));
   const needsReason = actions.some((action) => action.askReason);
   const canRevert = can("orders.revert") && revertableStatuses.includes(order.status);
   const address = order.address_snapshot ?? {};

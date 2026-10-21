@@ -1,6 +1,9 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" → En préparation{0}", " → In preparation{0}", " ← قيد التحضير{0}"],
+  ["{0} : marquer la commande « Préparée » quand même ?", "{0}: mark the order « Prepared » anyway?", "{0}: تعليم الطلبية « جاهزة » رغم ذلك؟"],
+  ["{0} commande(s) entièrement cochée(s) : marquée(s) « Préparée ».", "{0} order(s) fully ticked: marked « Prepared ».", "{0} طلبية(ات) مُعلَّمة بالكامل: أصبحت « جاهزة »."],
   [" · relation créée le {0}", " · link created on {0}", " · أُنشئت العلاقة في {0}"],
   [" · valable jusqu’au {0}", " · valid until {0}", " · صالحة حتى {0}"],
   ["{0} ne pourra plus se connecter et disparaît des listes. Le compte reste visible avec le filtre « Supprimés » et peut être restauré.", "{0} will no longer be able to sign in and leaves the lists. The account stays visible with the « Deleted » filter and can be restored.", "لن يتمكن {0} من تسجيل الدخول ويختفي من القوائم. يبقى الحساب ظاهرا بفلتر « المحذوفة » ويمكن استعادته."],

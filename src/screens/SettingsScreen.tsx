@@ -20,13 +20,14 @@ import { CompanyPage } from "./CompanyPage";
 import { ModulesPage } from "./ModulesPage";
 import { useVisibleSettings } from "../data/modules";
 import { AlertSettingsPanel } from "./NotificationSettings";
+import { saveWorkflow, useWorkflow, type Workflow } from "../data/workflow";
 import type { IconName } from "../ui/navigation";
 
-type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" } | { kind: "autoDeliver" };
+type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" } | { kind: "autoDeliver" } | { kind: "workflow" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
 // initialPage: opened straight from the home search (e.g. "company", "modules").
-const directPages = ["home", "numbering", "alerts", "company", "modules", "autoDeliver", "clientOptions"] as const;
+const directPages = ["home", "numbering", "alerts", "company", "modules", "autoDeliver", "clientOptions", "workflow"] as const;
 export function SettingsScreen({ onBack, onRoles, initialPage }: { onBack: () => void; onRoles?: () => void; initialPage?: string }) {
   const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
   const [page, setPage] = useState<Page>(() => directPages.includes(initialPage as typeof directPages[number]) ? { kind: initialPage as typeof directPages[number] } as Page : { kind: "menu" });
@@ -127,6 +128,7 @@ export function SettingsScreen({ onBack, onRoles, initialPage }: { onBack: () =>
   if (page.kind === "company") return <CompanyPage header={back} />;
   if (page.kind === "modules") return <ModulesPage header={back} />;
   if (page.kind === "autoDeliver") return <AutoDeliverPage header={back} />;
+  if (page.kind === "workflow") return <WorkflowPage header={back} />;
   if (page.kind === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="PARAMÉTRAGE" title="Notifications et e-mails" right={back} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
@@ -160,6 +162,7 @@ export function SettingsScreen({ onBack, onRoles, initialPage }: { onBack: () =>
         })}
       </ListGroup>
       <ListGroup title="Commandes">
+        <ListRow icon="git-commit-outline" title="Étapes de production" detail="« En préparation » ou non, commande préparée quand tous ses produits sont cochés, vos propres étapes (découpe, emballage…) et ce que voit le client." onPress={() => setPage({ kind: "workflow" })} />
         <ListRow icon="checkmark-done-outline" title="Clôture automatique des livraisons" detail="Délai après lequel une commande expédiée passe en « Livrée » pour les clients qui ont l’option (Livraison et remise)." onPress={() => setPage({ kind: "autoDeliver" })} />
       </ListGroup>
       <ListGroup title="Communication">
@@ -211,6 +214,72 @@ function AutoDeliverPage({ header }: { header: React.ReactNode }) {
         {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
         <Button label="ENREGISTRER LE DÉLAI" onPress={save} busy={busy} disabled={!hours || Number(hours) === saved} style={{ marginTop: 8 }} />
       </View>
+    </ScrollView>
+  </View>;
+}
+
+// The steps of an order for this Pro: accepted → (en préparation, with its own steps) → préparée → expédiée → livrée.
+function WorkflowPage({ header }: { header: React.ReactNode }) {
+  const workflow = useWorkflow();
+  const [steps, setSteps] = useState<string[]>(workflow.steps);
+  const [step, setStep] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setSteps(workflow.steps); }, [workflow.steps.join("|")]);
+
+  async function save(input: Partial<Workflow>) {
+    setBusy(true);
+    setError("");
+    try {
+      await saveWorkflow(input);
+    } catch (cause) {
+      setError(errorMessage(cause, "Le réglage n’a pas pu être enregistré. La migration 20261130 est-elle exécutée ?"));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const changedSteps = steps.join("|") !== workflow.steps.join("|");
+  const move = (index: number, delta: number) => setSteps((current) => {
+    const next = [...current];
+    const [item] = next.splice(index, 1);
+    next.splice(Math.max(0, Math.min(next.length, index + delta)), 0, item);
+    return next;
+  });
+  const row = (label: string, hint: string, value: boolean, onChange: (value: boolean) => void) => <View style={[ui.row, { marginTop: 10 }]}>
+    <View style={{ flex: 1 }}>
+      <Text style={ui.body}>{label}</Text>
+      <Text style={ui.small}>{hint}</Text>
+    </View>
+    <Switch value={value} disabled={busy} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+  </View>;
+
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="PARAMÉTRAGE" title="Étapes de production" right={header} />
+    <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      <View style={ui.card}>
+        <Text style={ui.strong}>Parcours d’une commande</Text>
+        <Text style={ui.small}>À décider → Acceptée{workflow.preparing ? ` → En préparation${workflow.steps.length ? ` (${workflow.steps.join(", ")})` : ""}` : ""} → Préparée → Expédiée → Livrée</Text>
+        {row("Étape « En préparation »", "Désactivée : une commande acceptée passe directement à « Préparée ».", workflow.preparing, (value) => void save({ preparing: value }))}
+        {row("Préparée quand tous les produits sont cochés", "Dans « À préparer », les coches sont partagées par l’équipe ; la dernière coche d’une commande la marque « Préparée ».", workflow.auto_ready, (value) => void save({ auto_ready: value }))}
+        {row("Le client voit vos étapes", "Chaque étape terminée apparaît dans l’historique de sa commande.", workflow.client_sees_steps, (value) => void save({ client_sees_steps: value }))}
+      </View>
+      <View style={ui.card}>
+        <Text style={ui.strong}>Vos étapes de préparation</Text>
+        <Text style={ui.small}>Par exemple Découpe, Emballage, Contrôle qualité. Elles se cochent sur chaque commande (Production → File d’exécution) et sont tracées dans son historique. Dix au plus.</Text>
+        {steps.map((item, index) => <View key={item} style={[ui.row, { marginTop: 8 }]}>
+          <Text style={[ui.body, { flex: 1 }]}>{index + 1}. {item}</Text>
+          <Button label="↑" variant="secondary" onPress={() => move(index, -1)} disabled={index === 0} />
+          <Button label="↓" variant="secondary" onPress={() => move(index, 1)} disabled={index === steps.length - 1} />
+          <Button label="RETIRER" variant="danger" onPress={() => setSteps((current) => current.filter((value) => value !== item))} />
+        </View>)}
+        <View style={[ui.row, { marginTop: 8 }]}>
+          <View style={{ flex: 1 }}><Field label="Nouvelle étape" value={step} onChangeText={setStep} placeholder="Emballage" maxLength={40} /></View>
+          <Button label="AJOUTER" variant="secondary" disabled={!step.trim() || steps.length >= 10 || steps.includes(step.trim())} onPress={() => { setSteps((current) => [...current, step.trim()]); setStep(""); }} />
+        </View>
+        {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
+        <Button label="ENREGISTRER LES ÉTAPES" onPress={() => save({ steps })} busy={busy} disabled={!changedSteps} style={{ marginTop: 10 }} />
+      </View>
+      <Text style={[ui.small, { marginTop: 10 }]}>L’acceptation automatique des commandes se règle dans les options des clients (pour tous, ou fiche par fiche).</Text>
     </ScrollView>
   </View>;
 }

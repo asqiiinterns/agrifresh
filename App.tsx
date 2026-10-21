@@ -11,6 +11,7 @@ import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type Module
 import { PermissionsContext } from "./src/data/permissions";
 import { clearShared, setBuyerMode } from "./src/data/shared";
 import { autoDeliverOrders } from "./src/data/staff";
+import { loadWorkflow } from "./src/data/workflow";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
@@ -320,6 +321,8 @@ function Main({ session }: { session: Session }) {
   const loadAccount = useCallback(async () => {
     setAccountError("");
     clearShared();
+    // The production steps follow the space (and Appro+ assisting a Pro).
+    void loadWorkflow(true).catch(() => undefined);
     try {
       // All in parallel: each request costs a round trip to the server. Trials over are closed in the same wave.
       const [next, nextModules, nextPro, nextSuppliers, nextSpaces] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro(), fetchMySuppliers(), fetchMySpaces(), expireTrials().catch(() => undefined), autoDeliverOrders().catch(() => undefined)]);
