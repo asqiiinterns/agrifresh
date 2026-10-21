@@ -4,7 +4,7 @@ import { Text, TextInput } from "../ui/Text";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { claimReasonLabel, claimStatusStyle, fetchClaims, updateClaim, type Claim, type ClaimStatus } from "../data/claims";
-import { deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/orders";
+import { collectedByDriver, deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/orders";
 import { fetchVehicles, vehicleName, type Vehicle } from "../data/fleet";
 import { closedAt, executionQueue, fetchAllOrders, groupOf, planVehicle, revertOrder, revertableStatuses, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterBar, type Filter } from "../ui/FilterBar";
@@ -339,6 +339,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     }
   }
 
+  const collected = collectedByDriver(order);
   return <View style={ui.card}>
     <Pressable onPress={() => setExpanded((value) => !value)}>
       <View style={ui.row}>
@@ -351,6 +352,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
         {address.point_label ? ` · ${address.point_label}` : ""} · {order.order_items.length} produit(s) · {formatPrice(order.total)}
         {openClaims ? ` · ⚠ ${openClaims} réclamation(s)` : ""}
       </Text>
+      {collected ? <Text style={[ui.small, { color: colors.primary, fontWeight: "700", marginTop: 2 }]}>💰 Paiement reçu par le livreur : {collected}</Text> : null}
     </Pressable>
 
     {expanded ? <>

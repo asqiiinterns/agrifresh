@@ -20,11 +20,14 @@ import { colors, ui } from "../ui/theme";
 
 type Tab = "pickup" | "todo" | "history";
 
-export function DriverScreen() {
+export function DriverScreen({ initialSection }: { initialSection?: string } = {}) {
   const can = useCan();
   const canShip = can("orders.ship");
   const { navigate } = useNav();
-  const [tab, setTab] = useState<Tab>(canShip ? "pickup" : "todo");
+  // Opened from a home tile: « Prêtes à expédier » → À récupérer, « En livraison » → À livrer.
+  const wanted = (section?: string): Tab | null => section === "pickup" && canShip ? "pickup" : section === "todo" || section === "history" ? section : null;
+  const [tab, setTab] = useState<Tab>(wanted(initialSection) ?? (canShip ? "pickup" : "todo"));
+  useEffect(() => { const next = wanted(initialSection); if (next) setTab(next); }, [initialSection]);
   // Hand-overs to do, one group per client, done one after the other.
   const [handover, setHandover] = useState<Shipment[][] | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);

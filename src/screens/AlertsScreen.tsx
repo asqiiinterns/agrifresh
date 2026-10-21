@@ -13,7 +13,7 @@ import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
 // Everything that concerns the signed-in person: orders, claims, messages, invoices, accounts.
-export function AlertsScreen({ userId, team, onRead }: { userId: string; team: boolean; onRead: () => void }) {
+export function AlertsScreen({ userId, team, platform = false, onRead }: { userId: string; team: boolean; platform?: boolean; onRead: () => void }) {
   const { navigate } = useNav();
   const [alerts, setAlerts] = useState<AppAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +125,7 @@ export function AlertsScreen({ userId, team, onRead }: { userId: string; team: b
       renderItem={({ item }) => <Pressable onPress={() => {
         // Opening an alert marks it read and goes straight to what it is about.
         if (!item.read_at) void read([item.id]);
-        const target = alertTarget(item.event, item.order_id, team, item.conversation_id);
+        const target = alertTarget(item.event, item.order_id, team, item.conversation_id, platform);
         if (target.tab !== "alerts") navigate(target.tab, { ...target.params, back: "alerts" });
       }} style={[ui.card, !item.read_at && styles.unread, item.important && styles.important]}>
         <View style={ui.row}>

@@ -3,10 +3,11 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshCont
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, TextInput } from "../ui/Text";
 import {
-  fetchDirectory, fetchMyLinks, fetchOrgInbox, fetchOrgThread, requestLink, respondLink, sendOrgMessage, setOpenToNew, setProVisibility,
-  type DirectoryPro, type InvitationSide, type LinkStatus, type MyLink, type MyLinks, type OrgConversation, type OrgThread,
+  fetchDirectory, fetchMyLinks, fetchOrgInbox, fetchOrgThread, fetchProCard, fetchProfileVisibility, requestLink, respondLink, sendOrgMessage, setOpenToNew,
+  setProfileVisibility, setProVisibility,
+  type DirectoryPro, type InvitationSide, type LinkStatus, type MyLink, type MyLinks, type OrgConversation, type OrgThread, type ProCard, type ProfileVisibility,
 } from "../data/directory";
-import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, Sheets, formatDateTime } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, Sheets, formatDateTime, formatDay } from "../ui/components";
 import { InviteModal } from "../ui/InviteModal";
 import { useNav } from "../ui/navigation";
 import { errorMessage, notify } from "../ui/notify";
@@ -23,14 +24,28 @@ type Sheet = "links" | "find" | "messages";
 
 // Réseau: my clients and suppliers, requests to answer, the directory of validated Pros, invitations,
 // the conversations with Pros outside my network, and what I show to others.
-export function NetworkScreen({ onChanged }: { onChanged?: () => void }) {
+export function NetworkScreen({ onChanged, initialSection }: { onChanged?: () => void; initialSection?: string }) {
   const [links, setLinks] = useState<MyLinks | null>(null);
-  const [sheet, setSheet] = useState<Sheet>("links");
+  const sheets: Sheet[] = ["links", "find", "messages"];
+  const [sheet, setSheet] = useState<Sheet>(sheets.includes(initialSection as Sheet) ? initialSection as Sheet : "links");
+  // Opened from a notification while already on Réseau (contact request, message from outside the network).
+  useEffect(() => { if (sheets.includes(initialSection as Sheet)) setSheet(initialSection as Sheet); }, [initialSection]);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [inviting, setInviting] = useState<InvitationSide | null>(null);
   const [conversations, setConversations] = useState<OrgConversation[]>([]);
-  const [openThread, setOpenThread] = useState<{ conversationId?: string; orgId: string; name: string } | null>(null);
+  const [openThread, setOpenThread] = useState<{ conversationId?: string; orgId: string; name: string; open?: boolean } | null>(null);
+  // A Pro's card, seen before accepting its request or from the directory.
+  const [card, setCard] = useState<{ orgId: string; link?: MyLink } | null>(null);
+  const [visibility, setVisibility] = useState<ProfileVisibility | null>(null);
+  useEffect(() => { void fetchProfileVisibility().then(setVisibility).catch(() => undefined); }, []);
+  async function changeVisibility(input: Partial<ProfileVisibility>) {
+    setVisibility((current) => current ? { ...current, ...input } : current);
+    try { await setProfileVisibility(input); } catch (cause) {
+      notify("Réseau", errorMessage(cause, "Le réglage n’a pas pu être modifié. La migration 20261126 est-elle exécutée ?"));
+      void fetchProfileVisibility().then(setVisibility).catch(() => undefined);
+    }
+  }
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
@@ -97,6 +112,14 @@ export function NetworkScreen({ onChanged }: { onChanged?: () => void }) {
     <SettingRow label="Recevoir des messages hors de mon réseau" hint="Les Pros qui ne sont pas encore en relation avec vous peuvent vous écrire." value={org.open_to_messages ?? false} onChange={(value) => void change({ messages: value })} />
     {org.is_buyer ? <SettingRow label="Ouvert à de nouveaux fournisseurs" hint="Désactivé : seuls vos fournisseurs actuels peuvent vous proposer leurs produits." value={org.open_to_new}
       onChange={(value) => void setOpenToNew(value).then(() => reload()).catch((cause: unknown) => notify("Réseau", errorMessage(cause, "Le réglage n’a pas pu être modifié.")))} /> : null}
+    {visibility ? <View style={[ui.divider, { marginTop: 10 }]}>
+      <Text style={ui.strong}>Sur ma fiche</Text>
+      <Text style={ui.small}>Ce que voient les autres Pros quand ils ouvrent votre fiche (annuaire, demande de mise en relation). Le nom et l’activité sont toujours visibles.</Text>
+      <View style={[ui.wrapRow, { marginTop: 6 }]}>
+        {([["address", "Adresse"], ["phone", "Téléphone"], ["email", "E-mail"], ["tax_id", "Matricule fiscal"], ["relations", "Nombre de clients et fournisseurs"]] as [keyof ProfileVisibility, string][])
+          .map(([key, label]) => <Chip key={key} label={label} selected={visibility[key]} onPress={() => void changeVisibility({ [key]: !visibility[key] })} />)}
+      </View>
+    </View> : null}
   </View> : null;
 
   return <View style={ui.screen}>
@@ -116,12 +139,17 @@ export function NetworkScreen({ onChanged }: { onChanged?: () => void }) {
           <Text style={[ui.small, { color: item.status === "active" ? colors.primary : colors.amber }]}>{item.side === "client" ? "Client" : "Fournisseur"} · {statusWords[item.status]}</Text>
         </View>
         {item.to_answer ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          <Button label="VOIR LA FICHE" variant="secondary" onPress={() => setCard({ orgId: item.org_id, link: item })} />
           <Button label="ACCEPTER" onPress={() => answer(item, true)} />
           <Button label="REFUSER" variant="danger" onPress={() => answer(item, false)} />
-        </View> : item.status !== "active" ? <Text style={[ui.small, { marginTop: 4 }]}>En attente de la réponse de l’autre Pro.</Text> : null}
+        </View> : <View style={[ui.wrapRow, { marginTop: 6 }]}>
+          {item.status !== "active" ? <Text style={[ui.small, { flex: 1 }]}>En attente de la réponse de l’autre Pro.</Text> : null}
+          <Button label="FICHE" variant="secondary" onPress={() => setCard({ orgId: item.org_id })} />
+        </View>}
       </View>}
     /> : sheet === "find" ? <DirectoryList isSupplier={!!org?.is_supplier} isBuyer={!!org?.is_buyer} onRequested={() => void reload()}
-      onWrite={(pro) => setOpenThread({ orgId: pro.id, name: pro.name, conversationId: conversations.find((item) => item.org_id === pro.id)?.conversation_id })} />
+      onWrite={(pro) => setOpenThread({ orgId: pro.id, name: pro.name, open: pro.open_to_messages !== false, conversationId: conversations.find((item) => item.org_id === pro.id)?.conversation_id })}
+      onCard={(pro) => setCard({ orgId: pro.id })} />
     : <FlatList
       data={conversations}
       keyExtractor={(item) => item.conversation_id}
@@ -136,10 +164,14 @@ export function NetworkScreen({ onChanged }: { onChanged?: () => void }) {
         </View>
         <Text style={ui.small} numberOfLines={2}>{item.last_body ?? ""}</Text>
         <Text style={ui.small}>{formatDateTime(item.last_at)}{item.related ? " · en relation" : ""}</Text>
+        {item.held ? <Text style={[ui.small, { color: colors.amber }]}>En attente : ce Pro n’accepte pas encore les messages hors réseau ; il les recevra dès qu’il les ouvrira.</Text> : null}
       </Pressable>}
     />}
     {inviting ? <InviteModal visible side={inviting} onClose={() => setInviting(null)} /> : null}
     <OrgThreadModal target={openThread} onClose={() => { setOpenThread(null); void reload(); }} />
+    <ProCardModal target={card} onClose={() => setCard(null)}
+      onAnswer={card?.link ? (accept) => { const link = card.link!; setCard(null); void answer(link, accept); } : undefined}
+      onWrite={(pro) => { setCard(null); setOpenThread({ orgId: pro.id, name: pro.name, conversationId: conversations.find((item) => item.org_id === pro.id)?.conversation_id }); }} />
   </View>;
 }
 
@@ -153,7 +185,7 @@ function SettingRow({ label, hint, value, onChange }: { label: string; hint: str
   </View>;
 }
 
-function DirectoryList({ isSupplier, isBuyer, onRequested, onWrite }: { isSupplier: boolean; isBuyer: boolean; onRequested: () => void; onWrite: (pro: DirectoryPro) => void }) {
+function DirectoryList({ isSupplier, isBuyer, onRequested, onWrite, onCard }: { isSupplier: boolean; isBuyer: boolean; onRequested: () => void; onWrite: (pro: DirectoryPro) => void; onCard: (pro: DirectoryPro) => void }) {
   const [lookingFor, setLookingFor] = useState<"clients" | "suppliers">(isSupplier ? "clients" : "suppliers");
   const [search, setSearch] = useState("");
   const [pros, setPros] = useState<DirectoryPro[] | null>(null);
@@ -196,8 +228,10 @@ function DirectoryList({ isSupplier, isBuyer, onRequested, onWrite }: { isSuppli
           : item.link && item.link.status !== "refused" ? <Text style={[ui.small, { color: colors.amber, fontWeight: "800" }]}>Demande en cours</Text>
           : lookingFor === "clients" && !item.open_to_new ? <Text style={ui.small}>Ne cherche pas de nouveau fournisseur</Text>
           : <Button label={lookingFor === "clients" ? "PROPOSER D’ÊTRE SON FOURNISSEUR" : "DEMANDER À ÊTRE CLIENT"} variant="secondary" onPress={() => ask(item)} />}
+        <Button label="FICHE" variant="secondary" onPress={() => onCard(item)} />
+        {/* Every listed Pro can be written to; if it does not accept messages yet, the message waits until it opens them. */}
         {item.link?.status === "active" ? <Button label="MESSAGES" variant="secondary" onPress={() => navigate("messages")} />
-          : item.open_to_messages ? <Button label="ÉCRIRE" variant="secondary" onPress={() => onWrite(item)} /> : null}
+          : <Button label="ÉCRIRE" variant="secondary" onPress={() => onWrite(item)} />}
         {lookingFor === "suppliers" && item.catalog_visibility === "public" && item.link?.status !== "active" ? <Button label="VOIR SES PRODUITS" variant="secondary" onPress={() => navigate("discover")} /> : null}
       </View>
     </View>}
@@ -205,7 +239,7 @@ function DirectoryList({ isSupplier, isBuyer, onRequested, onWrite }: { isSuppli
 }
 
 // One conversation with a Pro outside my network (started from the directory or from the list).
-function OrgThreadModal({ target, onClose }: { target: { conversationId?: string; orgId: string; name: string } | null; onClose: () => void }) {
+function OrgThreadModal({ target, onClose }: { target: { conversationId?: string; orgId: string; name: string; open?: boolean } | null; onClose: () => void }) {
   const [thread, setThread] = useState<OrgThread | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [body, setBody] = useState("");
@@ -251,12 +285,56 @@ function OrgThreadModal({ target, onClose }: { target: { conversationId?: string
             <Text style={ui.small}>{item.mine ? "Vous" : item.sender_name ?? target?.name}{" · "}{formatDateTime(item.created_at)}</Text>
           </View>}
         />
+        {target?.open === false ? <Text style={[ui.small, { paddingHorizontal: 14, color: colors.amber }]}>Ce Pro n’accepte pas encore les messages hors réseau : votre message restera en attente et lui sera remis dès qu’il les ouvrira.</Text> : null}
         {error ? <Text style={[ui.error, { paddingHorizontal: 14 }]}>{error}</Text> : null}
         <View style={styles.composer}>
           <TextInput style={[ui.input, { flex: 1, marginTop: 0 }]} value={body} onChangeText={setBody} placeholder="Votre message" placeholderTextColor={colors.muted} multiline />
           <Button label="ENVOYER" onPress={send} busy={busy} disabled={!body.trim()} />
         </View>
       </KeyboardAvoidingView>
+    </SafeAreaView>
+  </Modal>;
+}
+
+// The card of a Pro: only what it chose to show (Réseau → Sur ma fiche).
+function ProCardModal({ target, onClose, onAnswer, onWrite }: {
+  target: { orgId: string } | null;
+  onClose: () => void;
+  onAnswer?: (accept: boolean) => void;
+  onWrite: (pro: ProCard) => void;
+}) {
+  const [card, setCard] = useState<ProCard | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setCard(null); setError("");
+    if (target) void fetchProCard(target.orgId).then(setCard).catch((cause: unknown) => setError(errorMessage(cause, "Fiche non disponible. La migration 20261126 est-elle exécutée ?")));
+  }, [target?.orgId]);
+  const line = (label: string, value: string | number | null | undefined) => value === null || value === undefined || value === "" ? null
+    : <View style={[ui.row, { marginTop: 6 }]}><Text style={[ui.small, { width: 130 }]}>{label}</Text><Text style={[ui.body, { flex: 1 }]}>{String(value)}</Text></View>;
+  return <Modal visible={target !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SafeAreaView style={ui.modalSafe}>
+      <ScreenHeader eyebrow="FICHE DU PRO" title={card?.name ?? ""} subtitle={card ? [card.kind === "person" ? "Particulier" : "Entreprise", card.is_supplier ? "Fournisseur" : null, card.is_buyer ? "Acheteur" : null].filter(Boolean).join(" · ") : undefined} right={<CloseButton onPress={onClose} />} />
+      {!card ? (error ? <EmptyState title="Fiche indisponible" body={error} /> : <Loading />) : <View style={ui.content}>
+        <View style={ui.card}>
+          {card.tagline ? <Text style={ui.body}>{card.tagline}</Text> : null}
+          {line("Sur Appro+ depuis", formatDay(card.since, { day: "numeric", month: "long", year: "numeric" }))}
+          {line("Adresse", card.address)}
+          {line("Téléphone", card.phone)}
+          {line("E-mail", card.email)}
+          {line("Matricule fiscal", card.tax_id)}
+          {card.is_supplier ? line("Clients", card.clients) : null}
+          {card.is_buyer ? line("Fournisseurs", card.suppliers) : null}
+          {card.is_supplier ? line("Produits visibles", card.catalog_visibility === "public" ? "par tout le monde" : "par ses clients") : null}
+          <Text style={[ui.small, { marginTop: 8 }]}>Seules les informations que ce Pro a choisi de montrer apparaissent.</Text>
+        </View>
+        <View style={[ui.wrapRow, { marginTop: 12 }]}>
+          {onAnswer ? <>
+            <Button label="ACCEPTER LA RELATION" onPress={() => onAnswer(true)} />
+            <Button label="REFUSER" variant="danger" onPress={() => onAnswer(false)} />
+          </> : null}
+          <Button label="ÉCRIRE" variant="secondary" onPress={() => onWrite(card)} />
+        </View>
+      </View>}
     </SafeAreaView>
   </Modal>;
 }

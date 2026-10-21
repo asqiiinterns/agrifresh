@@ -30,6 +30,7 @@ export type RoleTemplate = { key: string; name: string; side: "supplier" | "buye
 export type PlatformAccount = {
   id: string; email: string; full_name: string; role: string | null; status: string | null; org_id: string | null; org_name: string | null;
   org_kind: ProKind | null; created_at: string; last_sign_in_at: string | null;
+  deleted_at?: string | null; email_confirmed?: boolean; invited_by?: string | null;
 };
 
 function client() {

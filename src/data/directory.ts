@@ -42,7 +42,7 @@ export const setProVisibility = (input: { catalog?: CatalogVisibility; listed?: 
   call<unknown>("set_pro_visibility", { p_catalog: input.catalog ?? null, p_listed: input.listed ?? null, p_messages: input.messages ?? null });
 
 // Messages between Pros outside their network (one conversation per pair of Pros).
-export type OrgConversation = { conversation_id: string; org_id: string; name: string; kind: "business" | "person"; last_at: string; last_body: string | null; unread: number; related: boolean };
+export type OrgConversation = { conversation_id: string; org_id: string; name: string; kind: "business" | "person"; last_at: string; last_body: string | null; unread: number; related: boolean; held?: boolean };
 export type OrgMessage = { id: string; body: string; mine: boolean; sender_name: string | null; created_at: string; read_at: string | null };
 export type OrgThread = { conversation_id: string; org: { id: string; name: string; kind: string }; messages: OrgMessage[] };
 export const fetchOrgInbox = () => call<OrgConversation[]>("org_inbox");
@@ -69,13 +69,16 @@ export const orderFromPublic = (supplierOrgId: string, items: { product_id: stri
   call<{ id: string; order_number: number; status: string; new_relation: boolean; supplier_name: string }>("order_from_public", { p_supplier_org_id: supplierOrgId, p_items: items, p_requested_date: null, p_note: note.trim() || null });
 
 // Appro+ settings everyone may read (also before signing in), and the trials that ended.
-export type PublicSettings = { app_url: string; trial_hours: number };
+// 20261126: invited accounts active for invited_trial_hours before validation; a spontaneous sign-up
+// gets a business space in trial only if self_signup_business_trial (otherwise a personal space).
+export type PublicSettings = { app_url: string; trial_hours: number; invited_trial_hours?: number; self_signup_business_trial?: boolean };
 export async function fetchPublicSettings(): Promise<PublicSettings> {
   if (!supabase) return { app_url: "", trial_hours: 0 };
   const { data, error } = await supabase.rpc("public_settings");
   return error || !data ? { app_url: "", trial_hours: 0 } : data as PublicSettings;
 }
-export const setPlatformSetting = (key: "new_accounts_trial_hours" | "app_url", value: number | string) => call<void>("platform_set_setting", { p_key: key, p_value: value });
+export type PlatformSettingKey = "new_accounts_trial_hours" | "app_url" | "invited_trial_hours" | "self_signup_business_trial";
+export const setPlatformSetting = (key: PlatformSettingKey, value: number | string | boolean) => call<void>("platform_set_setting", { p_key: key, p_value: value });
 export async function expireTrials(): Promise<void> {
   if (!supabase) return;
   await supabase.rpc("expire_trials");
@@ -87,3 +90,30 @@ export async function fetchMySuppliers(): Promise<MySupplier[]> {
   const { data, error } = await supabase.rpc("my_suppliers");
   return error ? [] : (data ?? []) as MySupplier[];
 }
+
+// Traceability of invitations (20261126): who invited whom, when, who accepted and when.
+export type InvitationRecord = {
+  code: string; created_at: string; expires_at: string | null; org_name: string; side: InvitationSide;
+  invited_by: string | null; name: string | null; contact: string | null; client_name: string | null; uses: number | null;
+  acceptances: { name: string | null; accepted_at: string; linked_at: string | null; org_name: string | null }[];
+};
+// "platform": every invitation (Appro+); "mine": the invitations of the person's own Pro (its administrator).
+export const fetchInvitations = (scope: "platform" | "mine") =>
+  call<InvitationRecord[]>(scope === "platform" ? "platform_invitations" : "my_invitations");
+
+// A Pro's card (20261126): only what it chose to show. Seen before accepting a request or from the directory.
+export type ProCard = {
+  id: string; name: string; kind: "business" | "person"; is_supplier: boolean; is_buyer: boolean; tagline: string | null; since: string;
+  catalog_visibility: CatalogVisibility | null; address: string | null; phone: string | null; email: string | null; tax_id: string | null;
+  clients: number | null; suppliers: number | null;
+};
+export const fetchProCard = (orgId: string) => call<ProCard>("pro_public_card", { p_org_id: orgId });
+
+// What my Pro shows on its card, item by item.
+export type ProfileVisibility = { address: boolean; phone: boolean; email: boolean; tax_id: boolean; relations: boolean };
+export async function fetchProfileVisibility(): Promise<ProfileVisibility | null> {
+  const { data, error } = await client().rpc("my_org_profile");
+  if (error || !data) return null;
+  return ((data as { profile_visibility?: ProfileVisibility }).profile_visibility) ?? null;
+}
+export const setProfileVisibility = (visibility: Partial<ProfileVisibility>) => call<void>("set_profile_visibility", { p_visibility: visibility });

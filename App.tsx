@@ -106,7 +106,7 @@ function tabsFor(account: Account, modules: ModuleState = {}, pro: MyPro | null 
   const has = (feature: string) => account.features.includes(feature);
   const add = (tabs: TabDef[], tab: TabDef, allowed: boolean) => { if (allowed && !tabs.includes(tab)) tabs.push(tab); };
   // The Appro+ team: its own console, separate from every Pro.
-  if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformSettings, TAB.platformTeam, TAB.account] };
+  if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformSettings, TAB.platformTeam, TAB.alerts, TAB.account] };
   if (account.role === "customer") {
     // Découvrir: the public catalogue, for a buyer's space (also before its first supplier).
     const discover = pro?.status === "active" && pro.is_buyer;
@@ -431,7 +431,7 @@ function Main({ session }: { session: Session }) {
     return onAlertTapped((data) => {
       if (data.id) void markAlertsRead([data.id]).then(alerts.refresh).catch(() => {});
       void (data.event === "team.message" && data.id ? fetchAlertConversation(data.id).catch(() => null) : Promise.resolve(null)).then((conversationId) => {
-        const target = alertTarget(data.event, data.order_id, account?.role !== "customer", conversationId);
+        const target = alertTarget(data.event, data.order_id, account?.role !== "customer", conversationId, account?.role === "platform");
         navigate(target.tab, { ...target.params, back: "alerts" });
       });
     });
@@ -525,17 +525,17 @@ function Main({ session }: { session: Session }) {
       case "returns":
         return <ReturnsScreen initialSheet={nav.params?.section} initialOrderId={nav.params?.orderId} />;
       case "deliveries":
-        return <DriverScreen />;
+        return <DriverScreen initialSection={nav.params?.section} />;
       case "alerts":
-        return <AlertsScreen userId={session.user.id} team={kind === "team"} onRead={alerts.refresh} />;
+        return <AlertsScreen userId={session.user.id} team={kind === "team"} platform={kind === "platform"} onRead={alerts.refresh} />;
       case "pros":
         return <ProsScreen />;
       case "platformTeam":
         return <PlatformTeamScreen />;
       case "platformSettings":
-        return <PlatformSettingsScreen />;
+        return <PlatformSettingsScreen initialPage={nav.params?.page} />;
       case "network":
-        return <NetworkScreen onChanged={() => void loadAccount()} />;
+        return <NetworkScreen initialSection={nav.params?.section} onChanged={() => void loadAccount()} />;
       case "discover":
         return <PublicCatalogScreen canOrder={account.role === "customer" && myPro?.status === "active"}
           reason={account.role !== "customer" ? "Passez dans votre espace Acheteur pour commander." : "Votre espace doit être actif pour commander."}

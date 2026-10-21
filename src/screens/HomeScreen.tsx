@@ -12,6 +12,7 @@ import { fetchCreditNotes, fetchReturns } from "../data/returns";
 import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
 import { closedAt, fetchAllOrders } from "../data/staff";
+import { fetchPickups, fetchShipments } from "../data/delivery";
 import { Button, ListGroup, ListRow, Loading, ScreenHeader, toDayKey } from "../ui/components";
 import { allowedFor, defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { useNav } from "../ui/navigation";
@@ -57,7 +58,10 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
         const money = ["invoicedMonth", "collectedMonth", "outstanding", "overdue", "toInvoice"].some(shows);
         const decisions = ["pending", "special", "reschedule", "waitingReply", "toInvoice"].some(shows);
         // One wave: the decision board shares the orders, claims, returns and accounts requested here.
-        const [orders, claims, accounts, returns, credits, invoices, board] = await Promise.all([
+        // Delivery tiles count exactly what Livraisons lists (À récupérer / À livrer), also for a driver
+        // who does not see every order.
+        const deliveryLists = can("deliveries") && (shows("ready") || shows("shipping"));
+        const [orders, claims, accounts, returns, credits, invoices, board, pickups, shipments] = await Promise.all([
           needsOrders ? fetchAllOrders(fresh).catch(() => []) : Promise.resolve([]),
           shows("claims") ? fetchClaims().catch(() => []) : Promise.resolve([]),
           shows("accounts") ? fetchAccounts().catch(() => []) : Promise.resolve([]),
@@ -65,6 +69,8 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
           shows("credits") ? fetchCreditNotes().catch(() => []) : Promise.resolve([]),
           money ? fetchInvoices().catch(() => []) : Promise.resolve([]),
           decisions ? fetchDecisionBoard(can, isAdmin).catch(() => null) : Promise.resolve(null),
+          deliveryLists && shows("ready") && can("orders.ship") ? fetchPickups().catch(() => null) : Promise.resolve(null),
+          deliveryLists && shows("shipping") ? fetchShipments().catch(() => null) : Promise.resolve(null),
         ]);
         const month = new Date().toISOString().slice(0, 7);
         const valid = invoices.filter((invoice) => invoice.status === "issued" || invoice.status === "paid");
@@ -85,8 +91,8 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
         next.placedToday = orders.filter((order) => toDayKey(new Date(order.created_at)) === today).length;
         next.queue = count(orders, ["confirmed", "preparing", "ready"]);
         next.prepare = count(orders, ["confirmed", "preparing"]);
-        next.ready = count(orders, ["ready"]);
-        next.shipping = count(orders, ["out_for_delivery"]);
+        next.ready = pickups ? pickups.length : count(orders, ["ready"]);
+        next.shipping = shipments ? shipments.length : count(orders, ["out_for_delivery"]);
         // Delivered today, whatever the day they were placed (the same orders as Clôturées → « Clôturées le : aujourd'hui »).
         next.deliveredToday = orders.filter((order) => order.status === "delivered" && toDayKey(new Date(closedAt(order))) === today).length;
         next.dueToday = orders.filter((order) => order.requested_delivery_date === today && !["delivered", "declined", "cancelled"].includes(order.status)).length;

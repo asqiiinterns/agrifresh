@@ -1,6 +1,10 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" · relation créée le {0}", " · link created on {0}", " · أُنشئت العلاقة في {0}"],
+  [" · valable jusqu’au {0}", " · valid until {0}", " · صالحة حتى {0}"],
+  ["{0} ne pourra plus se connecter et disparaît des listes. Le compte reste visible avec le filtre « Supprimés » et peut être restauré.", "{0} will no longer be able to sign in and leaves the lists. The account stays visible with the « Deleted » filter and can be restored.", "لن يتمكن {0} من تسجيل الدخول ويختفي من القوائم. يبقى الحساب ظاهرا بفلتر « المحذوفة » ويمكن استعادته."],
+  ["{0} ne pourra plus se connecter. Le compte reste visible avec le filtre « Supprimés » et peut être restauré.", "{0} will no longer be able to sign in. The account stays visible with the « Deleted » filter and can be restored.", "لن يتمكن {0} من تسجيل الدخول. يبقى الحساب ظاهرا بفلتر « المحذوفة » ويمكن استعادته."],
   [" Plafond : ce qu’Appro+ a ouvert à votre espace ({0} fonctions).", " Ceiling: what Appro+ has opened to your space ({0} functions).", " السقف: ما فتحه Appro+ لفضائك ({0} وظيفة)."],
   ["Assister {0}", "Assist {0}", "مساعدة {0}"],
   ["Aucune modification applicable.\n{0}", "No applicable change.\n{0}", "لا يوجد تعديل قابل للتطبيق.\n{0}"],

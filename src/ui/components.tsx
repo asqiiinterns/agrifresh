@@ -72,13 +72,15 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function ScreenHeader({ eyebrow, title, subtitle, right }: { eyebrow: string; title: string; subtitle?: string; right?: ReactNode }) {
-  return <View style={[ui.header, ui.row]}>
-    <View style={{ flex: 1 }}>
-      <Text style={ui.eyebrow}>{eyebrow}</Text>
-      <Text style={ui.title}>{title}</Text>
-      {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
+  return <View style={ui.header}>
+    <View style={[ui.row, ui.pageInner]}>
+      <View style={{ flex: 1 }}>
+        <Text style={ui.eyebrow}>{eyebrow}</Text>
+        <Text style={ui.title}>{title}</Text>
+        {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
+      </View>
+      {right}
     </View>
-    {right}
   </View>;
 }
 

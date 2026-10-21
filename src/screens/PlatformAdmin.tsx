@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Platform, ScrollView, StyleSheet, Switch, View } from "react-native";
-import { fetchPublicSettings, setPlatformSetting, type PublicSettings } from "../data/directory";
+import { fetchPublicSettings, setPlatformSetting, type PlatformSettingKey, type PublicSettings } from "../data/directory";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../ui/Text";
+import { InvitationsPage } from "./InvitationsPage";
 import {
   assistChanged, fetchPlatformAccounts, fetchProCard, fetchTemplates, saveProAsPlatform, setPlatformAccountStatus, setTemplatePermission, startAssist,
   type PlatformAccount, type ProCard, type ProInput, type RolePermission, type RoleTemplate,
 } from "../data/pros";
+import { deleteAccount } from "../data/admin";
 import { confirmWithPassword } from "../ui/PasswordConfirm";
 import { InviteModal } from "../ui/InviteModal";
 import { setProStatus } from "../data/platform";
@@ -162,11 +164,15 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
 // ---------------------------------------------------------------------------
 // Appro+ → Paramétrage: everything that applies to the whole platform.
 // ---------------------------------------------------------------------------
-type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories" | "signup";
+type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories" | "signup" | "invitations";
+const settingsPages: SettingsPage[] = ["modules", "templates", "alerts", "accounts", "categories", "signup", "invitations"];
 
-export function PlatformSettingsScreen() {
-  const [page, setPage] = useState<SettingsPage>("menu");
+export function PlatformSettingsScreen({ initialPage }: { initialPage?: string } = {}) {
+  const [page, setPage] = useState<SettingsPage>(settingsPages.includes(initialPage as SettingsPage) ? initialPage as SettingsPage : "menu");
+  // A notification opened while this screen is shown (e.g. a new invitation).
+  useEffect(() => { if (settingsPages.includes(initialPage as SettingsPage)) setPage(initialPage as SettingsPage); }, [initialPage]);
   const back = <BackButton label="Paramétrage" onPress={() => setPage("menu")} />;
+  if (page === "invitations") return <InvitationsPage scope="platform" header={back} />;
   if (page === "signup") return <SignupSettingsPage header={back} />;
   if (page === "modules") return <ModulesPage header={back} mode={{ kind: "platform" }} />;
   if (page === "templates") return <TemplatesPage header={back} />;
@@ -182,6 +188,7 @@ export function PlatformSettingsScreen() {
       <MenuSearch>
       <ListGroup title="Comptes">
         <ListRow icon="people-outline" title="Tous les comptes" detail="Rechercher, valider les inscriptions, suspendre ou réactiver un compte." onPress={() => setPage("accounts")} />
+        <ListRow icon="mail-open-outline" title="Invitations" detail="Toutes les invitations : qui a invité qui, pour quel Pro, quand, qui a accepté et quand." onPress={() => setPage("invitations")} />
         <ListRow icon="person-add-outline" title="Nouveaux inscrits et invitations" detail="Période d’essai des nouveaux espaces (commande possible avant validation) et adresse des liens d’invitation." onPress={() => setPage("signup")} />
       </ListGroup>
       <ListGroup title="Fonctions et droits">
@@ -204,16 +211,18 @@ export function PlatformSettingsScreen() {
 function SignupSettingsPage({ header }: { header: React.ReactNode }) {
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [hours, setHours] = useState("");
+  const [invitedHours, setInvitedHours] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   async function reload() {
     const next = await fetchPublicSettings();
     setSettings(next);
     setHours(String(next.trial_hours));
+    setInvitedHours(String(next.invited_trial_hours ?? 0));
     setUrl(next.app_url || (Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin : ""));
   }
   useEffect(() => { void reload(); }, []);
-  async function save(key: "new_accounts_trial_hours" | "app_url", value: number | string) {
+  async function save(key: PlatformSettingKey, value: number | string | boolean) {
     setBusy(true);
     try {
       await setPlatformSetting(key, value);
@@ -226,6 +235,7 @@ function SignupSettingsPage({ header }: { header: React.ReactNode }) {
     }
   }
   const trial = Number(hours) || 0;
+  const invitedTrial = Number(invitedHours) || 0;
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="APPRO+ · PARAMÉTRAGE" title="Nouveaux inscrits" right={header} />
     {!settings ? <Loading /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
@@ -238,6 +248,26 @@ function SignupSettingsPage({ header }: { header: React.ReactNode }) {
         <Field label="Durée de l’essai (heures, 0 = désactivée)" value={hours} onChangeText={setHours} keyboardType="number-pad" />
         <Button label="ENREGISTRER LA DURÉE" onPress={() => save("new_accounts_trial_hours", Math.max(0, Math.round(trial)))} busy={busy} disabled={trial === settings.trial_hours} style={{ marginTop: 8 }} />
         <Text style={[ui.small, { marginTop: 6 }]}>Actuellement : {settings.trial_hours > 0 ? `essai de ${settings.trial_hours} h` : "validation obligatoire avant la première commande"}. Les espaces en essai sont en tête de la liste des Pros.</Text>
+      </View>
+      <View style={ui.card}>
+        <Text style={ui.strong}>Comptes invités</Text>
+        <Text style={ui.small}>Une personne qui rejoint Appro+ par une invitation peut travailler pendant cette durée ; sans validation de votre part (ou de l’administrateur de l’espace), son compte est ensuite suspendu. 0 : validation obligatoire tout de suite. Dans tous les cas, l’e-mail doit d’abord être confirmé.</Text>
+        <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          {[0, 24, 48, 72].map((value) => <Chip key={value} label={value === 0 ? "Validation immédiate" : `${value} h`} selected={invitedTrial === value} onPress={() => setInvitedHours(String(value))} />)}
+        </View>
+        <Field label="Période transitoire des invités (heures)" value={invitedHours} onChangeText={setInvitedHours} keyboardType="number-pad" />
+        <Button label="ENREGISTRER" onPress={() => save("invited_trial_hours", Math.max(0, Math.round(invitedTrial)))} busy={busy} disabled={invitedTrial === (settings.invited_trial_hours ?? 0)} style={{ marginTop: 8 }} />
+      </View>
+      <View style={ui.card}>
+        <View style={ui.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={ui.strong}>Inscription spontanée d’une entreprise</Text>
+            <Text style={ui.small}>{settings.self_signup_business_trial
+              ? "Une personne qui s’inscrit seule peut créer un espace entreprise, en période d’essai selon la durée ci-dessus."
+              : "Une personne qui s’inscrit seule obtient un compte personnel ; l’espace entreprise reste à valider par l’équipe Appro+."}</Text>
+          </View>
+          <Switch value={!!settings.self_signup_business_trial} disabled={busy} onValueChange={(value) => void save("self_signup_business_trial", value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+        </View>
       </View>
       <View style={ui.card}>
         <Text style={ui.strong}>Adresse de l’application web</Text>
@@ -288,6 +318,8 @@ function PlatformAccountsPage({ header }: { header: React.ReactNode }) {
   const [search, setSearch] = useState("");
   const [accounts, setAccounts] = useState<PlatformAccount[] | null>(null);
   const [error, setError] = useState("");
+  // Deleted accounts (soft delete) only show with this filter; unconfirmed e-mails can be singled out.
+  const [view, setView] = useState<"live" | "pending" | "unconfirmed" | "deleted">("live");
   async function reload(text = search) {
     try { setAccounts(await fetchPlatformAccounts(text)); setError(""); } catch (cause) { setError(errorMessage(cause, "Impossible de charger les comptes.")); }
   }
@@ -303,11 +335,28 @@ function PlatformAccountsPage({ header }: { header: React.ReactNode }) {
     ]);
   }
 
+  function remove(account: PlatformAccount, restore: boolean) {
+    const act = () => void deleteAccount(account.id, restore).then(() => reload()).catch((cause: unknown) => notify("Comptes", errorMessage(cause, "Le compte n’a pas pu être modifié.")));
+    if (restore) { act(); return; }
+    notify("Supprimer ce compte", `${account.email} ne pourra plus se connecter. Le compte reste visible avec le filtre « Supprimés » et peut être restauré.`, [
+      { text: "Annuler", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: act },
+    ]);
+  }
+  const inView = (item: PlatformAccount) => view === "deleted" ? !!item.deleted_at
+    : !item.deleted_at && (view === "live" || (view === "pending" ? item.status === "pending" : item.email_confirmed === false));
+  const countOf = (value: typeof view) => (accounts ?? []).filter((item) => value === "deleted" ? !!item.deleted_at
+    : !item.deleted_at && (value === "live" || (value === "pending" ? item.status === "pending" : item.email_confirmed === false))).length;
+
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="APPRO+ · PARAMÉTRAGE" title="Tous les comptes" right={header} />
     <View style={{ paddingHorizontal: 14, paddingTop: 8 }}><Field label="Rechercher" value={search} onChangeText={setSearch} placeholder="E-mail, nom ou Pro" autoCapitalize="none" /></View>
+    <View style={[ui.wrapRow, { paddingHorizontal: 14, marginTop: 6 }]}>
+      {([["live", "Comptes"], ["pending", "À valider"], ["unconfirmed", "E-mail non confirmé"], ["deleted", "Supprimés"]] as [typeof view, string][])
+        .map(([value, label]) => <Chip key={value} label={`${label} (${countOf(value)})`} selected={view === value} onPress={() => setView(value)} />)}
+    </View>
     {error ? <Text style={[ui.error, { paddingHorizontal: 14 }]}>{error}</Text> : null}
-    {!accounts ? <Loading /> : <FlatList data={accounts} keyExtractor={(item) => item.id} contentContainerStyle={ui.content}
+    {!accounts ? <Loading /> : <FlatList data={accounts.filter(inView)} keyExtractor={(item) => item.id} contentContainerStyle={ui.content}
       ListEmptyComponent={<EmptyState title="Aucun compte" body="Aucun compte ne correspond à cette recherche." />}
       renderItem={({ item }) => <View style={ui.card}>
         <View style={ui.row}>
@@ -316,10 +365,16 @@ function PlatformAccountsPage({ header }: { header: React.ReactNode }) {
         </View>
         <Text style={ui.small}>{item.email} · {roleWords[item.role ?? "customer"] ?? item.role} · {item.org_name ?? (item.role === "platform" ? "Appro+" : "Sans Pro (inscription libre)")}</Text>
         <Text style={ui.small}>Créé le {formatDay(item.created_at, { day: "numeric", month: "short", year: "numeric" })}{item.last_sign_in_at ? ` · dernière connexion le ${formatDay(item.last_sign_in_at, { day: "numeric", month: "short" })}` : ""}</Text>
-        {item.role !== "platform" ? <View style={[ui.wrapRow, { marginTop: 6 }]}>
+        {item.invited_by ? <Text style={ui.small}>Invité par {item.invited_by}</Text> : null}
+        {item.email_confirmed === false ? <Text style={[ui.small, { color: colors.amber }]}>E-mail pas encore confirmé : reste suspendu jusqu’à la confirmation.</Text> : null}
+        {item.deleted_at ? <View style={[ui.wrapRow, { marginTop: 6 }]}>
+          <Text style={[ui.small, { color: colors.danger, flex: 1 }]}>Supprimé le {formatDay(item.deleted_at, { day: "numeric", month: "short", year: "numeric" })}</Text>
+          {item.role !== "platform" ? <Button label="RESTAURER" variant="secondary" onPress={() => remove(item, true)} /> : null}
+        </View> : item.role !== "platform" ? <View style={[ui.wrapRow, { marginTop: 6 }]}>
           {item.status !== "active" ? <Button label={item.status === "pending" ? "VALIDER" : "RÉACTIVER"} onPress={() => change(item, "active")} /> : null}
           {item.status === "active" ? <Button label="SUSPENDRE" variant="danger" onPress={() => change(item, "suspended")} /> : null}
           {item.status === "pending" ? <Button label="REFUSER" variant="danger" onPress={() => change(item, "refused")} /> : null}
+          <Button label="SUPPRIMER" variant="secondary" onPress={() => remove(item, false)} />
         </View> : null}
       </View>}
     />}

@@ -12,6 +12,10 @@ export type AdminAccount = {
   last_sign_in_at: string | null;
   client_name: string | null;
   is_self: boolean;
+  // 20261126: soft delete, e-mail confirmation, who invited.
+  deleted_at?: string | null;
+  email_confirmed?: boolean;
+  invited_by?: string | null;
 };
 
 function client() {
@@ -28,6 +32,12 @@ async function loadAccounts(): Promise<AdminAccount[]> {
 // Validate (active), refuse, suspend, or put back on hold (pending).
 export async function setAccountStatus(userId: string, status: AccountStatus): Promise<void> {
   const { error } = await client().rpc("admin_set_account_status", { p_user_id: userId, p_status: status });
+  if (error) throw error;
+}
+
+// Soft delete (restore = true brings it back, still suspended until reactivated). Admin of the space or Appro+.
+export async function deleteAccount(userId: string, restore = false): Promise<void> {
+  const { error } = await client().rpc("delete_account", { p_user_id: userId, p_restore: restore });
   if (error) throw error;
 }
 

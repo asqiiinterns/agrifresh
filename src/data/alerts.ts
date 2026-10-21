@@ -37,8 +37,16 @@ export const alertKinds: Record<string, string> = {
 };
 
 // Where an alert leads: the order itself, the conversation, the invoices or the account to validate.
-export function alertTarget(event: string | undefined, orderId: string | null | undefined, team: boolean, conversationId?: string | null): { tab: TabKey; params?: NavParams } {
+export function alertTarget(event: string | undefined, orderId: string | null | undefined, team: boolean, conversationId?: string | null, platform = false): { tab: TabKey; params?: NavParams } {
   const order = orderId ? { orderId } : {};
+  // The Appro+ team: invitations, new spaces and accounts to validate.
+  if (platform) switch (event) {
+    case "invitation.created":
+    case "invitation.accepted": return { tab: "platformSettings", params: { page: "invitations" } };
+    case "account.pending": return { tab: "platformSettings", params: { page: "accounts" } };
+    case "pro.trial": return { tab: "pros" };
+    default: return { tab: "alerts" };
+  }
   switch (event) {
     case "order.new": return { tab: "orders", params: team ? { section: "decide", ...order } : order };
     case "order.status":
@@ -49,6 +57,21 @@ export function alertTarget(event: string | undefined, orderId: string | null | 
     case "team.message": return { tab: "messages", params: { section: "team", page: conversationId ?? undefined } };
     case "invoice.issued": return { tab: "invoices" };
     case "account.pending": return { tab: "admin", params: { page: "accounts" } };
+    // Between Pros: contact requests, new clients, invitations, messages from outside the network.
+    case "link.request":
+    case "link.new_client": return { tab: "network", params: { section: "links" } };
+    case "invitation.accepted":
+    case "invitation.created": return { tab: "admin", params: { page: "invitations" } };
+    case "org.message": return { tab: "network", params: { section: "messages" } };
+    case "order.forced": return { tab: "orders", params: order };
+    case "invoice.reminder": return { tab: "invoices" };
+    case "leave.new":
+    case "leave.decision": return { tab: "leaves" };
+    case "incident.new": return { tab: "incidents" };
+    case "location.request":
+    case "location.answer":
+    case "location.tracking":
+    case "location.viewed": return team ? { tab: "admin", params: { page: "location" } } : { tab: "alerts" };
     case "return.new": return { tab: "returns", params: order };
     case "return.update": return team ? { tab: "returns", params: order } : { tab: "invoices", params: { section: "returns", ...order } };
     case "credit.issued": return team ? { tab: "returns", params: { section: "credits" } } : { tab: "invoices", params: { section: "credits" } };

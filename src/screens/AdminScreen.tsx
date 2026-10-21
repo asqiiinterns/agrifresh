@@ -3,12 +3,13 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshCont
 import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { roleLabels, type Role } from "../data/account";
-import { createAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, type AdminAccount } from "../data/admin";
+import { createAccount, deleteAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, type AdminAccount } from "../data/admin";
 import type { AccountStatus } from "../data/account";
 import { assignableRoles } from "../data/team";
 import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, formatDateTime } from "../ui/components";
 import { useCan } from "../data/permissions";
 import { RolesManager } from "./RolesManager";
+import { InvitationsPage } from "./InvitationsPage";
 import { SettingsScreen } from "./SettingsScreen";
 import { AuditPage, FleetPage, LocationPage } from "./FleetAuditScreens";
 import { FilterBar, type Filter } from "../ui/FilterBar";
@@ -19,8 +20,8 @@ import { StaffProductsModal } from "./StaffProductsScreen";
 import { PricingModal } from "./PricingScreen";
 import { useModules } from "../data/modules";
 
-type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "location" | "roles";
-const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location", "roles"];
+type Page = "menu" | "accounts" | "settings" | "alerts" | "fleet" | "audit" | "location" | "roles" | "invitations";
+const pages: Page[] = ["accounts", "settings", "alerts", "fleet", "audit", "location", "roles", "invitations"];
 
 // Administration home: each button opens its own page.
 export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean; initialPage?: string } = {}) {
@@ -39,6 +40,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
   if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
   if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
   if (page === "location") return <LocationPage onBack={() => setPage("menu")} isAdmin={isAdmin} />;
+  if (page === "invitations") return <InvitationsPage scope="mine" header={<BackButton onPress={() => setPage("menu")} />} />;
   if (page === "roles") return <RolesManager header={<ScreenHeader eyebrow="ADMINISTRATION" title="Rôles et accès" right={<BackButton onPress={() => setPage("menu")} />} />} />;
 
   return <View style={ui.screen}>
@@ -48,6 +50,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
       {isAdmin ? <ListGroup title="Comptes et réglages">
         <ListRow icon="person-outline" title="Comptes" detail="Validation des comptes de vos clients, suspension, rôle, ajout d’un membre de l’équipe." onPress={() => setPage("accounts")} />
         <ListRow icon="key-outline" title="Rôles et accès" detail="Qui a quel rôle, ce que chaque rôle permet, voir les droits d’une personne." onPress={() => setPage("roles")} />
+        <ListRow icon="mail-open-outline" title="Invitations" detail="Qui a invité qui, quand, qui a accepté et quand." onPress={() => setPage("invitations")} />
         <ListRow icon="options-outline" title="Paramétrage" detail="Onglets et droits par thème, profil et utilisateur ; options des clients ; accueil." onPress={() => setPage("settings")} />
         <ListRow icon="notifications-outline" title="Notifications et e-mails" detail="Événements notifiés et service d’envoi." onPress={() => setPage("alerts")} />
       </ListGroup> : null}
@@ -75,6 +78,7 @@ const statusOptions = [
   { key: "active", label: "Actifs" },
   { key: "suspended", label: "Suspendus" },
   { key: "refused", label: "Refusés" },
+  { key: "deleted", label: "Supprimés" },
 ];
 
 const statusStyle: Record<AccountStatus, { label: string; color: string; background: string }> = {
@@ -133,17 +137,28 @@ function AccountsPage({ onBack, onRoles }: { onBack: () => void; onRoles: () => 
     ]);
   }
 
+  function remove(account: AdminAccount, restore: boolean) {
+    if (restore) { void run(account, () => deleteAccount(account.id, true)); return; }
+    notify("Supprimer le compte", `${account.email} ne pourra plus se connecter et disparaît des listes. Le compte reste visible avec le filtre « Supprimés » et peut être restauré.`, [
+      { text: "Retour", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: () => void run(account, () => deleteAccount(account.id)) },
+    ]);
+  }
+
+  // Deleted accounts only show with the « Supprimés » filter.
+  const live = accounts.filter((account) => !account.deleted_at);
   const counts: Record<string, number> = {
-    all: accounts.length,
-    pending: accounts.filter((account) => account.status === "pending").length,
-    active: accounts.filter((account) => account.status === "active").length,
-    suspended: accounts.filter((account) => account.status === "suspended").length,
-    refused: accounts.filter((account) => account.status === "refused").length,
+    all: live.length,
+    pending: live.filter((account) => account.status === "pending").length,
+    active: live.filter((account) => account.status === "active").length,
+    suspended: live.filter((account) => account.status === "suspended").length,
+    refused: live.filter((account) => account.status === "refused").length,
+    deleted: accounts.length - live.length,
   };
 
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
-    return accounts.filter((account) => (status === "all" || account.status === status)
+    return accounts.filter((account) => (status === "deleted" ? !!account.deleted_at : !account.deleted_at && (status === "all" || account.status === status))
       && (role === "all" || account.role === role || (role === "supervisor" && account.role === "staff"))
       && `${account.email} ${account.full_name} ${account.client_name ?? ""}`.toLocaleLowerCase("fr").includes(term));
   }, [accounts, search, status, role]);
@@ -173,7 +188,12 @@ function AccountsPage({ onBack, onRoles }: { onBack: () => void; onRoles: () => 
           </View>
           <Text style={ui.small}>{roleLabels[item.role] ?? item.role}{item.full_name ? ` · ${item.full_name}` : ""}{item.client_name ? ` · fiche ${item.client_name}` : ""}</Text>
           <Text style={ui.small}>Créé le {formatDateTime(item.created_at)}{item.last_sign_in_at ? ` · dernière connexion ${formatDateTime(item.last_sign_in_at)}` : " · jamais connecté"}</Text>
-          {!item.is_self ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+          {item.invited_by ? <Text style={ui.small}>Invité par {item.invited_by}</Text> : null}
+          {item.email_confirmed === false ? <Text style={[ui.small, { color: colors.amber }]}>E-mail pas encore confirmé : le compte ne peut pas être activé avant.</Text> : null}
+          {item.deleted_at ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
+            <Text style={[ui.small, { color: colors.danger, flex: 1 }]}>Supprimé le {formatDateTime(item.deleted_at)}</Text>
+            <Button label="RESTAURER" variant="secondary" onPress={() => remove(item, true)} busy={busy} />
+          </View> : !item.is_self ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
             {item.status === "pending" ? <>
               <Button label="VALIDER" onPress={() => changeStatus(item, "active")} busy={busy} style={{ flexGrow: 1 }} />
               <Button label="SUSPENDRE" variant="secondary" onPress={() => changeStatus(item, "suspended")} disabled={busy} />
@@ -183,9 +203,10 @@ function AccountsPage({ onBack, onRoles }: { onBack: () => void; onRoles: () => 
                 <Button label="RÉACTIVER" onPress={() => changeStatus(item, "active")} busy={busy} />
                 <Button label="REMETTRE EN ATTENTE" variant="secondary" onPress={() => changeStatus(item, "pending")} disabled={busy} />
               </>}
+            <Button label="SUPPRIMER" variant="danger" onPress={() => remove(item, false)} disabled={busy} />
           </View> : null}
           {/* One place for roles: Rôles et accès (the former profile chips here followed another set of rights). */}
-          {!item.is_self && !item.client_name ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          {!item.is_self && !item.client_name && !item.deleted_at ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
             <Button label="RÔLES ET ACCÈS" variant="secondary" onPress={onRoles} />
           </View> : null}
         </View>;

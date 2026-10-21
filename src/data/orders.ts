@@ -166,6 +166,15 @@ export const deliveryNoteNumber = (order: Pick<Order, "order_number"> & { delive
 export const formatOrigin = (origin: ProductOrigin | null | undefined) =>
   origin ? [origin.producer, origin.region].filter(Boolean).join(" · ") : "";
 
+// Payment collected by the driver at hand-over (written in the history by driver_deliver_v3): "12,500 TND (espèces)".
+export function collectedByDriver(order: Pick<Order, "order_status_history">): string | null {
+  for (const event of order.order_status_history ?? []) {
+    const match = /Acompte reçu : ([\d\s.,\u00a0\u202f]+ TND)(?: \(([^)]+)\))?/.exec(event.note ?? "");
+    if (match) return match[2] ? `${match[1].trim()} (${match[2]})` : match[1].trim();
+  }
+  return null;
+}
+
 // Status history, oldest first, labelled with who made each change.
 export const timeline = (order: Order) => [...(order.order_status_history ?? [])]
   .sort((a, b) => a.created_at.localeCompare(b.created_at))
