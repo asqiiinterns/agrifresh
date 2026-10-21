@@ -27,6 +27,7 @@ import { NetworkScreen } from "./src/screens/NetworkScreen";
 import { acceptInvitation, expireTrials, fetchMySuppliers, fetchPublicSettings, switchSupplier, type MySupplier } from "./src/data/directory";
 import { getPendingInvite, onPendingInvite, setPendingInvite, startInviteCapture } from "./src/data/invite";
 import { PublicCatalogScreen } from "./src/screens/PublicCatalogScreen";
+import { LocationRequestHost } from "./src/ui/LocationRequestHost";
 import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -561,6 +562,8 @@ function Main({ session }: { session: Session }) {
   })();
 
   return <ModulesContext.Provider value={modules}><PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
+    {/* A colleague asks where I am: I accept or refuse (team accounts, Localisation module on). */}
+    <LocationRequestHost enabled={isActive && account.role !== "customer" && account.role !== "platform" && isModuleOn(modules, "location")} />
     <View style={styles.topBar}>
       <Text style={styles.brand}>Appro<Text style={styles.brandPlus}>+</Text></Text>
       <View style={{ flex: 1 }} />

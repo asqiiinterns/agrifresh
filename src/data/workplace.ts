@@ -14,7 +14,9 @@ function client() {
 // Location: shared only with consent, only while the app is open
 // ---------------------------------------------------------------------------
 
-export type TeamLocation = { user_id: string; name: string; role: string; consent: boolean; latitude: number | null; longitude: number | null; accuracy: number | null; updated_at: string | null; last_sign_in_at: string | null };
+export type TeamLocation = { user_id: string; name: string; role: string; consent: boolean; latitude: number | null; longitude: number | null; accuracy: number | null; updated_at: string | null; last_sign_in_at: string | null;
+  // 20261123: the administrator allows showing the last position when the person does not answer.
+  tracking?: boolean };
 
 export async function fetchMyLocationConsent(): Promise<boolean> {
   const { data: auth } = await client().auth.getUser();
@@ -55,6 +57,62 @@ export async function fetchTeamLocations(): Promise<TeamLocation[]> {
   const { data, error } = await client().rpc("team_locations");
   if (error) throw error;
   return (data ?? []) as TeamLocation[];
+}
+
+// The position of this phone now (asks for the permission when needed); null when unavailable.
+export async function currentPosition(): Promise<{ latitude: number; longitude: number; accuracy: number | null } | null> {
+  try {
+    if (Platform.OS === "web") {
+      if (typeof navigator === "undefined" || !navigator.geolocation) return null;
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 15000 }));
+      return { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+    }
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (!permission.granted) return null;
+    const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+  } catch {
+    return null;
+  }
+}
+
+// A look at a colleague's position is a request she answers (20261123); after a minute without answer the last
+// known position is shown only if her tracking is allowed or the one asking is the administrator — she is told.
+export type LocationRequestStatus = { id: string; status: "pending" | "accepted" | "refused" | "automatic" | "expired"; latitude: number | null; longitude: number | null;
+  accuracy: number | null; located_at: string | null; target: string; seconds_left: number };
+export type IncomingLocationRequest = { id: string; requester: string; created_at: string; tracking: boolean };
+
+export async function requestLocation(targetId: string): Promise<string> {
+  const { data, error } = await client().rpc("request_location", { p_target_id: targetId });
+  if (error) throw error;
+  return data as string;
+}
+export async function fetchLocationRequestStatus(requestId: string): Promise<LocationRequestStatus> {
+  const { data, error } = await client().rpc("location_request_status", { p_request_id: requestId });
+  if (error) throw error;
+  return data as LocationRequestStatus;
+}
+export async function fetchIncomingLocationRequests(): Promise<IncomingLocationRequest[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("my_location_requests");
+  return error ? [] : (data ?? []) as IncomingLocationRequest[];
+}
+export async function answerLocationRequest(requestId: string, accept: boolean): Promise<void> {
+  const position = accept ? await currentPosition() : null;
+  if (accept && !position) throw new Error("Position indisponible : autorisez la localisation sur ce téléphone, puis réessayez.");
+  const { error } = await client().rpc("answer_location_request", {
+    p_request_id: requestId, p_accept: accept, p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null, p_accuracy: position?.accuracy ?? null,
+  });
+  if (error) throw error;
+}
+export async function setLocationTracking(userId: string, allowed: boolean): Promise<void> {
+  const { error } = await client().rpc("set_location_tracking", { p_user_id: userId, p_allowed: allowed });
+  if (error) throw error;
+}
+export async function fetchMyLocationViews(): Promise<{ requester: string; status: LocationRequestStatus["status"]; created_at: string }[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("my_location_views");
+  return error ? [] : (data ?? []) as { requester: string; status: LocationRequestStatus["status"]; created_at: string }[];
 }
 
 // ---------------------------------------------------------------------------

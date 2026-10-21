@@ -38,7 +38,7 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
   if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} onRoles={() => setPage("roles")} />;
   if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
   if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
-  if (page === "location") return <LocationPage onBack={() => setPage("menu")} />;
+  if (page === "location") return <LocationPage onBack={() => setPage("menu")} isAdmin={isAdmin} />;
   if (page === "roles") return <RolesManager header={<ScreenHeader eyebrow="ADMINISTRATION" title="Rôles et accès" right={<BackButton onPress={() => setPage("menu")} />} />} />;
 
   return <View style={ui.screen}>

@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { Text } from "../ui/Text";
 import { actionLabels, describeChanges, entityLabels, fetchAudit, type AuditEntry } from "../data/audit";
 import { roleLabels, type Role } from "../data/account";
 import { fetchVehicles, saveVehicle, type Vehicle, type VehicleInput } from "../data/fleet";
-import { fetchTeamLocations, type TeamLocation } from "../data/workplace";
+import { fetchLocationRequestStatus, fetchTeamLocations, requestLocation, setLocationTracking, type LocationRequestStatus, type TeamLocation } from "../data/workplace";
 import { Linking } from "react-native";
 import { BackButton, Button, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime, toDayKey } from "../ui/components";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
-import { errorMessage } from "../ui/notify";
+import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
 const emptyVehicle: VehicleInput = { label: "", plate: "", notes: "", active: true };
+
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 24 },
+  dialog: { backgroundColor: colors.white, borderRadius: 12, padding: 16 },
+});
 
 // Delivery fleet: the vehicles a driver can pick when shipping.
 export function FleetPage({ onBack }: { onBack: () => void }) {
@@ -87,12 +92,52 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
   </View>;
 }
 
-// Where connected accounts are (last position, only for those who agreed to share it).
-export function LocationPage({ onBack }: { onBack: () => void }) {
+// Where a colleague is: asked to her, she accepts or refuses. Without answer within a minute, the last known
+// position is shown only if the administrator allowed tracking for her account (or if I am the administrator);
+// she is told who looked. The administrator switches tracking on or off per account.
+export function LocationPage({ onBack, isAdmin = false }: { onBack: () => void; isAdmin?: boolean }) {
   const [people, setPeople] = useState<TeamLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [asking, setAsking] = useState<{ name: string; requestId: string } | null>(null);
+  const [status, setStatus] = useState<LocationRequestStatus | null>(null);
+
+  async function ask(person: TeamLocation) {
+    try {
+      const requestId = await requestLocation(person.user_id);
+      setStatus(null);
+      setAsking({ name: person.name, requestId });
+    } catch (cause) {
+      notify("Localisation", errorMessage(cause, "La demande n’a pas pu être envoyée. La migration 20261123 est-elle exécutée ?"));
+    }
+  }
+
+  // While waiting: the answer, or the end of the minute.
+  useEffect(() => {
+    if (!asking) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const next = await fetchLocationRequestStatus(asking.requestId);
+        if (active) setStatus(next);
+        return next.status !== "pending";
+      } catch { return false; }
+    };
+    void poll();
+    const timer = setInterval(() => { void poll().then((done) => { if (done) clearInterval(timer); }); }, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, [asking?.requestId]);
+
+  async function toggleTracking(person: TeamLocation, allowed: boolean) {
+    setPeople((current) => current.map((item) => item.user_id === person.user_id ? { ...item, tracking: allowed } : item));
+    try {
+      await setLocationTracking(person.user_id, allowed);
+    } catch (cause) {
+      setPeople((current) => current.map((item) => item.user_id === person.user_id ? { ...item, tracking: !allowed } : item));
+      notify("Localisation", errorMessage(cause, "Le réglage n’a pas pu être enregistré."));
+    }
+  }
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
@@ -118,15 +163,41 @@ export function LocationPage({ onBack }: { onBack: () => void }) {
       keyExtractor={(item) => item.user_id}
       contentContainerStyle={ui.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
-      ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || "Seuls les comptes dont le profil le permet (Paramétrage → Personnel) et qui ont donné leur accord partagent leur position, quand l’application est ouverte."}</Text>}
-      renderItem={({ item }) => <View style={[ui.card, ui.row]}>
-        <View style={{ flex: 1 }}>
-          <Text style={ui.strong}>{item.name}</Text>
-          <Text style={ui.small}>{roleLabels[item.role as Role] ?? item.role} · {item.latitude !== null && item.updated_at ? `vu ${ago(item.updated_at)}${item.accuracy ? ` · ±${Math.round(item.accuracy)} m` : ""}` : item.consent ? "accord donné, pas encore de position" : "ne partage pas sa position"}</Text>
+      ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || "Touchez « Demander la position » : la personne est prévenue et accepte ou refuse. Sans réponse en une minute, sa dernière position n’est montrée que si le repérage est autorisé pour son compte (ou à l’administrateur), et elle en est informée."}</Text>}
+      renderItem={({ item }) => <View style={ui.card}>
+        <View style={ui.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={ui.strong}>{item.name}</Text>
+            <Text style={ui.small}>{roleLabels[item.role as Role] ?? item.role}{item.updated_at ? ` · dernière position ${ago(item.updated_at)}` : " · aucune position connue"}</Text>
+          </View>
+          <Button label="DEMANDER LA POSITION" variant="secondary" onPress={() => ask(item)} />
         </View>
-        {item.latitude !== null && item.longitude !== null ? <Button label="CARTE" variant="secondary" onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)} /> : null}
+        {isAdmin ? <View style={[ui.row, { marginTop: 8 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={ui.body}>Repérage autorisé</Text>
+            <Text style={ui.small}>Sans réponse dans la minute, sa dernière position est montrée ; elle est prévenue à chaque fois.</Text>
+          </View>
+          <Switch value={!!item.tracking} onValueChange={(value) => void toggleTracking(item, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+        </View> : null}
       </View>}
     />}
+    <Modal visible={asking !== null} transparent animationType="fade" onRequestClose={() => setAsking(null)}>
+      <View style={styles.backdrop}>
+        <View style={styles.dialog}>
+          <Text style={ui.strong}>Position de {asking?.name}</Text>
+          {!status || status.status === "pending" ? <>
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />
+            <Text style={[ui.small, { marginTop: 8, textAlign: "center" }]}>En attente de sa réponse{status ? ` · ${status.seconds_left} s` : ""}.</Text>
+          </> : status.status === "accepted" || status.status === "automatic" ? <>
+            {status.latitude !== null && status.longitude !== null ? <>
+              <Text style={[ui.body, { marginTop: 8 }]}>{status.status === "accepted" ? "Position partagée à l’instant." : `Dernière position connue${status.located_at ? ` (${ago(status.located_at)})` : ""}, sans réponse de sa part : elle en est informée.`}{status.accuracy ? ` Précision ±${Math.round(status.accuracy)} m.` : ""}</Text>
+              <Button label="OUVRIR LA CARTE" onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${status.latitude},${status.longitude}`)} style={{ marginTop: 10 }} />
+            </> : <Text style={[ui.body, { marginTop: 8 }]}>Aucune position connue pour ce compte.</Text>}
+          </> : <Text style={[ui.body, { marginTop: 8 }]}>{status.status === "refused" ? "Elle a refusé de partager sa position." : "Pas de réponse dans la minute : sa position ne peut pas être montrée sans son accord."}</Text>}
+          <Button label="FERMER" variant="secondary" onPress={() => { setAsking(null); void reload(); }} style={{ marginTop: 12 }} />
+        </View>
+      </View>
+    </Modal>
   </View>;
 }
 

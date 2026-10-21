@@ -7,11 +7,11 @@ import { AudioModule } from "expo-audio";
 import { Camera } from "expo-camera";
 import * as Location from "expo-location";
 import { Text } from "../ui/Text";
-import { Button } from "../ui/components";
+import { Button, formatDateTime } from "../ui/components";
 import { registerForPush } from "../notifications";
 import { Switch } from "react-native";
 import { useCan } from "../data/permissions";
-import { fetchMyLocationConsent, setLocationConsent } from "../data/workplace";
+import { fetchMyLocationConsent, fetchMyLocationViews, setLocationConsent } from "../data/workplace";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 
@@ -88,7 +88,10 @@ export function PermissionsCard() {
 function LocationConsentCard() {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void fetchMyLocationConsent().then(setConsent).catch(() => {}); }, []);
+  // Every look at my position (asked, accepted, refused, shown without answer).
+  const [views, setViews] = useState<Awaited<ReturnType<typeof fetchMyLocationViews>>>([]);
+  useEffect(() => { void fetchMyLocationConsent().then(setConsent).catch(() => {}); void fetchMyLocationViews().then(setViews); }, []);
+  const words: Record<string, string> = { pending: "en attente", accepted: "acceptée", refused: "refusée", automatic: "montrée sans réponse", expired: "sans suite" };
   async function toggle(value: boolean) {
     setBusy(true);
     try {
@@ -104,9 +107,13 @@ function LocationConsentCard() {
     <View style={ui.row}>
       <View style={{ flex: 1 }}>
         <Text style={ui.strong}>Partager ma position</Text>
-        <Text style={ui.small}>L’administration voit votre dernière position, uniquement quand l’application est ouverte. Vous pouvez arrêter à tout moment : votre position est alors effacée.</Text>
+        <Text style={ui.small}>Votre dernière position est mise à jour quand l’application est ouverte. Personne ne la voit sans vous le demander : vous acceptez ou refusez chaque demande. Arrêter efface votre position.</Text>
       </View>
       <Switch value={consent} disabled={busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
     </View>
+    {views.length ? <View style={{ marginTop: 10 }}>
+      <Text style={ui.fieldLabel}>Consultations de ma position</Text>
+      {views.slice(0, 10).map((view, index) => <Text key={index} style={ui.small}>{formatDateTime(view.created_at)} · {view.requester} · {words[view.status] ?? view.status}</Text>)}
+    </View> : null}
   </View>;
 }

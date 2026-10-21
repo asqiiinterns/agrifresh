@@ -1,6 +1,9 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" Précision ±{0} m.", " Accuracy ±{0} m.", " الدقة ±{0} م."],
+  [" · dernière position {0}", " · last position {0}", " · آخر موقع {0}"],
+  ["Dernière position connue{0}, sans réponse de sa part : elle en est informée.", "Last known position{0}, without an answer: the person is told.", "آخر موقع معروف{0}، دون رد: يُعلم الشخص بذلك."],
   [" (motif : {0})", " (reason: {0})", " (السبب: {0})"],
   ["Commande #{0} de {1} : « {2} » sera annulée{3}.", "Order #{0} of {1}: “{2}” will be undone{3}.", "الطلبية رقم {0} لـ {1}: سيُلغى «{2}»{3}."],
   ["\n\nEnsuite, remise détaillée pour : {0}.", "\n\nThen, detailed hand-over for: {0}.", "\n\nبعد ذلك، تسليم مفصّل لـ: {0}."],
