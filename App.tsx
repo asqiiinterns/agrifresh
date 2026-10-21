@@ -346,6 +346,14 @@ function Main({ session }: { session: Session }) {
   useEffect(() => onModulesChanged(() => { void loadAccount(); }), [loadAccount]);
   // Appro+ starts or ends assisting a Pro: everything follows (menus, rights, space).
   useEffect(() => onAssistChanged(() => { setTab(null); void loadAccount(); }), [loadAccount]);
+  // The assistance ends by itself at its time: the console comes back.
+  const assistEnds = account?.assisting?.expires_at;
+  useEffect(() => {
+    if (!assistEnds) return;
+    const delay = new Date(assistEnds).getTime() - Date.now() + 1000;
+    const timer = setTimeout(() => { setTab(null); void loadAccount(); }, Math.max(1000, Math.min(delay, 12 * 3600 * 1000)));
+    return () => clearTimeout(timer);
+  }, [assistEnds, loadAccount]);
 
   // An invitation link opened before signing in (or a code captured since): accepted once signed in.
   useEffect(() => {

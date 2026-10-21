@@ -58,7 +58,9 @@ export function RightsMatrix({ orgId, matrix, platform, onChanged }: { orgId?: s
     ? matrix.roles.filter((role) => role.side === side)
       .sort((a, b) => Number(OWNER_KEYS.includes(b.template_key ?? "")) - Number(OWNER_KEYS.includes(a.template_key ?? "")))
       .map((role) => ({ id: role.id, name: role.name, owner: OWNER_KEYS.includes(role.template_key ?? ""), granted: role.granted }))
-    : (members ?? []).filter((member) => member.side === side).map((member) => ({ id: member.id, name: member.name, owner: false, granted: member.granted }));
+    // Accounts: the Responsable and oneself are shown but locked (set by Appro+ / by another person).
+    : (members ?? []).filter((member) => member.side === side).map((member) => ({ id: member.id, name: member.is_self ? `${member.name} (vous)` : member.name,
+      owner: !!member.owner || (!!member.is_self && !platform), granted: member.granted }));
 
   const cellKey = (column: Column, key: string) => `${mode}|${column.id}|${key}`;
   const valueOf = (column: Column, key: string) => draft[cellKey(column, key)] ?? column.granted.includes(key);

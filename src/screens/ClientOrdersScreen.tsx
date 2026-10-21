@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type { ClientSummary } from "../data/account";
+import { withSeller } from "../data/buyer";
 import { deliveryNoteNumber, fetchBuyerOrders, fetchMyOrders, formatOrigin, respondToOrder, shareDeliveryNote, type BuyerOrder, type Order } from "../data/orders";
 import { claimReasonLabel, claimReasons, claimStatusStyle, createClaim, fetchClaims, type Claim, type ClaimReason } from "../data/claims";
 import { OrderTimeline } from "../ui/OrderTimeline";
@@ -32,7 +33,7 @@ const filters = [
   { key: "refused", label: "Déclinées / annulées", statuses: ["declined", "cancelled"] },
 ] as const;
 
-type ListedOrder = Order & Partial<Pick<BuyerOrder, "supplier_name" | "show_prices" | "show_origin" | "history_enabled" | "delivery_note">>;
+type ListedOrder = Order & Partial<Pick<BuyerOrder, "supplier_name" | "show_prices" | "show_origin" | "history_enabled" | "delivery_note" | "seller">>;
 
 // Orders of all the buyer's suppliers in one list; acting on another supplier's order switches to it first (onOpenSupplier).
 export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupplier }: { session: Session; client: ClientSummary; initialOrderId?: string; onOpenSupplier?: (clientId: string, orderId: string) => void }) {
@@ -149,7 +150,8 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
   async function share(order: ListedOrder) {
     setSharingId(order.id);
     try {
-      await shareDeliveryNote(order, { showPrices: rulesOf(order).show_prices, showOrigin: rulesOf(order).show_origin });
+      // Printed with the details of this order's supplier (a buyer may have several).
+      await withSeller(order.seller, () => shareDeliveryNote(order, { showPrices: rulesOf(order).show_prices, showOrigin: rulesOf(order).show_origin }));
     } catch (cause) {
       notify("Bon de livraison", errorMessage(cause, "Impossible de générer le PDF."));
     } finally {

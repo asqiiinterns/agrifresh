@@ -1,5 +1,5 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261123 are installed
--- (generated from the test database, 322 functions). Read-only: do not run it. New migrations copy a function from here
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261129 are installed
+-- (generated from the test database, 350 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
 -- ===== accept_invitation
@@ -118,14 +118,15 @@ CREATE OR REPLACE FUNCTION public.acting_supplier_org_id()
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-  select o.id
-  from public.profiles pr
-  join public.organizations o on o.id = case
-    when pr.role = 'customer' then (select c.supplier_org_id from public.clients c where c.id = pr.client_id)
-    when pr.role = 'platform' then null
-    else pr.org_id end
-  where pr.id = (select auth.uid()) and pr.account_status = 'active' and o.status = 'active'
-    and (pr.role <> 'customer' or exists (select 1 from public.organizations b where b.id = pr.org_id and b.status = 'active'));
+  select coalesce(public.assisted_org(), (
+    select o.id
+    from public.profiles pr
+    join public.organizations o on o.id = case
+      when pr.role = 'customer' then (select c.supplier_org_id from public.clients c where c.id = pr.client_id)
+      when pr.role = 'platform' then null
+      else pr.org_id end
+    where pr.id = (select auth.uid()) and pr.account_status = 'active' and o.status = 'active'
+      and (pr.role <> 'customer' or exists (select 1 from public.organizations b where b.id = pr.org_id and b.status = 'active'))));
 $function$
 ;
 
@@ -185,28 +186,23 @@ CREATE OR REPLACE FUNCTION public.admin_list_accounts()
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO ''
-AS $function$ /* org-scoped */
+AS $function$
 begin
   if not public.is_admin() then
     raise exception using errcode = '42501', message = 'Accès réservé aux administrateurs.';
   end if;
   return coalesce((
     select jsonb_agg(jsonb_build_object(
-      'id', u.id,
-      'email', u.email,
-      'full_name', coalesce(pr.full_name, ''),
-      'role', coalesce(pr.role::text, 'customer'),
-      'status', coalesce(pr.account_status, 'pending'),
-      'created_at', u.created_at,
-      'last_sign_in_at', u.last_sign_in_at,
-      'client_name', c.business_name,
-      'is_self', u.id = auth.uid()
+      'id', u.id, 'email', u.email, 'full_name', coalesce(pr.full_name, ''), 'role', coalesce(pr.role::text, 'customer'),
+      'status', coalesce(pr.account_status, 'pending'), 'created_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at,
+      'client_name', c.business_name, 'is_self', u.id = auth.uid(),
+      'deleted_at', pr.deleted_at, 'email_confirmed', public.email_confirmed(u.id), 'invited_by', public.invited_by_of(u.id)
     ) order by (coalesce(pr.account_status, 'pending') = 'pending') desc, u.created_at desc)
     from auth.users u
     left join public.profiles pr on pr.id = u.id
     left join public.clients c on c.id = pr.client_id
     where coalesce(pr.role::text, 'customer') <> 'platform'
-      and (public.org_visible(pr.org_id))
+      and public.org_visible(pr.org_id)
   ), '[]'::jsonb);
 end;
 $function$
@@ -716,6 +712,10 @@ begin
   if v_request.id is null or v_request.target_id is distinct from auth.uid() then
     raise exception using errcode = 'P0002', message = 'Demande introuvable.';
   end if;
+  -- Already answered, shown automatically or expired: nothing more to do.
+  if v_request.status <> 'pending' then
+    return;
+  end if;
   if p_accept and (p_latitude is null or p_longitude is null) then
     raise exception using errcode = '22023', message = 'Position indisponible : autorisez la localisation sur ce téléphone.';
   end if;
@@ -943,6 +943,29 @@ end;
 $function$
 ;
 
+-- ===== assist_can_edit
+CREATE OR REPLACE FUNCTION public.assist_can_edit()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$ select coalesce((select a.can_edit from public.platform_assist a where a.user_id = (select auth.uid()) and a.expires_at > now()), false) and public.assisted_org() is not null; $function$
+;
+
+-- ===== assisted_org
+CREATE OR REPLACE FUNCTION public.assisted_org()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select a.org_id from public.platform_assist a
+  join public.platform_members pm on pm.user_id = a.user_id and pm.active
+  join public.organizations o on o.id = a.org_id and o.status in ('active', 'pending', 'suspended')
+  where a.user_id = (select auth.uid()) and a.expires_at > now();
+$function$
+;
+
 -- ===== attach_invoice_orders
 CREATE OR REPLACE FUNCTION public.attach_invoice_orders(p_invoice_id uuid, p_client_id uuid, p_order_ids uuid[])
  RETURNS void
@@ -1003,6 +1026,22 @@ begin
   select p_user_id, r.id from public.org_roles r join public.role_templates t on t.id = r.template_id
   where r.org_id = p_org_id and t.key in ('supplier_owner', 'buyer_owner')
   on conflict do nothing;
+end;
+$function$
+;
+
+-- ===== audit_fill_org
+CREATE OR REPLACE FUNCTION public.audit_fill_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if new.org_id is null then
+    new.org_id := public.current_org_id();
+  end if;
+  return new;
 end;
 $function$
 ;
@@ -1286,7 +1325,7 @@ AS $function$
   select coalesce(jsonb_agg(jsonb_build_object(
       'id', cn.id, 'credit_number', cn.credit_number, 'client_id', cn.client_id, 'return_id', cn.return_id, 'invoice_id', cn.invoice_id,
       'status', cn.status, 'reason', cn.reason, 'client_snapshot', cn.client_snapshot, 'total_ht', cn.total_ht, 'total_vat', cn.total_vat,
-      'total_ttc', cn.total_ttc, 'created_at', cn.created_at, 'issued_at', cn.issued_at, 'settled_at', cn.settled_at, 'supplier_name', s.name,
+      'total_ttc', cn.total_ttc, 'created_at', cn.created_at, 'issued_at', cn.issued_at, 'settled_at', cn.settled_at, 'supplier_name', s.name, 'seller', public.seller_card(s.id),
       'credit_note_items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'label', i.label, 'quantity', i.quantity, 'unit', i.unit,
           'unit_price', i.unit_price, 'vat_rate', i.vat_rate)) from public.credit_note_items i where i.credit_note_id = cn.id), '[]'::jsonb),
       'clients', jsonb_build_object('business_name', c.business_name, 'client_number', c.client_number),
@@ -1378,7 +1417,7 @@ AS $function$
       (to_jsonb(o) - 'subtotal' - 'total' - 'delivery_fee')
       || jsonb_build_object(
         'total', case when c.show_prices then o.total end,
-        'supplier_name', s.name, 'show_prices', c.show_prices, 'show_origin', (c.show_origin and public.module_enabled_for(c.supplier_org_id, 'origin')), 'history_enabled', c.history_enabled, 'delivery_note', c.delivery_note_client,
+        'supplier_name', s.name, 'seller', public.seller_card(s.id), 'show_prices', c.show_prices, 'show_origin', (c.show_origin and public.module_enabled_for(c.supplier_org_id, 'origin')), 'history_enabled', c.history_enabled, 'delivery_note', c.delivery_note_client,
         'order_items', coalesce((select jsonb_agg(jsonb_build_object(
             'product_id', i.product_id, 'product_name_snapshot', i.product_name_snapshot, 'quantity', i.quantity,
             'unit_snapshot', i.unit_snapshot, 'vat_rate', i.vat_rate,
@@ -1566,7 +1605,7 @@ AS $function$
   select coalesce(jsonb_agg(jsonb_build_object(
       'id', r.id, 'return_number', r.return_number, 'client_id', r.client_id, 'order_id', r.order_id, 'status', r.status, 'reason', r.reason,
       'description', r.description, 'staff_note', r.staff_note, 'restocked', r.restocked, 'created_at', r.created_at, 'received_at', r.received_at,
-      'supplier_name', s.name,
+      'supplier_name', s.name, 'seller', public.seller_card(s.id),
       'return_items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'product_id', i.product_id, 'product_name', i.product_name, 'unit', i.unit,
           'quantity', i.quantity, 'unit_price', i.unit_price, 'vat_rate', i.vat_rate)) from public.return_items i where i.return_id = r.id), '[]'::jsonb),
       'clients', jsonb_build_object('business_name', c.business_name),
@@ -1716,7 +1755,7 @@ CREATE OR REPLACE FUNCTION public.can_manage_org_roles(p_org_id uuid, p_edit boo
 AS $function$
   select public.platform_can('platform.pros.manage')
       or (not p_edit and public.platform_can('platform.roles.assign'))
-      or ((public.is_admin() or public.is_org_owner(p_org_id)) and public.current_org_id() = p_org_id);
+      or ((public.is_admin() or public.is_org_owner(p_org_id) or public.has_feature('roles.manage')) and public.current_org_id() = p_org_id);
 $function$
 ;
 
@@ -2271,49 +2310,10 @@ $function$
 -- ===== create_invitation
 CREATE OR REPLACE FUNCTION public.create_invitation(p_side text, p_client_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_contact text DEFAULT NULL::text)
  RETURNS jsonb
- LANGUAGE plpgsql
+ LANGUAGE sql
  SECURITY DEFINER
  SET search_path TO ''
-AS $function$
-declare
-  v_org public.organizations%rowtype;
-  v_code text;
-  v_name text := nullif(btrim(coalesce(p_name, '')), '');
-begin
-  select * into v_org from public.organizations where id = public.current_org_id();
-  if v_org.id is null then
-    raise exception using errcode = '42501', message = 'Votre espace doit être actif pour inviter.';
-  end if;
-  if p_side = 'client' and not v_org.is_supplier then
-    raise exception using errcode = '22023', message = 'Seul un fournisseur invite des clients.';
-  elsif p_side = 'supplier' and not v_org.is_buyer then
-    raise exception using errcode = '22023', message = 'Seul un acheteur invite des fournisseurs.';
-  elsif p_side not in ('client', 'supplier') then
-    raise exception using errcode = '22023', message = 'Précisez qui vous invitez.';
-  end if;
-  if p_client_id is not null then
-    if p_side <> 'client' or not exists (select 1 from public.clients c where c.id = p_client_id and c.supplier_org_id = v_org.id) then
-      raise exception using errcode = 'P0002', message = 'Client introuvable.';
-    end if;
-    v_name := coalesce(v_name, (select c.business_name from public.clients c where c.id = p_client_id));
-  end if;
-  -- The same invitation is reused while it is valid (one per client record, one per person invited).
-  select i.code into v_code from public.invitations i
-  where i.org_id = v_org.id and i.side = p_side and i.client_id is not distinct from p_client_id and i.expires_at > now() + interval '7 days'
-    and (p_client_id is not null or (i.invited_by = auth.uid() and i.name is not distinct from v_name))
-  order by i.created_at desc limit 1;
-  if v_code is null then
-    loop
-      v_code := upper(substr(md5(random()::text || clock_timestamp()::text || coalesce(auth.uid()::text, '')), 1, 8));
-      exit when not exists (select 1 from public.invitations i where i.code = v_code);
-    end loop;
-    insert into public.invitations (code, org_id, invited_by, side, client_id, name, contact)
-    values (v_code, v_org.id, auth.uid(), p_side, p_client_id, v_name, nullif(btrim(coalesce(p_contact, '')), ''));
-  end if;
-  return jsonb_build_object('code', v_code, 'org_name', v_org.name, 'side', p_side, 'name', v_name,
-    'app_url', coalesce(public.platform_setting('app_url') #>> '{}', ''));
-end;
-$function$
+AS $function$ select public.invitation_create(public.current_org_id(), p_side, p_client_id, p_name, p_contact, false); $function$
 ;
 
 -- ===== create_order_receipt
@@ -2416,8 +2416,9 @@ CREATE OR REPLACE FUNCTION public.current_org_id()
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-  select pr.org_id from public.profiles pr join public.organizations o on o.id = pr.org_id
-  where pr.id = (select auth.uid()) and pr.account_status = 'active' and o.status = 'active';
+  select coalesce(public.assisted_org(), (
+    select pr.org_id from public.profiles pr join public.organizations o on o.id = pr.org_id
+    where pr.id = (select auth.uid()) and pr.account_status = 'active' and o.status = 'active'));
 $function$
 ;
 
@@ -2470,6 +2471,49 @@ CREATE OR REPLACE FUNCTION public.default_org_id()
  SET search_path TO ''
 AS $function$
   select coalesce(public.current_org_id(), public.legacy_org_id());
+$function$
+;
+
+-- ===== default_vehicle_for
+CREATE OR REPLACE FUNCTION public.default_vehicle_for(p_org_id uuid)
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select v.id from public.vehicles v where v.org_id = p_org_id and v.active order by v.is_default desc, v.label, v.id limit 1;
+$function$
+;
+
+-- ===== delete_account
+CREATE OR REPLACE FUNCTION public.delete_account(p_user_id uuid, p_restore boolean DEFAULT false)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_target public.profiles%rowtype;
+begin
+  select * into v_target from public.profiles where id = p_user_id;
+  if v_target.id is null or v_target.role = 'platform' then
+    raise exception using errcode = 'P0002', message = 'Compte introuvable.';
+  end if;
+  if p_user_id = auth.uid() then
+    raise exception using errcode = '22023', message = 'Vous ne pouvez pas supprimer votre propre compte ici.';
+  end if;
+  if not (public.platform_can('platform.pros.manage')
+          or (v_target.org_id is not null and v_target.org_id = public.current_org_id() and (public.is_admin() or public.is_org_owner(v_target.org_id)))) then
+    raise exception using errcode = '42501', message = 'Seul l’administrateur de l’espace (ou Appro+) supprime un compte.';
+  end if;
+  perform set_config('appro.link_write', 'on', true);
+  if coalesce(p_restore, false) then
+    update public.profiles set deleted_at = null where id = p_user_id;
+  else
+    update public.profiles set deleted_at = now(), account_status = 'suspended' where id = p_user_id;
+  end if;
+  perform set_config('appro.link_write', 'off', true);
+end;
 $function$
 ;
 
@@ -3040,10 +3084,13 @@ CREATE OR REPLACE FUNCTION public.driver_ship_orders(p_order_ids uuid[], p_vehic
 AS $function$
 declare
   v_actor uuid := public.active_uid();
+  v_org uuid := public.acting_supplier_org_id();
   v_count int;
   v_ready int;
+  v_vehicle_id uuid := p_vehicle_id;
   v_vehicle public.vehicles%rowtype;
   v_vehicle_text text := '';
+  v_auto text := '';
   v_shipment_id uuid;
   v_number bigint;
 begin
@@ -3054,14 +3101,31 @@ begin
   if v_count = 0 then
     raise exception using errcode = '22023', message = 'Sélectionnez au moins un bon de livraison.';
   end if;
-  if p_vehicle_id is not null then
-    select v.* into v_vehicle from public.vehicles v where v.id = p_vehicle_id and v.active;
+  if exists (select 1 from public.orders o where o.id = any(p_order_ids) and o.supplier_org_id is distinct from v_org) then
+    raise exception using errcode = 'P0002', message = 'Commande introuvable.';
+  end if;
+  if v_vehicle_id is null then
+    -- No choice: the vehicle planned for all these orders, else the default one of the fleet (if any).
+    select case when count(distinct o.planned_vehicle_id) = 1 and bool_and(o.planned_vehicle_id is not null) then (array_agg(o.planned_vehicle_id))[1] end
+    into v_vehicle_id from public.orders o where o.id = any(p_order_ids);
+    if v_vehicle_id is not null and not exists (select 1 from public.vehicles v where v.id = v_vehicle_id and v.active and v.org_id = v_org) then
+      v_vehicle_id := null;
+    end if;
+    if v_vehicle_id is not null then
+      v_auto := ' (prévu)';
+    else
+      v_vehicle_id := public.default_vehicle_for(v_org);
+      if v_vehicle_id is not null then
+        v_auto := ' (par défaut)';
+      end if;
+    end if;
+  end if;
+  if v_vehicle_id is not null then
+    select v.* into v_vehicle from public.vehicles v where v.id = v_vehicle_id and v.active and v.org_id = v_org;
     if not found then
       raise exception using errcode = 'P0002', message = 'Véhicule introuvable ou retiré de la flotte.';
     end if;
-    v_vehicle_text := ' · ' || v_vehicle.label || case when v_vehicle.plate <> '' then ' (' || v_vehicle.plate || ')' else '' end;
-  elsif exists (select 1 from public.vehicles v where v.active) then
-    raise exception using errcode = '22023', message = 'Choisissez le véhicule utilisé pour cette expédition.';
+    v_vehicle_text := ' · ' || v_vehicle.label || case when v_vehicle.plate <> '' then ' (' || v_vehicle.plate || ')' else '' end || v_auto;
   end if;
 
   perform 1 from public.orders o where o.id = any(p_order_ids) order by o.id for update;
@@ -3070,7 +3134,7 @@ begin
     raise exception using errcode = '22023', message = 'Une commande sélectionnée n’est plus prête à expédier : actualisez la liste.';
   end if;
 
-  insert into public.shipments (vehicle_id, driver_id, order_count) values (p_vehicle_id, v_actor, v_count)
+  insert into public.shipments (vehicle_id, driver_id, order_count) values (v_vehicle_id, v_actor, v_count)
   returning id, shipment_number into v_shipment_id, v_number;
   update public.orders set status = 'out_for_delivery', shipment_id = v_shipment_id, production_rank = null, updated_at = now()
   where id = any(p_order_ids);
@@ -3078,16 +3142,16 @@ begin
   select o.id, 'out_for_delivery', format('Expédition #%s%s', v_number, v_vehicle_text), v_actor
   from public.orders o where o.id = any(p_order_ids);
   -- A vehicle other than the one planned: traced on the order and the deciders are told.
-  update public.order_status_history h set note = h.note || format(' · véhicule prévu : %s, remplacé par le livreur', pv.label)
+  update public.order_status_history h set note = h.note || format(' · véhicule prévu : %s, remplacé', pv.label)
   from public.orders o join public.vehicles pv on pv.id = o.planned_vehicle_id
   where h.order_id = o.id and o.id = any(p_order_ids) and h.status = 'out_for_delivery' and h.created_at > now() - interval '1 minute'
-    and o.planned_vehicle_id is distinct from p_vehicle_id;
+    and o.planned_vehicle_id is distinct from v_vehicle_id;
   perform public.notify(array(select public.team_with_feature('orders.decide', o.supplier_org_id)), 'order.forced',
     format('Condition forcée · commande #%s', o.order_number),
     format('Véhicule prévu : %s ; utilisé : %s.', pv.label, coalesce(v_vehicle.label, 'aucun')), o.id)
   from public.orders o join public.vehicles pv on pv.id = o.planned_vehicle_id
-  where o.id = any(p_order_ids) and o.planned_vehicle_id is distinct from p_vehicle_id;
-  return jsonb_build_object('shipment_id', v_shipment_id, 'shipment_number', v_number, 'count', v_count);
+  where o.id = any(p_order_ids) and o.planned_vehicle_id is distinct from v_vehicle_id;
+  return jsonb_build_object('shipment_id', v_shipment_id, 'shipment_number', v_number, 'count', v_count, 'vehicle', v_vehicle.label);
 end;
 $function$
 ;
@@ -3141,6 +3205,15 @@ end;
 $function$
 ;
 
+-- ===== email_confirmed
+CREATE OR REPLACE FUNCTION public.email_confirmed(p_user uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$ select coalesce((select (to_jsonb(u) ->> 'email_confirmed_at') is not null or (to_jsonb(u) ->> 'confirmed_at') is not null from auth.users u where u.id = p_user), false); $function$
+;
+
 -- ===== ensure_relation
 CREATE OR REPLACE FUNCTION public.ensure_relation(p_supplier uuid, p_buyer uuid, p_via text)
  RETURNS uuid
@@ -3183,7 +3256,19 @@ CREATE OR REPLACE FUNCTION public.expire_trials()
 AS $function$
 declare
   v_ids uuid[];
+  v_pending record;
 begin
+  -- Spaces still waiting because the e-mail was not confirmed yet (created in the last 7 days, never in trial).
+  for v_pending in
+    select o.id, exists (select 1 from public.profiles pr join public.invitation_acceptances a on a.user_id = pr.id where pr.org_id = o.id) as invited
+    from public.organizations o
+    where o.status = 'pending' and o.trial_until is null and o.created_at > now() - interval '7 days'
+      and exists (select 1 from public.profiles pr where pr.org_id = o.id and public.email_confirmed(pr.id))
+    limit 50
+  loop
+    perform public.start_trial(v_pending.id, v_pending.invited);
+  end loop;
+
   with expired as (
     update public.organizations set status = 'suspended', updated_at = now()
     where trial_until is not null and trial_until < now() and status = 'active'
@@ -3198,6 +3283,20 @@ begin
   perform set_config('appro.link_write', 'off', true);
   return cardinality(v_ids);
 end;
+$function$
+;
+
+-- ===== feature_display_of
+CREATE OR REPLACE FUNCTION public.feature_display_of(p_org_id uuid, p_permission text)
+ RETURNS text
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(
+    (select d.display from public.feature_display d where d.org_id = p_org_id and d.permission = p_permission),
+    (select d.display from public.feature_display d where d.org_id is null and d.permission = p_permission),
+    'hidden');
 $function$
 ;
 
@@ -3315,7 +3414,10 @@ CREATE OR REPLACE FUNCTION public.has_feature_base(p_feature text)
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-  select public.has_permission(p_feature);
+  select case when public.assisted_org() is not null then
+      (public.assist_can_edit() or public.permission_kind(p_feature) = 'read')
+      and (public.org_owner_ceiling(public.assisted_org(), 'supplier', p_feature) or public.org_owner_ceiling(public.assisted_org(), 'buyer', p_feature))
+    else public.has_permission(p_feature) end;
 $function$
 ;
 
@@ -3329,6 +3431,65 @@ AS $function$
   select exists (select 1 from public.profiles pr join public.organizations o on o.id = pr.org_id
                  where pr.id = (select auth.uid()) and o.status = 'active')
      and public.user_has_permission((select auth.uid()), p_permission);
+$function$
+;
+
+-- ===== invitation_create
+CREATE OR REPLACE FUNCTION public.invitation_create(p_org_id uuid, p_side text, p_client_id uuid, p_name text, p_contact text, p_by_platform boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org public.organizations%rowtype;
+  v_code text;
+  v_name text := nullif(btrim(coalesce(p_name, '')), '');
+  v_contact text := nullif(btrim(coalesce(p_contact, '')), '');
+  v_new boolean := false;
+begin
+  select * into v_org from public.organizations where id = p_org_id;
+  if v_org.id is null then
+    raise exception using errcode = '42501', message = 'Votre espace doit être actif pour inviter.';
+  end if;
+  if p_side = 'client' and not v_org.is_supplier then
+    raise exception using errcode = '22023', message = 'Seul un fournisseur invite des clients.';
+  elsif p_side = 'supplier' and not v_org.is_buyer then
+    raise exception using errcode = '22023', message = 'Seul un acheteur invite des fournisseurs.';
+  elsif p_side not in ('client', 'supplier') then
+    raise exception using errcode = '22023', message = 'Précisez qui vous invitez.';
+  end if;
+  if p_client_id is not null then
+    if p_side <> 'client' or not exists (select 1 from public.clients c where c.id = p_client_id and c.supplier_org_id = v_org.id) then
+      raise exception using errcode = 'P0002', message = 'Client introuvable.';
+    end if;
+    v_name := coalesce(v_name, (select c.business_name from public.clients c where c.id = p_client_id));
+  end if;
+  select i.code into v_code from public.invitations i
+  where i.org_id = v_org.id and i.side = p_side and i.client_id is not distinct from p_client_id and i.expires_at > now() + interval '7 days'
+    and (p_client_id is not null or (i.invited_by = auth.uid() and i.name is not distinct from v_name))
+  order by i.created_at desc limit 1;
+  if v_code is null then
+    loop
+      v_code := upper(substr(md5(random()::text || clock_timestamp()::text || coalesce(auth.uid()::text, '')), 1, 8));
+      exit when not exists (select 1 from public.invitations i where i.code = v_code);
+    end loop;
+    insert into public.invitations (code, org_id, invited_by, side, client_id, name, contact)
+    values (v_code, v_org.id, auth.uid(), p_side, p_client_id, v_name, v_contact);
+    v_new := true;
+  end if;
+  -- Appro+ follows every invitation created (who, for whom, when).
+  if v_new then
+    perform public.notify(array(select pm.user_id from public.platform_members pm where pm.active and pm.role in ('superadmin', 'account_manager', 'verification')
+        and pm.user_id <> auth.uid()),
+      'invitation.created', format('Invitation créée · %s', v_org.name),
+      format('%s%s invite %s comme %s%s (code %s, %s).', public.location_name(auth.uid()), case when p_by_platform then ' (Appro+, pour le compte du Pro)' else '' end,
+        coalesce(v_name, 'une personne'), case when p_side = 'client' then 'client' else 'fournisseur' end, coalesce(' · ' || v_contact, ''), v_code,
+        to_char(now() at time zone 'Africa/Tunis', 'DD/MM/YYYY HH24:MI')));
+  end if;
+  return jsonb_build_object('code', v_code, 'org_name', v_org.name, 'side', p_side, 'name', v_name,
+    'app_url', coalesce(public.platform_setting('app_url') #>> '{}', ''));
+end;
 $function$
 ;
 
@@ -3368,7 +3529,6 @@ begin
   if v_inv.client_id is not null then
     select * into v_record from public.clients where id = v_inv.client_id;
   end if;
-  -- No space yet, invited from a client record whose space has nobody: the person becomes its Responsable.
   if v_org.id is null then
     if v_record.id is null or v_record.buyer_org_id is null
        or exists (select 1 from public.profiles pr where pr.org_id = v_record.buyer_org_id and pr.id <> p_user_id) then
@@ -3378,12 +3538,11 @@ begin
     perform public.attach_org_owner(v_record.buyer_org_id, p_user_id);
     update public.profiles set client_id = v_record.id where id = p_user_id;
     perform set_config('appro.link_write', 'off', true);
-    perform public.start_trial(v_record.buyer_org_id);
+    perform public.start_trial(v_record.buyer_org_id, true);
   elsif v_inv.side = 'client' then
     if not v_org.is_buyer then
       return false;
     end if;
-    -- The client record waiting for its buyer is given to this buyer's space.
     if v_record.id is not null and v_record.buyer_org_id is distinct from v_org.id
        and not exists (select 1 from public.profiles pr where pr.org_id = v_record.buyer_org_id)
        and not exists (select 1 from public.clients c where c.supplier_org_id = v_inv.org_id and c.buyer_org_id = v_org.id) then
@@ -3409,6 +3568,39 @@ end;
 $function$
 ;
 
+-- ===== invitations_list
+CREATE OR REPLACE FUNCTION public.invitations_list(p_org_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'code', i.code, 'created_at', i.created_at, 'expires_at', i.expires_at, 'org_name', o.name, 'side', i.side,
+      'invited_by', public.location_name(i.invited_by), 'name', i.name, 'contact', i.contact, 'client_name', c.business_name, 'uses', i.uses,
+      'acceptances', coalesce((select jsonb_agg(jsonb_build_object('name', public.location_name(a.user_id), 'accepted_at', a.accepted_at, 'linked_at', a.linked_at,
+          'org_name', (select oo.name from public.profiles pr join public.organizations oo on oo.id = pr.org_id where pr.id = a.user_id)) order by a.accepted_at)
+        from public.invitation_acceptances a where a.invitation_id = i.id), '[]'::jsonb))
+    order by i.created_at desc), '[]'::jsonb)
+  from (select * from public.invitations x where p_org_id is null or x.org_id = p_org_id order by x.created_at desc limit 500) i
+  join public.organizations o on o.id = i.org_id
+  left join public.clients c on c.id = i.client_id;
+$function$
+;
+
+-- ===== invited_by_of
+CREATE OR REPLACE FUNCTION public.invited_by_of(p_user uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select jsonb_build_object('name', public.location_name(i.invited_by), 'org_name', o.name, 'code', i.code, 'created_at', i.created_at, 'accepted_at', a.accepted_at)
+  from public.invitation_acceptances a join public.invitations i on i.id = a.invitation_id join public.organizations o on o.id = i.org_id
+  where a.user_id = p_user order by a.accepted_at desc limit 1;
+$function$
+;
+
 -- ===== is_admin
 CREATE OR REPLACE FUNCTION public.is_admin()
  RETURNS boolean
@@ -3416,7 +3608,8 @@ CREATE OR REPLACE FUNCTION public.is_admin()
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-  select exists (select 1 from public.profiles pr where pr.id = (select auth.uid()) and pr.role = 'admin' and pr.account_status = 'active');
+  select exists (select 1 from public.profiles pr where pr.id = (select auth.uid()) and pr.role = 'admin' and pr.account_status = 'active')
+      or public.assist_can_edit();
 $function$
 ;
 
@@ -3715,6 +3908,19 @@ AS $function$
 $function$
 ;
 
+-- ===== member_is_owner
+CREATE OR REPLACE FUNCTION public.member_is_owner(p_user_id uuid, p_org_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select exists (select 1 from public.member_roles mr join public.org_roles r on r.id = mr.role_id
+    join public.role_templates t on t.id = r.template_id
+    where mr.user_id = p_user_id and r.org_id = p_org_id and t.key in ('supplier_owner', 'buyer_owner'));
+$function$
+;
+
 -- ===== messages_needing_reply
 CREATE OR REPLACE FUNCTION public.messages_needing_reply()
  RETURNS jsonb
@@ -3823,16 +4029,20 @@ CREATE OR REPLACE FUNCTION public.my_account()
 AS $function$
   select jsonb_build_object(
     'id', pr.id,
-    'role', pr.role,
+    'role', case when public.assisted_org() is not null then 'admin'::public.app_role else pr.role end,
     'full_name', pr.full_name,
     'features', public.my_features(),
+    'locked_features', public.my_locked_features(),
+    'assisting', (select jsonb_build_object('org_id', a.org_id, 'org_name', o.name, 'can_edit', a.can_edit, 'expires_at', a.expires_at, 'reason', a.reason)
+                  from public.platform_assist a join public.organizations o on o.id = a.org_id
+                  where a.user_id = pr.id and a.expires_at > now() and public.assisted_org() is not null),
     'disabled', pr.account_status <> 'active',
     'status', pr.account_status,
     'home_layout', coalesce(pr.home_layout, (select hl.layout from public.home_layouts hl
       where hl.role = (case when pr.role = 'staff' then 'supervisor' else pr.role end)::public.app_role)),
     'role_home_layout', (select hl.layout from public.home_layouts hl
       where hl.role = (case when pr.role = 'staff' then 'supervisor' else pr.role end)::public.app_role),
-    'client', case when c.id is null or not c.active then null else jsonb_build_object(
+    'client', case when c.id is null or not c.active or public.assisted_org() is not null then null else jsonb_build_object(
       'id', c.id,
       'client_number', c.client_number,
       'business_name', c.business_name,
@@ -3849,12 +4059,8 @@ AS $function$
       'reminder_opt_out_allowed', c.reminder_opt_out_allowed,
       'reminder_opt_out', c.reminder_opt_out,
       'delivery_points', coalesce((
-        select jsonb_agg(jsonb_build_object(
-          'id', dp.id, 'label', dp.label, 'address_line', dp.address_line, 'city', dp.city
-        ) order by dp.created_at)
-        from public.client_delivery_points dp
-        where dp.client_id = c.id and dp.active
-      ), '[]'::jsonb)
+        select jsonb_agg(jsonb_build_object('id', dp.id, 'label', dp.label, 'address_line', dp.address_line, 'city', dp.city) order by dp.created_at)
+        from public.client_delivery_points dp where dp.client_id = c.id and dp.active), '[]'::jsonb)
     ) end
   )
   from public.profiles pr
@@ -3902,6 +4108,24 @@ AS $function$
   where public.has_feature(f.feature)
      or (f.feature in ('client.home', 'client.order', 'client.orders', 'client.messages', 'client.invoices', 'client.alerts')
          and exists (select 1 from public.buyer_relations(f.feature)));
+$function$
+;
+
+-- ===== my_invitations
+CREATE OR REPLACE FUNCTION public.my_invitations()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.current_org_id();
+begin
+  if v_org is null or not (public.is_admin() or public.is_org_owner(v_org) or public.has_feature('roles.manage')) then
+    raise exception using errcode = '42501', message = 'Réservé à l’administrateur de l’espace.';
+  end if;
+  return public.invitations_list(v_org);
+end;
 $function$
 ;
 
@@ -3953,6 +4177,20 @@ AS $function$
 $function$
 ;
 
+-- ===== my_locked_features
+CREATE OR REPLACE FUNCTION public.my_locked_features()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(jsonb_agg(p.key order by p.sort, p.key), '[]'::jsonb)
+  from public.permissions p
+  where not public.has_feature(p.key)
+    and public.feature_display_of(coalesce(public.current_org_id(), (select pr.org_id from public.profiles pr where pr.id = (select auth.uid()))), p.key) = 'locked';
+$function$
+;
+
 -- ===== my_notification_prefs
 CREATE OR REPLACE FUNCTION public.my_notification_prefs()
  RETURNS jsonb
@@ -3962,6 +4200,20 @@ CREATE OR REPLACE FUNCTION public.my_notification_prefs()
 AS $function$
   select jsonb_build_object('push', pr.notify_push, 'email', pr.notify_email)
   from public.profiles pr where pr.id = (select auth.uid());
+$function$
+;
+
+-- ===== my_org_profile
+CREATE OR REPLACE FUNCTION public.my_org_profile()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select jsonb_build_object('id', o.id, 'name', o.name, 'kind', o.kind, 'tagline', o.tagline, 'address', o.address, 'phone', o.phone, 'email', o.email,
+    'tax_id', o.tax_id, 'rib', o.rib, 'brand_color', o.brand_color, 'profile_visibility', o.profile_visibility,
+    'can_edit', public.is_admin() or public.is_org_owner(o.id))
+  from public.organizations o where o.id = public.current_org_id();
 $function$
 ;
 
@@ -3976,7 +4228,7 @@ AS $function$
     'id', o.id, 'name', o.name, 'kind', o.kind, 'status', o.status, 'is_supplier', o.is_supplier, 'is_buyer', o.is_buyer,
     'roles_delegated', o.roles_delegated, 'trial_until', o.trial_until, 'catalog_visibility', o.catalog_visibility,
     'listed_in_directory', o.listed_in_directory, 'open_to_messages', o.open_to_messages, 'open_to_new', o.open_to_new) end
-  from public.profiles pr left join public.organizations o on o.id = pr.org_id
+  from public.profiles pr left join public.organizations o on o.id = coalesce(public.assisted_org(), pr.org_id)
   where pr.id = (select auth.uid());
 $function$
 ;
@@ -4433,13 +4685,17 @@ begin
     raise exception using errcode = '42501', message = 'Réservé aux espaces actifs.';
   end if;
   return coalesce((select jsonb_agg(jsonb_build_object(
-      'conversation_id', cv.id, 'org_id', o.id, 'name', o.name, 'kind', o.kind, 'last_at', cv.last_at,
-      'last_body', (select m.body from public.org_messages m where m.conversation_id = cv.id order by m.created_at desc limit 1),
-      'unread', (select count(*) from public.org_messages m where m.conversation_id = cv.id and m.sender_org_id <> v_org and m.read_at is null),
-      'related', public.org_related(v_org, o.id)) order by cv.last_at desc)
-    from public.org_conversations cv
-    join public.organizations o on o.id = case when cv.org_a = v_org then cv.org_b else cv.org_a end
-    where v_org in (cv.org_a, cv.org_b)), '[]'::jsonb);
+      'conversation_id', x.id, 'org_id', x.other_id, 'name', x.name, 'kind', x.kind, 'last_at', x.last_at, 'held', x.held_now,
+      'last_body', (select m.body from public.org_messages m where m.conversation_id = x.id order by m.created_at desc limit 1),
+      'unread', (select count(*) from public.org_messages m where m.conversation_id = x.id and m.sender_org_id <> v_org and m.read_at is null),
+      'related', x.related) order by x.last_at desc)
+    from (
+      select cv.id, cv.last_at, cv.started_by, o.id as other_id, o.name, o.kind, public.org_related(v_org, o.id) as related,
+        cv.held and not public.org_related(v_org, o.id) as held_now
+      from public.org_conversations cv
+      join public.organizations o on o.id = case when cv.org_a = v_org then cv.org_b else cv.org_a end
+      where v_org in (cv.org_a, cv.org_b)) x
+    where not (x.held_now and x.started_by is distinct from v_org)), '[]'::jsonb);
 end;
 $function$
 ;
@@ -4491,6 +4747,32 @@ begin
   end if;
   return (select coalesce(jsonb_agg(p.key order by p.key), '[]'::jsonb) from public.permissions p
           where public.user_has_permission(p_user_id, p.key));
+end;
+$function$
+;
+
+-- ===== org_members_rights
+CREATE OR REPLACE FUNCTION public.org_members_rights(p_org_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := coalesce(p_org_id, public.current_org_id());
+begin
+  if v_org is null or not public.can_manage_org_roles(v_org, false) then
+    raise exception using errcode = '42501', message = 'Réservé aux personnes qui gèrent les rôles de ce Pro et à l’équipe Appro+.';
+  end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', pr.id, 'name', coalesce(nullif(btrim(pr.full_name), ''), u.email), 'email', u.email, 'status', pr.account_status,
+      'side', case when pr.role = 'customer' then 'buyer' else 'supplier' end,
+      'owner', public.member_is_owner(pr.id, v_org), 'is_self', pr.id = auth.uid(),
+      'granted', (select coalesce(jsonb_agg(p.key order by p.key), '[]'::jsonb) from public.permissions p where public.user_has_permission(pr.id, p.key)),
+      'overrides', (select coalesce(jsonb_object_agg(mo.permission, mo.allowed), '{}'::jsonb) from public.member_overrides mo where mo.user_id = pr.id and mo.org_id = v_org))
+    order by pr.full_name, u.email)
+    from public.profiles pr left join auth.users u on u.id = pr.id
+    where pr.org_id = v_org and pr.role <> 'platform' and pr.deleted_at is null), '[]'::jsonb);
 end;
 $function$
 ;
@@ -4632,9 +4914,10 @@ AS $function$
 declare
   v_org uuid := public.current_org_id();
   v_other public.organizations%rowtype;
-  v_cv uuid;
+  v_cv public.org_conversations%rowtype;
   v_a uuid;
   v_b uuid;
+  v_related boolean;
 begin
   if v_org is null then
     raise exception using errcode = '42501', message = 'Votre espace doit être actif pour écrire.';
@@ -4646,21 +4929,69 @@ begin
   if v_other.id is null or v_other.id = v_org then
     raise exception using errcode = 'P0002', message = 'Ce Pro n’est pas disponible.';
   end if;
+  v_related := public.org_related(v_org, v_other.id);
   v_a := least(v_org, v_other.id);
   v_b := greatest(v_org, v_other.id);
-  select cv.id into v_cv from public.org_conversations cv where cv.org_a = v_a and cv.org_b = v_b;
-  if v_cv is null then
-    if not v_other.open_to_messages and not public.org_related(v_org, v_other.id) then
-      raise exception using errcode = '42501', message = 'Ce Pro ne reçoit pas de messages hors de son réseau.';
-    end if;
-    insert into public.org_conversations (org_a, org_b, started_by) values (v_a, v_b, v_org) returning id into v_cv;
+  select * into v_cv from public.org_conversations cv where cv.org_a = v_a and cv.org_b = v_b;
+  if v_cv.id is null then
+    -- Closed to messages from outside its network: the conversation waits until it opens them.
+    insert into public.org_conversations (org_a, org_b, started_by, held)
+    values (v_a, v_b, v_org, not v_other.open_to_messages and not v_related)
+    returning * into v_cv;
+  elsif v_cv.held and (v_cv.started_by is distinct from v_org or v_related or v_other.open_to_messages) then
+    -- The other Pro answers, the Pros are now in relation, or it opened its messages: delivered.
+    update public.org_conversations set held = false where id = v_cv.id returning * into v_cv;
   end if;
-  insert into public.org_messages (conversation_id, sender_org_id, sender_id, body) values (v_cv, v_org, auth.uid(), btrim(p_body));
-  update public.org_conversations set last_at = now() where id = v_cv;
-  perform public.notify(array(select mr.user_id from public.member_roles mr join public.org_roles r on r.id = mr.role_id
-      join public.role_templates t on t.id = r.template_id where r.org_id = v_other.id and t.key in ('supplier_owner', 'buyer_owner')),
-    'org.message', format('Message de %s', (select o.name from public.organizations o where o.id = v_org)), left(btrim(p_body), 140));
-  return v_cv;
+  insert into public.org_messages (conversation_id, sender_org_id, sender_id, body) values (v_cv.id, v_org, auth.uid(), btrim(p_body));
+  update public.org_conversations set last_at = now() where id = v_cv.id;
+  if not v_cv.held then
+    perform public.notify(array(select mr.user_id from public.member_roles mr join public.org_roles r on r.id = mr.role_id
+        join public.role_templates t on t.id = r.template_id where r.org_id = v_other.id and t.key in ('supplier_owner', 'buyer_owner')),
+      'org.message', format('Message de %s', (select o.name from public.organizations o where o.id = v_org)), left(btrim(p_body), 140));
+  end if;
+  return v_cv.id;
+end;
+$function$
+;
+
+-- ===== org_set_member_permission
+CREATE OR REPLACE FUNCTION public.org_set_member_permission(p_user_id uuid, p_permission text, p_allowed boolean)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_member public.profiles%rowtype;
+  v_side text;
+  v_platform boolean := public.platform_can('platform.pros.manage');
+begin
+  select * into v_member from public.profiles where id = p_user_id;
+  if v_member.id is null or v_member.org_id is null or not public.can_manage_org_roles(v_member.org_id, true) then
+    raise exception using errcode = '42501', message = 'Vous ne pouvez pas modifier les droits de cette personne.';
+  end if;
+  v_side := case when v_member.role = 'customer' then 'buyer' else 'supplier' end;
+  if not exists (select 1 from public.permissions p where p.key = p_permission and p.side = v_side) then
+    raise exception using errcode = '22023', message = 'Ce droit ne concerne pas cette personne.';
+  end if;
+  if p_user_id = auth.uid() and not v_platform then
+    raise exception using errcode = '22023', message = 'Vos propres droits sont réglés par une autre personne.';
+  end if;
+  if not v_platform and public.member_is_owner(p_user_id, v_member.org_id) then
+    raise exception using errcode = '42501', message = 'Les droits du Responsable sont réglés par Appro+.';
+  end if;
+  if not v_platform and coalesce(p_allowed, false) then
+    if not public.org_owner_ceiling(v_member.org_id, v_side, p_permission) then
+      raise exception using errcode = '42501', message = 'Ce droit dépasse ce qu’Appro+ a ouvert à votre Pro.';
+    end if;
+    if not (public.is_admin() or public.is_org_owner(v_member.org_id)) and not public.has_feature(p_permission) then
+      raise exception using errcode = '42501', message = 'Vous ne pouvez pas donner un droit que vous n’avez pas.';
+    end if;
+  end if;
+  delete from public.member_overrides where user_id = p_user_id and org_id = v_member.org_id and permission = p_permission;
+  if p_allowed is not null then
+    insert into public.member_overrides (user_id, org_id, permission, allowed) values (p_user_id, v_member.org_id, p_permission, p_allowed);
+  end if;
 end;
 $function$
 ;
@@ -4738,6 +5069,7 @@ declare
   v_role public.org_roles%rowtype;
   v_template boolean;
   v_platform boolean := public.platform_can('platform.pros.manage');
+  v_full boolean;
 begin
   select * into v_role from public.org_roles where id = p_role_id;
   if v_role.id is null or not public.can_manage_org_roles(v_role.org_id, true) then
@@ -4752,6 +5084,11 @@ begin
     end if;
     if coalesce(p_allowed, false) and not public.org_owner_ceiling(v_role.org_id, v_role.side, p_permission) then
       raise exception using errcode = '42501', message = 'Ce droit dépasse ce qu’Appro+ a ouvert à votre Pro.';
+    end if;
+    -- A delegate (not the Responsable) never gives a right it does not have.
+    v_full := public.is_admin() or public.is_org_owner(v_role.org_id);
+    if not v_full and coalesce(p_allowed, false) and not public.has_feature(p_permission) then
+      raise exception using errcode = '42501', message = 'Vous ne pouvez pas donner un droit que vous n’avez pas.';
     end if;
   end if;
   v_template := exists (select 1 from public.role_template_permissions tp where tp.template_id = v_role.template_id and tp.permission = p_permission);
@@ -4820,8 +5157,8 @@ begin
   if (select auth.uid()) is null or public.org_write_guard_bypassed() then
     return coalesce(new, old);
   end if;
-  if exists (select 1 from public.profiles pr where pr.id = (select auth.uid()) and pr.role = 'platform') then
-    raise exception using errcode = '42501', message = 'L’équipe Appro+ ne modifie pas les données des Pros.';
+  if exists (select 1 from public.profiles pr where pr.id = (select auth.uid()) and pr.role = 'platform') and not public.assist_can_edit() then
+    raise exception using errcode = '42501', message = 'L’équipe Appro+ ne modifie les données d’un Pro qu’en l’assistant, avec les modifications autorisées.';
   end if;
   v_acting := public.acting_supplier_org_id();
   if tg_op <> 'DELETE' then
@@ -4854,6 +5191,15 @@ CREATE OR REPLACE FUNCTION public.org_write_guard_bypassed()
  STABLE
  SET search_path TO ''
 AS $function$ select coalesce(current_setting('appro.link_write', true), '') = 'on'; $function$
+;
+
+-- ===== permission_kind
+CREATE OR REPLACE FUNCTION public.permission_kind(p_permission text)
+ RETURNS text
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$ select coalesce((select p.kind from public.permissions p where p.key = p_permission), 'write'); $function$
 ;
 
 -- ===== place_client_order
@@ -5108,7 +5454,8 @@ begin
     select jsonb_agg(x order by (x ->> 'status') = 'pending' desc, x ->> 'email') from (
       select jsonb_build_object('id', u.id, 'email', u.email, 'full_name', coalesce(pr.full_name, ''), 'role', pr.role,
         'status', pr.account_status, 'org_id', o.id, 'org_name', coalesce(o.name, c.business_name), 'org_kind', o.kind,
-        'created_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at) as x
+        'created_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at,
+        'deleted_at', pr.deleted_at, 'email_confirmed', public.email_confirmed(u.id), 'invited_by', public.invited_by_of(u.id)) as x
       from auth.users u left join public.profiles pr on pr.id = u.id
       left join public.organizations o on o.id = pr.org_id left join public.clients c on c.id = pr.client_id
       where p_search is null or btrim(p_search) = ''
@@ -5148,6 +5495,38 @@ AS $function$
   select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'parent_id', c.parent_id, 'sort_order', c.sort_order, 'active', c.active,
     'products', (select count(*) from public.products p where p.category_id = c.id)) order by c.sort_order, c.name), '[]'::jsonb)
   from public.categories c where public.platform_can('platform.catalog');
+$function$
+;
+
+-- ===== platform_create_invitation
+CREATE OR REPLACE FUNCTION public.platform_create_invitation(p_org_id uuid, p_side text, p_name text DEFAULT NULL::text, p_contact text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if not public.platform_can('platform.pros.manage') then
+    raise exception using errcode = '42501', message = 'Votre rôle Appro+ ne permet pas d’inviter pour un Pro.';
+  end if;
+  return public.invitation_create(p_org_id, p_side, null, p_name, p_contact, true);
+end;
+$function$
+;
+
+-- ===== platform_invitations
+CREATE OR REPLACE FUNCTION public.platform_invitations()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if not public.platform_can('platform.pros.view') then
+    raise exception using errcode = '42501', message = 'Réservé à l’équipe Appro+.';
+  end if;
+  return public.invitations_list(null);
+end;
 $function$
 ;
 
@@ -5360,6 +5739,31 @@ end;
 $function$
 ;
 
+-- ===== platform_set_feature_display
+CREATE OR REPLACE FUNCTION public.platform_set_feature_display(p_org_id uuid, p_permission text, p_display text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if not public.platform_can('platform.pros.manage') then
+    raise exception using errcode = '42501', message = 'Votre rôle Appro+ ne permet pas ce réglage.';
+  end if;
+  if not exists (select 1 from public.permissions p where p.key = p_permission) then
+    raise exception using errcode = '22023', message = 'Fonction inconnue.';
+  end if;
+  if p_display is not null and p_display not in ('hidden', 'locked') then
+    raise exception using errcode = '22023', message = 'Affichage inconnu.';
+  end if;
+  delete from public.feature_display d where d.org_id is not distinct from p_org_id and d.permission = p_permission;
+  if p_display is not null then
+    insert into public.feature_display (org_id, permission, display) values (p_org_id, p_permission, p_display);
+  end if;
+end;
+$function$
+;
+
 -- ===== platform_set_member
 CREATE OR REPLACE FUNCTION public.platform_set_member(p_email text, p_role text)
  RETURNS void
@@ -5419,6 +5823,38 @@ begin
   end if;
   insert into public.org_modules (org_id, key, granted, updated_at, updated_by) values (p_org_id, p_key, p_granted, now(), auth.uid())
   on conflict (org_id, key) do update set granted = excluded.granted, updated_at = now(), updated_by = auth.uid();
+end;
+$function$
+;
+
+-- ===== platform_set_org_plan
+CREATE OR REPLACE FUNCTION public.platform_set_org_plan(p_org_id uuid, p_preset text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_essential text[] := array['delivery', 'invoicing', 'client_messages'];
+begin
+  if not public.platform_can('platform.pros.manage') then
+    raise exception using errcode = '42501', message = 'Seule l’équipe Appro+ gère la formule d’un Pro.';
+  end if;
+  if p_preset not in ('all', 'essential', 'default') then
+    raise exception using errcode = '22023', message = 'Formule inconnue.';
+  end if;
+  if not exists (select 1 from public.organizations o where o.id = p_org_id) then
+    raise exception using errcode = 'P0002', message = 'Pro introuvable.';
+  end if;
+  insert into public.org_modules (org_id, key, granted, enabled, updated_at, updated_by)
+  select p_org_id, k,
+    case p_preset when 'all' then true when 'essential' then k = any(v_essential) else null end,
+    null, now(), auth.uid()
+  from unnest(public.module_keys()) k
+  on conflict (org_id, key) do update set
+    granted = excluded.granted,
+    enabled = case when p_preset = 'all' then null else public.org_modules.enabled end,
+    updated_at = now(), updated_by = auth.uid();
 end;
 $function$
 ;
@@ -5502,11 +5938,15 @@ begin
   if not public.platform_can('platform.pros.manage') then
     raise exception using errcode = '42501', message = 'Votre rôle Appro+ ne permet pas de modifier ce réglage.';
   end if;
-  if p_key = 'new_accounts_trial_hours' then
+  if p_key in ('new_accounts_trial_hours', 'invited_trial_hours') then
     if jsonb_typeof(p_value) is distinct from 'number' or (p_value #>> '{}')::numeric not between 0 and 720 then
       raise exception using errcode = '22023', message = 'Durée invalide (0 à 720 heures).';
     end if;
     p_value := to_jsonb(round((p_value #>> '{}')::numeric)::int);
+  elsif p_key = 'self_signup_business_trial' then
+    if jsonb_typeof(p_value) is distinct from 'boolean' then
+      raise exception using errcode = '22023', message = 'Valeur invalide.';
+    end if;
   elsif p_key = 'app_url' then
     if jsonb_typeof(p_value) is distinct from 'string' or ((p_value #>> '{}') <> '' and (p_value #>> '{}') !~ '^https?://[^ ]+$') then
       raise exception using errcode = '22023', message = 'Adresse invalide : elle commence par https://';
@@ -5557,6 +5997,52 @@ CREATE OR REPLACE FUNCTION public.platform_setting(p_key text)
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$ select s.value from public.platform_settings s where s.key = p_key; $function$
+;
+
+-- ===== platform_start_assist
+CREATE OR REPLACE FUNCTION public.platform_start_assist(p_org_id uuid, p_edit boolean DEFAULT false, p_reason text DEFAULT NULL::text, p_hours integer DEFAULT 2)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org public.organizations%rowtype;
+begin
+  if not public.platform_can('platform.support.access') or (coalesce(p_edit, false) and not public.platform_can('platform.pros.manage')) then
+    raise exception using errcode = '42501', message = 'Votre rôle Appro+ ne permet pas d’assister ce Pro.';
+  end if;
+  select * into v_org from public.organizations where id = p_org_id;
+  if v_org.id is null then
+    raise exception using errcode = 'P0002', message = 'Pro introuvable.';
+  end if;
+  insert into public.platform_assist (user_id, org_id, can_edit, reason, started_at, expires_at)
+  values (auth.uid(), p_org_id, coalesce(p_edit, false), nullif(btrim(coalesce(p_reason, '')), ''), now(), now() + make_interval(hours => least(greatest(coalesce(p_hours, 2), 1), 12)))
+  on conflict (user_id) do update set org_id = excluded.org_id, can_edit = excluded.can_edit, reason = excluded.reason, started_at = now(), expires_at = excluded.expires_at;
+  -- The Pro knows who assists it.
+  perform public.notify(array(select mr.user_id from public.member_roles mr join public.org_roles r on r.id = mr.role_id
+      join public.role_templates t on t.id = r.template_id where r.org_id = p_org_id and t.key in ('supplier_owner', 'buyer_owner')),
+    'platform.assist', 'L’équipe Appro+ assiste votre espace',
+    format('%s %s%s.', public.location_name(auth.uid()), case when coalesce(p_edit, false) then 'peut voir et régler votre espace' else 'consulte votre espace' end,
+      coalesce(' · ' || nullif(btrim(coalesce(p_reason, '')), ''), '')));
+  if to_regclass('public.audit_log') is not null then
+    insert into public.audit_log (actor_id, actor_name, actor_role, action, entity, entity_id, label, changes, org_id)
+    values (auth.uid(), public.location_name(auth.uid()), 'platform', 'insert', 'platform_assist', p_org_id::text,
+            case when coalesce(p_edit, false) then 'Assistance Appro+ (lecture et modification)' else 'Assistance Appro+ (lecture)' end,
+            jsonb_build_object('reason', p_reason), p_org_id);
+  end if;
+  return jsonb_build_object('org_id', p_org_id, 'org_name', v_org.name, 'can_edit', coalesce(p_edit, false));
+end;
+$function$
+;
+
+-- ===== platform_stop_assist
+CREATE OR REPLACE FUNCTION public.platform_stop_assist()
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$ delete from public.platform_assist where user_id = (select auth.uid()); $function$
 ;
 
 -- ===== platform_team
@@ -6150,6 +6636,37 @@ end;
 $function$
 ;
 
+-- ===== pro_public_card
+CREATE OR REPLACE FUNCTION public.pro_public_card(p_org_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_me uuid := public.current_org_id();
+  v_org public.organizations%rowtype;
+  v jsonb;
+begin
+  select * into v_org from public.organizations where id = p_org_id and status in ('active', 'pending');
+  if v_org.id is null or v_me is null or not (v_org.listed_in_directory
+      or exists (select 1 from public.clients c where (c.supplier_org_id = v_me and c.buyer_org_id = p_org_id) or (c.supplier_org_id = p_org_id and c.buyer_org_id = v_me))
+      or exists (select 1 from public.org_conversations cv where cv.org_a = least(v_me, p_org_id) and cv.org_b = greatest(v_me, p_org_id))) then
+    raise exception using errcode = 'P0002', message = 'Fiche non disponible.';
+  end if;
+  v := v_org.profile_visibility;
+  return jsonb_build_object('id', v_org.id, 'name', v_org.name, 'kind', v_org.kind, 'is_supplier', v_org.is_supplier, 'is_buyer', v_org.is_buyer,
+    'tagline', v_org.tagline, 'since', v_org.created_at, 'catalog_visibility', v_org.catalog_visibility,
+    'address', case when coalesce((v ->> 'address')::boolean, true) then v_org.address end,
+    'phone', case when coalesce((v ->> 'phone')::boolean, false) then v_org.phone end,
+    'email', case when coalesce((v ->> 'email')::boolean, false) then v_org.email end,
+    'tax_id', case when coalesce((v ->> 'tax_id')::boolean, false) then v_org.tax_id end,
+    'clients', case when coalesce((v ->> 'relations')::boolean, true) then (select count(*) from public.clients c where c.supplier_org_id = v_org.id and c.link_status = 'active') end,
+    'suppliers', case when coalesce((v ->> 'relations')::boolean, true) then (select count(*) from public.clients c where c.buyer_org_id = v_org.id and c.link_status = 'active') end);
+end;
+$function$
+;
+
 -- ===== profiles_attach_named_owner
 CREATE OR REPLACE FUNCTION public.profiles_attach_named_owner()
  RETURNS trigger
@@ -6310,7 +6827,9 @@ CREATE OR REPLACE FUNCTION public.public_settings()
 AS $function$
   select jsonb_build_object(
     'app_url', coalesce(public.platform_setting('app_url') #>> '{}', ''),
-    'trial_hours', coalesce((public.platform_setting('new_accounts_trial_hours') #>> '{}')::int, 0));
+    'trial_hours', coalesce((public.platform_setting('new_accounts_trial_hours') #>> '{}')::int, 0),
+    'invited_trial_hours', coalesce((public.platform_setting('invited_trial_hours') #>> '{}')::int, 0),
+    'self_signup_business_trial', coalesce((public.platform_setting('self_signup_business_trial') #>> '{}')::boolean, false));
 $function$
 ;
 
@@ -6401,6 +6920,7 @@ declare
   v_kind text := case when p_profile ->> 'kind' = 'person' then 'person' else 'business' end;
   v_supplier boolean := coalesce((p_profile ->> 'is_supplier')::boolean, false) and v_kind = 'business';
   v_buyer boolean := coalesce((p_profile ->> 'is_buyer')::boolean, true) or v_kind = 'person';
+  v_invited boolean := exists (select 1 from public.invitation_acceptances a where a.user_id = auth.uid());
   v_acceptance record;
 begin
   select * into v_me from public.profiles where id = auth.uid();
@@ -6429,7 +6949,7 @@ begin
   select auth.uid(), r.id from public.org_roles r join public.role_templates t on t.id = r.template_id
   where r.org_id = v_org and t.key in ('supplier_owner', 'buyer_owner')
   on conflict do nothing;
-  perform public.start_trial(v_org);
+  perform public.start_trial(v_org, v_invited);
   for v_acceptance in select a.invitation_id from public.invitation_acceptances a where a.user_id = auth.uid() and a.linked_at is null loop
     perform public.invitation_link(v_acceptance.invitation_id, auth.uid());
   end loop;
@@ -6652,6 +7172,23 @@ begin
     raise exception using errcode = 'P0002', message = 'Incident introuvable ou déjà traité.';
   end if;
 end;
+$function$
+;
+
+-- ===== rights_catalogue
+CREATE OR REPLACE FUNCTION public.rights_catalogue(p_org_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(jsonb_agg(jsonb_build_object('key', p.key, 'side', p.side, 'area', p.area, 'kind', p.kind, 'label', p.label, 'sort', p.sort,
+      'module', public.feature_module(p.key),
+      'display', public.feature_display_of(coalesce(p_org_id, public.current_org_id()), p.key),
+      'display_default', public.feature_display_of(null, p.key),
+      'display_own', (select d.display from public.feature_display d where d.org_id = coalesce(p_org_id, public.current_org_id()) and d.permission = p.key))
+    order by p.side desc, p.sort, p.key), '[]'::jsonb)
+  from public.permissions p;
 $function$
 ;
 
@@ -7016,7 +7553,7 @@ AS $function$
 declare
   v_org uuid := public.current_org_id();
 begin
-  if not public.is_admin() or v_org is null then
+  if v_org is null or not (public.is_admin() or public.is_org_owner(v_org)) then
     raise exception using errcode = '42501', message = 'Seul le Responsable du Pro peut modifier les informations de l’entreprise.';
   end if;
   if p_profile ? 'brand_color' and coalesce(p_profile ->> 'brand_color', '') !~ '^(#[0-9a-fA-F]{6})?$' then
@@ -7033,6 +7570,28 @@ begin
     brand_color = coalesce(p_profile ->> 'brand_color', brand_color),
     updated_at = now()
   where id = v_org;
+end;
+$function$
+;
+
+-- ===== set_default_vehicle
+CREATE OR REPLACE FUNCTION public.set_default_vehicle(p_vehicle_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.current_org_id();
+begin
+  if v_org is null or not public.has_feature('fleet.manage') then
+    raise exception using errcode = '42501', message = 'Votre profil ne permet pas de gérer la flotte.';
+  end if;
+  if not exists (select 1 from public.vehicles v where v.id = p_vehicle_id and v.org_id = v_org and v.active) then
+    raise exception using errcode = 'P0002', message = 'Véhicule introuvable ou retiré de la flotte.';
+  end if;
+  update public.vehicles set is_default = false where org_id = v_org and is_default and id <> p_vehicle_id;
+  update public.vehicles set is_default = true where id = p_vehicle_id;
 end;
 $function$
 ;
@@ -7083,14 +7642,16 @@ CREATE OR REPLACE FUNCTION public.set_location_tracking(p_user_id uuid, p_allowe
 AS $function$
 declare
   v_org uuid := public.current_org_id();
+  v_count int;
 begin
   if v_org is null or not (public.is_admin() or public.is_org_owner(v_org)) then
     raise exception using errcode = '42501', message = 'Seul l’administrateur règle le repérage.';
   end if;
   perform set_config('appro.link_write', 'on', true);
   update public.profiles set location_tracking = coalesce(p_allowed, false) where id = p_user_id and org_id = v_org;
+  get diagnostics v_count = row_count;
   perform set_config('appro.link_write', 'off', true);
-  if not found then
+  if v_count = 0 then
     raise exception using errcode = 'P0002', message = 'Compte introuvable.';
   end if;
   perform public.notify(array[p_user_id], 'location.tracking', case when p_allowed then 'Repérage autorisé' else 'Repérage retiré' end,
@@ -7127,6 +7688,25 @@ CREATE OR REPLACE FUNCTION public.set_my_notification_prefs(p_push boolean, p_em
  SET search_path TO ''
 AS $function$
   update public.profiles set notify_push = p_push, notify_email = p_email where id = (select auth.uid());
+$function$
+;
+
+-- ===== set_my_profile
+CREATE OR REPLACE FUNCTION public.set_my_profile(p_full_name text, p_phone text DEFAULT NULL::text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if auth.uid() is null then
+    raise exception using errcode = '28000', message = 'Connectez-vous d’abord.';
+  end if;
+  if char_length(btrim(coalesce(p_full_name, ''))) not between 2 and 120 then
+    raise exception using errcode = '22023', message = 'Indiquez votre nom (2 à 120 caractères).';
+  end if;
+  update public.profiles set full_name = btrim(p_full_name), phone = nullif(left(btrim(coalesce(p_phone, '')), 40), '') where id = auth.uid();
+end;
 $function$
 ;
 
@@ -7213,6 +7793,7 @@ CREATE OR REPLACE FUNCTION public.set_pro_visibility(p_catalog text DEFAULT NULL
 AS $function$
 declare
   v_org uuid := public.current_org_id();
+  v_released int := 0;
 begin
   if v_org is null or not (public.is_admin() or public.is_org_owner(v_org)) then
     raise exception using errcode = '42501', message = 'Seul le Responsable du Pro peut changer ce réglage.';
@@ -7226,7 +7807,40 @@ begin
   update public.organizations set catalog_visibility = coalesce(p_catalog, catalog_visibility),
     listed_in_directory = coalesce(p_listed, listed_in_directory), open_to_messages = coalesce(p_messages, open_to_messages), updated_at = now()
   where id = v_org;
+  -- Opening the messages delivers those that waited.
+  if p_messages then
+    update public.org_conversations set held = false
+    where held and v_org in (org_a, org_b) and started_by is distinct from v_org;
+    get diagnostics v_released = row_count;
+    if v_released > 0 then
+      perform public.notify(array[auth.uid()], 'org.message', 'Messages en attente', format('%s conversation(s) de Pros hors de votre réseau vous attendaient.', v_released));
+    end if;
+  end if;
   return public.my_pro();
+end;
+$function$
+;
+
+-- ===== set_profile_visibility
+CREATE OR REPLACE FUNCTION public.set_profile_visibility(p_visibility jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.current_org_id();
+begin
+  if v_org is null or not (public.is_admin() or public.is_org_owner(v_org)) then
+    raise exception using errcode = '42501', message = 'Seul le Responsable du Pro peut changer ce réglage.';
+  end if;
+  update public.organizations set profile_visibility = jsonb_build_object(
+      'address', coalesce((p_visibility ->> 'address')::boolean, (profile_visibility ->> 'address')::boolean, true),
+      'phone', coalesce((p_visibility ->> 'phone')::boolean, (profile_visibility ->> 'phone')::boolean, false),
+      'email', coalesce((p_visibility ->> 'email')::boolean, (profile_visibility ->> 'email')::boolean, false),
+      'tax_id', coalesce((p_visibility ->> 'tax_id')::boolean, (profile_visibility ->> 'tax_id')::boolean, false),
+      'relations', coalesce((p_visibility ->> 'relations')::boolean, (profile_visibility ->> 'relations')::boolean, true)), updated_at = now()
+  where id = v_org;
 end;
 $function$
 ;
@@ -8087,19 +8701,18 @@ begin
   end if;
 
   select o.* into v_order from public.orders o where o.id = p_order_id for update;
-  if not found then
+  if not found or v_order.supplier_org_id is distinct from public.acting_supplier_org_id() then
     raise exception using errcode = 'P0002', message = 'Commande introuvable.';
   end if;
 
-  -- Clients whose reconfirmation is switched off get the reopened order accepted at once.
   if p_status = 'awaiting_client' and v_order.status = 'declined'
      and exists (select 1 from public.clients c where c.id = v_order.client_id and not (c.reconfirm_declined and public.module_enabled_for(c.supplier_org_id, 'reconfirm'))) then
     return public.reopen_order_accepted(p_order_id, v_note, v_actor_id);
   end if;
 
-  -- With a fleet, shipping goes through driver_ship_orders so the vehicle is recorded.
-  if p_status = 'out_for_delivery' and exists (select 1 from public.vehicles v where v.active) then
-    raise exception using errcode = '22023', message = 'Choisissez le véhicule : expédiez depuis Livraisons → À récupérer.';
+  -- Shipping: one shipment, with the planned or the default vehicle (never blocked for a vehicle).
+  if p_status = 'out_for_delivery' and v_order.status = 'ready' then
+    return public.driver_ship_orders(array[p_order_id], null) || jsonb_build_object('id', p_order_id, 'previous_status', v_order.status, 'status', p_status);
   end if;
 
   v_allowed := case v_order.status
@@ -8138,11 +8751,10 @@ begin
   update public.orders
   set status = p_status,
       status_note = case when p_status in ('declined', 'on_hold', 'cancelled', 'awaiting_client') then v_note else status_note end,
-      -- Accepted orders join the end of the queue; staff may then move them.
       production_rank = case
         when p_status = 'confirmed' then coalesce(production_rank, (
           select coalesce(max(q.production_rank), 0) + 1 from public.orders q
-          where q.status in ('confirmed', 'preparing', 'ready') and q.id <> p_order_id))
+          where q.supplier_org_id = v_order.supplier_org_id and q.status in ('confirmed', 'preparing', 'ready') and q.id <> p_order_id))
         when p_status in ('preparing', 'ready') then production_rank
         else null end,
       updated_at = now()
@@ -8164,7 +8776,6 @@ begin
       where oi.order_id = p_order_id and oi.product_id = p.id;
       update public.orders set stock_reserved = false where id = p_order_id;
     end if;
-
     update public.payments set status = 'cancelled'
     where order_id = p_order_id and status = 'pending';
   end if;
@@ -8236,29 +8847,37 @@ $function$
 ;
 
 -- ===== start_trial
-CREATE OR REPLACE FUNCTION public.start_trial(p_org_id uuid)
+CREATE OR REPLACE FUNCTION public.start_trial(p_org_id uuid, p_invited boolean DEFAULT false)
  RETURNS boolean
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
 declare
-  v_hours int := coalesce((public.platform_setting('new_accounts_trial_hours') #>> '{}')::int, 0);
+  v_org public.organizations%rowtype;
+  v_hours int := coalesce((public.platform_setting(case when p_invited then 'invited_trial_hours' else 'new_accounts_trial_hours' end) #>> '{}')::int, 0);
 begin
-  if v_hours <= 0 or not exists (select 1 from public.organizations o where o.id = p_org_id and o.status = 'pending') then
+  select * into v_org from public.organizations where id = p_org_id;
+  if v_hours <= 0 or v_org.status is distinct from 'pending' then
+    return false;
+  end if;
+  if not p_invited and v_org.kind = 'business' and not coalesce((public.platform_setting('self_signup_business_trial') #>> '{}')::boolean, false) then
+    return false;
+  end if;
+  if not exists (select 1 from public.profiles pr where pr.org_id = p_org_id and public.email_confirmed(pr.id)) then
     return false;
   end if;
   update public.organizations set status = 'active', trial_until = now() + make_interval(hours => v_hours), updated_at = now() where id = p_org_id;
   perform public.org_install_roles(p_org_id);
-  if exists (select 1 from public.organizations o where o.id = p_org_id and o.is_supplier) then
+  if v_org.is_supplier then
     perform public.org_install_numbering(p_org_id);
   end if;
   perform set_config('appro.link_write', 'on', true);
   update public.profiles set account_status = 'active' where org_id = p_org_id and account_status = 'pending' and role <> 'platform';
   perform set_config('appro.link_write', 'off', true);
   perform public.notify(array(select pm.user_id from public.platform_members pm where pm.active and pm.role in ('superadmin', 'verification', 'account_manager')),
-    'pro.trial', 'Nouveau Pro en essai',
-    format('%s est actif pour %s h : validez-le (Appro+ → Pros) pour qu’il le reste.', (select o.name from public.organizations o where o.id = p_org_id), v_hours));
+    'pro.trial', 'Nouvel espace en période transitoire',
+    format('%s est actif pour %s h%s : validez-le (Appro+ → Pros) pour qu’il le reste.', v_org.name, v_hours, case when p_invited then ' (invité)' else '' end));
   return true;
 end;
 $function$

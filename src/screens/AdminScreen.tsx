@@ -203,7 +203,8 @@ function AccountsPage({ onBack, onRoles }: { onBack: () => void; onRoles: () => 
                 <Button label="RÉACTIVER" onPress={() => changeStatus(item, "active")} busy={busy} />
                 <Button label="REMETTRE EN ATTENTE" variant="secondary" onPress={() => changeStatus(item, "pending")} disabled={busy} />
               </>}
-            <Button label="SUPPRIMER" variant="danger" onPress={() => remove(item, false)} disabled={busy} />
+            {/* A client's account belongs to its own space: only that space (or Appro+) deletes it. */}
+            {!item.client_name ? <Button label="SUPPRIMER" variant="danger" onPress={() => remove(item, false)} disabled={busy} /> : null}
           </View> : null}
           {/* One place for roles: Rôles et accès (the former profile chips here followed another set of rights). */}
           {!item.is_self && !item.client_name && !item.deleted_at ? <View style={[ui.wrapRow, { marginTop: 8 }]}>

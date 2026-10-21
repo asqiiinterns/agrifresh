@@ -40,6 +40,7 @@ from (values
   (32, '20261125_rights_accounts.sql',           to_regprocedure('public.org_members_rights(uuid)') is not null and to_regprocedure('public.org_set_member_permission(uuid,text,boolean)') is not null),
   (33, '20261126_fixes.sql',                     to_regprocedure('public.platform_invitations()') is not null and to_regprocedure('public.delete_account(uuid,boolean)') is not null and to_regprocedure('public.pro_public_card(uuid)') is not null),
   (34, '20261127_default_vehicle.sql',           to_regprocedure('public.set_default_vehicle(uuid)') is not null),
-  (35, '20261128_plan_presets.sql',             to_regprocedure('public.platform_set_org_plan(uuid,text)') is not null)
+  (35, '20261128_plan_presets.sql',             to_regprocedure('public.platform_set_org_plan(uuid,text)') is not null),
+  (36, '20261129_review.sql',                   to_regprocedure('public.member_is_owner(uuid,uuid)') is not null)
 ) as checks(position, migration, installed)
 order by position;

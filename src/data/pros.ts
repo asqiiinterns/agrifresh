@@ -77,7 +77,10 @@ export type CatalogueFunction = { key: string; side: "supplier" | "buyer"; area:
 export const fetchRightsCatalogue = (orgId?: string | null) => call<CatalogueFunction[]>("rights_catalogue", { p_org_id: orgId ?? null });
 export const setFeatureDisplay = (orgId: string | null, permission: string, display: "hidden" | "locked" | null) =>
   call<void>("platform_set_feature_display", { p_org_id: orgId, p_permission: permission, p_display: display });
-export type MemberRights = { id: string; name: string; email: string; status: string; side: "supplier" | "buyer"; granted: string[]; overrides: Record<string, boolean> };
+export type MemberRights = { id: string; name: string; email: string; status: string; side: "supplier" | "buyer"; granted: string[]; overrides: Record<string, boolean>
+  // 20261129: the Responsable (set by Appro+ only) and the person itself are not editable here.
+  owner?: boolean; is_self?: boolean;
+};
 export const fetchMembersRights = (orgId?: string | null) => call<MemberRights[]>("org_members_rights", { p_org_id: orgId ?? null });
 export const setMemberPermission = (userId: string, permission: string, allowed: boolean | null) =>
   call<void>("org_set_member_permission", { p_user_id: userId, p_permission: permission, p_allowed: allowed });
