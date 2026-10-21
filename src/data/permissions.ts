@@ -89,7 +89,8 @@ export const configurableRoles: { role: Role; label: string; short: string; audi
 
 // Client options: one value for all clients, which a client record may override.
 export type ClientOptionKey = "show_prices" | "show_origin" | "show_stock" | "stock_managed" | "invoice_mode" | "reception_qr"
-  | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr" | "payment_reminders" | "reminder_opt_out_allowed" | "delivery_signature";
+  | "history_enabled" | "reconfirm_declined" | "scan_delivery_note" | "scan_client_qr" | "payment_reminders" | "reminder_opt_out_allowed" | "delivery_signature"
+  | "driver_prices";
 export const clientOptionBlocks: { title: string; icon: string; items: { key: ClientOptionKey; label: string; hint: string }[] }[] = [
   { title: "Affichage", icon: "eye-outline", items: [
     { key: "show_prices", label: "Afficher les prix", hint: "Dans l’application et sur les bons de livraison." },
@@ -106,6 +107,7 @@ export const clientOptionBlocks: { title: string; icon: string; items: { key: Cl
     { key: "scan_client_qr", label: "Scan du QR client", hint: "QR collé au point de livraison (ou QR de réception)." },
     { key: "reception_qr", label: "QR de réception dans l’appli du client", hint: "Remplace le QR collé au point de livraison." },
     { key: "delivery_signature", label: "Signature du client à la livraison", hint: "Le client signe sur l’écran du livreur ; la signature figure sur le bon de livraison." },
+    { key: "driver_prices", label: "Montants visibles par le livreur", hint: "Le livreur voit le montant TTC de chaque bon, pour encaisser un paiement à la livraison." },
   ] },
   { title: "Facturation et relances", icon: "document-text-outline", items: [
     { key: "invoice_mode", label: "Facture automatique à l’acceptation", hint: "Sinon : factures regroupées par l’équipe (fréquence réglée sur la fiche)." },

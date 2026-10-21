@@ -5,7 +5,7 @@ import {
   fetchMyPlatformRole, fetchPlatformTeam, fetchPros, platformRoleLabels, setPlatformMember, setProStatus,
   type PlatformMember, type PlatformRole, type ProStatus, type ProSummary,
 } from "../data/platform";
-import { Button, Chip, EmptyState, Field, ListGroup, Loading, ScreenHeader, formatDay } from "../ui/components";
+import { Button, Chip, EmptyState, Field, ListGroup, Loading, ScreenHeader, formatDateTime, formatDay } from "../ui/components";
 import { FilterBar } from "../ui/FilterBar";
 import { errorMessage, notify } from "../ui/notify";
 import { ProDetailModal } from "./PlatformAdmin";
@@ -90,8 +90,12 @@ export function ProsScreen() {
             {item.is_buyer ? <Text style={styles.kind}>Acheteur · {item.suppliers} fournisseur(s)</Text> : null}
           </View>
           <Text style={[ui.small, { marginTop: 4 }]}>{[item.email, item.phone].filter(Boolean).join(" · ") || "Coordonnées à compléter"} · {item.members} compte(s) · depuis le {formatDay(item.created_at, { day: "numeric", month: "short", year: "numeric" })}</Text>
+          {item.trial_until ? <Text style={[ui.small, { marginTop: 4, color: colors.amber, fontWeight: "800" }]}>{item.status === "active"
+            ? `En essai jusqu’au ${formatDateTime(item.trial_until)} : validez-le pour qu’il reste actif.`
+            : `Essai terminé le ${formatDateTime(item.trial_until)} : à valider pour le réactiver.`}</Text> : null}
           <View style={[ui.wrapRow, { marginTop: 8 }]}>
-            {item.status !== "active" ? <Button label={item.status === "pending" ? "VALIDER" : "RÉACTIVER"} onPress={() => decide(item, "active")} /> : null}
+            {item.status !== "active" ? <Button label={item.status === "pending" || item.trial_until ? "VALIDER" : "RÉACTIVER"} onPress={() => decide(item, "active")} /> : null}
+            {item.status === "active" && item.trial_until ? <Button label="VALIDER DÉFINITIVEMENT" onPress={() => decide(item, "active")} /> : null}
             {item.status === "active" ? <Button label="SUSPENDRE" variant="danger" onPress={() => decide(item, "suspended")} /> : null}
             {item.status === "pending" ? <Button label="REFUSER" variant="danger" onPress={() => decide(item, "refused")} /> : null}
           </View>

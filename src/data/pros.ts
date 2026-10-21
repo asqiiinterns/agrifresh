@@ -2,7 +2,9 @@ import { supabase } from "../lib/supabase";
 
 // Pros (businesses or private persons): self-service creation, Appro+ management, roles.
 export type ProKind = "business" | "person";
-export type MyPro = { id: string; name: string; status: "pending" | "active" | "suspended" | "refused"; is_supplier: boolean; is_buyer: boolean; roles_delegated: boolean };
+export type MyPro = { id: string; name: string; status: "pending" | "active" | "suspended" | "refused"; is_supplier: boolean; is_buyer: boolean; roles_delegated: boolean;
+  // 20261120: end of the trial (until Appro+ validates the Pro), kind of space.
+  trial_until?: string | null; kind?: ProKind };
 export type ProCard = {
   id: string; name: string; kind: ProKind; status: MyPro["status"]; is_supplier: boolean; is_buyer: boolean; roles_delegated: boolean; legacy: boolean;
   tagline: string; address: string; phone: string; email: string; tax_id: string; rib: string; owner_email: string | null; created_at: string;
@@ -46,7 +48,7 @@ export async function fetchMyPro(): Promise<MyPro | null> {
   const { data, error } = await supabase.rpc("my_pro");
   return error ? null : (data as MyPro | null);
 }
-export const registerPro = (input: { name: string; is_supplier: boolean; is_buyer: boolean; phone?: string; address?: string; tax_id?: string }) =>
+export const registerPro = (input: { name: string; kind?: ProKind; is_supplier: boolean; is_buyer: boolean; phone?: string; address?: string; tax_id?: string }) =>
   call<string>("register_pro", { p_profile: input });
 
 export const fetchProCard = (orgId: string) => call<ProCard>("platform_pro", { p_org_id: orgId });

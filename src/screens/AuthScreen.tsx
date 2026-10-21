@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { Text } from "../ui/Text";
 import { supabase } from "../lib/supabase";
+import { fetchInvitationInfo, type InvitationInfo } from "../data/directory";
+import { getPendingInvite, onPendingInvite } from "../data/invite";
 import { Button, Chip, Field } from "../ui/components";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
@@ -19,6 +21,20 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  // Opened from an invitation link: who invites, and "Créer mon compte" first.
+  const [invite, setInvite] = useState<{ code: string; info: InvitationInfo } | null>(null);
+
+  useEffect(() => {
+    const show = (code: string | null) => {
+      if (!code) { setInvite(null); return; }
+      void fetchInvitationInfo(code).then((info) => {
+        setInvite({ code, info });
+        if (info?.valid) setMode((current) => current === "signin" ? "activate" : current);
+      }).catch(() => setInvite({ code, info: null }));
+    };
+    void getPendingInvite().then(show);
+    return onPendingInvite(show);
+  }, []);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -61,6 +77,14 @@ export function AuthScreen() {
         <Text style={[ui.eyebrow, { marginTop: 4 }]}>ESPACE COMMANDES PROFESSIONNELLES</Text>
       </View>
 
+      {invite ? <View style={[ui.card, { borderColor: colors.primary, backgroundColor: colors.primarySoft, marginBottom: 12 }]}>
+        <Text style={ui.strong}>{invite.info?.valid ? `Invitation de ${invite.info.org_name}` : "Invitation"}</Text>
+        <Text style={ui.small}>{!invite.info ? `Code ${invite.code} : il sera vérifié après la connexion.`
+          : !invite.info.valid ? "Cette invitation a expiré : demandez un nouveau lien."
+          : invite.info.side === "client" ? `Créez votre compte (ou connectez-vous) : vous pourrez commander chez ${invite.info.org_name}${invite.info.client_name ? ` pour ${invite.info.client_name}` : ""}.`
+          : `Créez votre compte (ou connectez-vous) : ${invite.info.org_name} souhaite vous compter parmi ses fournisseurs.`}</Text>
+      </View> : null}
+
       <View style={[ui.wrapRow, { justifyContent: "center" }]}>
         <Chip label="Connexion" selected={mode === "signin"} onPress={() => switchMode("signin")} />
         <Chip label="Créer mon compte" selected={mode === "activate"} onPress={() => switchMode("activate")} />
@@ -68,7 +92,7 @@ export function AuthScreen() {
 
       <Text style={[ui.subtitle, { textAlign: "center", marginTop: 16 }]}>
         {mode === "signin" ? "Connectez-vous pour passer et suivre vos commandes."
-          : mode === "activate" ? "Utilisez l’adresse e-mail communiquée à votre fournisseur. Votre compte sera actif dès qu’il l’aura validé."
+          : mode === "activate" ? (invite?.info?.valid ? "Choisissez votre adresse e-mail et un mot de passe." : "Utilisez l’adresse e-mail communiquée à votre fournisseur. Votre compte sera actif dès qu’il l’aura validé.")
           : "Recevez un lien de connexion pour choisir un nouveau mot de passe."}
       </Text>
 

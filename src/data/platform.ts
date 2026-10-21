@@ -16,6 +16,8 @@ export type ProStatus = "pending" | "active" | "suspended" | "refused";
 export type ProSummary = {
   id: string; name: string; is_supplier: boolean; is_buyer: boolean; status: ProStatus; email: string; phone: string;
   created_at: string; members: number; clients: number; suppliers: number;
+  // 20261120: end of its trial (active until then without validation), kind of space.
+  trial_until?: string | null; kind?: "business" | "person";
 };
 
 function client() {

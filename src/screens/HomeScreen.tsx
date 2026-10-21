@@ -11,7 +11,7 @@ import { decisionCount, fetchDecisionBoard } from "../data/decisions";
 import { fetchCreditNotes, fetchReturns } from "../data/returns";
 import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
-import { fetchAllOrders } from "../data/staff";
+import { closedAt, fetchAllOrders } from "../data/staff";
 import { Button, ListGroup, ListRow, Loading, ScreenHeader, toDayKey } from "../ui/components";
 import { allowedFor, defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { useNav } from "../ui/navigation";
@@ -45,19 +45,20 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
   const shortcuts = layout.shortcuts.map((key) => allowedShortcuts.find((item) => item.key === key)).filter((item) => !!item);
   const shows = (key: string) => tiles.some((tile) => tile.key === key);
 
-  async function reload(refresh = false) {
+  // fresh: pull to refresh or a change announced live (a request started before it is not reused).
+  async function reload(refresh = false, fresh = refresh) {
     if (refresh) setRefreshing(true);
     const next: Record<string, number> = {};
     const today = toDayKey(new Date());
     const count = (orders: Order[], statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length;
     try {
       if (audience === "team") {
-        const needsOrders = ["decide", "placedToday", "queue", "prepare", "ready", "shipping", "dueToday"].some(shows);
+        const needsOrders = ["decide", "placedToday", "queue", "prepare", "ready", "shipping", "deliveredToday", "dueToday"].some(shows);
         const money = ["invoicedMonth", "collectedMonth", "outstanding", "overdue", "toInvoice"].some(shows);
         const decisions = ["pending", "special", "reschedule", "waitingReply", "toInvoice"].some(shows);
         // One wave: the decision board shares the orders, claims, returns and accounts requested here.
         const [orders, claims, accounts, returns, credits, invoices, board] = await Promise.all([
-          needsOrders ? fetchAllOrders().catch(() => []) : Promise.resolve([]),
+          needsOrders ? fetchAllOrders(fresh).catch(() => []) : Promise.resolve([]),
           shows("claims") ? fetchClaims().catch(() => []) : Promise.resolve([]),
           shows("accounts") ? fetchAccounts().catch(() => []) : Promise.resolve([]),
           shows("returns") ? fetchReturns().catch(() => []) : Promise.resolve([]),
@@ -86,6 +87,8 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
         next.prepare = count(orders, ["confirmed", "preparing"]);
         next.ready = count(orders, ["ready"]);
         next.shipping = count(orders, ["out_for_delivery"]);
+        // Delivered today, whatever the day they were placed (the same orders as Clôturées → « Clôturées le : aujourd'hui »).
+        next.deliveredToday = orders.filter((order) => order.status === "delivered" && toDayKey(new Date(closedAt(order))) === today).length;
         next.dueToday = orders.filter((order) => order.requested_delivery_date === today && !["delivered", "declined", "cancelled"].includes(order.status)).length;
         next.claims = claims.filter((claim) => claim.status === "open" || claim.status === "in_progress").length;
         next.accounts = accounts.filter((item) => item.status === "pending").length;
@@ -111,7 +114,7 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     void reload();
     if (!realtime) return;
     const channel = realtime.channel(`home-${audience}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(false, true); })
       .subscribe();
     return () => { void realtime.removeChannel(channel); };
   }, [layout.tiles.join(",")]);

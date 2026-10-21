@@ -25,6 +25,7 @@ export const homeTiles: HomeTileDef[] = [
   { key: "prepare", label: "À préparer", icon: "construct-outline", audience: "team", need: "production.view", tab: "production", params: { section: "prepare" } },
   { key: "ready", label: "Prêtes à expédier", icon: "cube-outline", audience: "team", need: "orders.ship", tab: "deliveries" },
   { key: "shipping", label: "En livraison", icon: "car-outline", audience: "team", need: "deliveries", tab: "deliveries" },
+  { key: "deliveredToday", label: "Livrées aujourd’hui", icon: "checkmark-done-outline", audience: "team", need: "orders.view", tab: "orders", params: { section: "done" } },
   { key: "dueToday", label: "À livrer aujourd’hui", icon: "calendar-outline", audience: "team", need: "orders.view", tab: "orders", params: { section: "queue" }, tone: "warn" },
   { key: "claims", label: "Réclamations", icon: "alert-circle-outline", audience: "team", need: "claims.manage", tab: "orders", params: { section: "claims" }, tone: "warn" },
   { key: "returns", label: "Retours à traiter", icon: "return-down-back-outline", audience: "team", need: "returns.manage", tab: "returns", tone: "warn" },
@@ -73,7 +74,7 @@ export const homeShortcuts: HomeShortcutDef[] = [
 // Built-in layout when neither the user nor the admin chose one.
 // Built-in layout when neither the user nor the admin chose one: the usual figures and every shortcut.
 export const defaultLayout = (audience: Audience): HomeLayout => audience === "team"
-  ? { tiles: ["pending", "decide", "placedToday", "queue", "prepare", "ready", "shipping", "claims", "accounts", "messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "team").map((item) => item.key) }
+  ? { tiles: ["pending", "decide", "placedToday", "queue", "prepare", "ready", "shipping", "deliveredToday", "claims", "accounts", "messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "team").map((item) => item.key) }
   : { tiles: ["c_progress", "c_reconfirm", "c_shipped", "c_invoices", "c_messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "customer").map((item) => item.key) };
 
 // A module that is off hides its items, for administrators too.

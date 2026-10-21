@@ -30,19 +30,34 @@ export const statusGroups = {
   done: ["delivered", "declined", "cancelled"],
 } as const;
 
+// The list an order belongs to: À décider, En cours or Clôturées.
+export const groupOf = (order: Pick<Order, "status">): "decide" | "queue" | "done" =>
+  (statusGroups.decide as readonly string[]).includes(order.status) ? "decide"
+    : (statusGroups.done as readonly string[]).includes(order.status) ? "done" : "queue";
+
+// When a closed order was closed: delivery time, else the last delivered/declined/cancelled step, else its creation.
+export const closedAt = (order: Pick<Order, "delivered_at" | "order_status_history" | "created_at">) => order.delivered_at
+  ?? [...(order.order_status_history ?? [])].filter((event) => (statusGroups.done as readonly string[]).includes(event.status))
+    .map((event) => event.created_at).sort().pop()
+  ?? order.created_at;
+
 export type StaffOrder = Order & {
   clients: { business_name: string; client_number: number; show_prices: boolean; show_origin: boolean; reconfirm_declined?: boolean } | null;
   client_invoices: { invoice_number: string | null; status: string } | null;
   delivered_by_profile: { full_name: string } | null;
 };
 
+// Every order still open (whatever its age), and the orders closed or changed in the last two months.
+// (The 300 latest orders used before could leave out an old open order, or one delivered today but placed long ago.)
 async function loadAllOrders(): Promise<StaffOrder[]> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
+  const since = new Date(Date.now() - 62 * 86400000).toISOString();
   const { data, error } = await supabase
     .from("orders")
     .select(`${ORDER_FIELDS}, clients(business_name, client_number, show_prices, show_origin, reconfirm_declined), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
+    .or(`status.not.in.(${statusGroups.done.join(",")}),updated_at.gte.${since},created_at.gte.${since}`)
     .order("created_at", { ascending: false })
-    .limit(300);
+    .limit(1500);
   if (error) throw error;
   return (data ?? []) as unknown as StaffOrder[];
 }

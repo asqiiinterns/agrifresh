@@ -190,13 +190,21 @@ function TotalsView({ orders, refreshControl }: { orders: StaffOrder[]; refreshC
 
 function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; refreshControl: ReactElement<ComponentProps<typeof RefreshControl>>; onChanged: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  // The step just made is shown at once, and a second tap right after it is ignored (double tap).
+  const [local, setLocal] = useState<Record<string, StaffOrder["status"]>>({});
   const canUpdate = useCan()("production.update");
+  const statusOf = (order: StaffOrder) => local[order.id] ?? order.status;
+  useEffect(() => { setLocal({}); }, [queue]);
 
   async function advance(order: StaffOrder) {
+    if (busyId) return;
+    const next = statusOf(order) === "confirmed" ? "preparing" : "ready";
     setBusyId(order.id);
     try {
-      await updateOrderStatus(order.id, order.status === "confirmed" ? "preparing" : "ready");
+      await updateOrderStatus(order.id, next);
+      setLocal((current) => ({ ...current, [order.id]: next }));
       onChanged();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (cause) {
       notify("Production", errorMessage(cause, "Le statut n’a pas pu être modifié."));
     } finally {
@@ -211,23 +219,23 @@ function QueueView({ queue, refreshControl, onChanged }: { queue: StaffOrder[]; 
     refreshControl={refreshControl}
     ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>Ordre fixé par l’administration : préparez de haut en bas.</Text>}
     ListEmptyComponent={<EmptyState title="File vide" body="Aucune commande acceptée pour le moment." />}
-    renderItem={({ item, index }) => <View style={[ui.card, item.status === "preparing" && styles.activeCard]}>
+    renderItem={({ item, index }) => { const status = statusOf(item); return <View style={[ui.card, status === "preparing" && styles.activeCard]}>
       <View style={ui.row}>
         <Text style={styles.position}>{index + 1}</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.clientName} numberOfLines={1}>{clientOf(item)}</Text>
           <Text style={ui.small}>Commande #{item.order_number}</Text>
         </View>
-        <StatusBadge status={item.status} />
+        <StatusBadge status={status} />
       </View>
       <Text style={[ui.small, { marginTop: 3 }]}>{item.requested_delivery_date ? `Livraison ${formatDay(item.requested_delivery_date)}` : "Dès que possible"}{item.address_snapshot?.point_label ? ` · ${item.address_snapshot.point_label}` : ""}</Text>
       <View style={ui.divider}>
         {item.order_items.map((line, lineIndex) => <Text key={`${item.id}-${lineIndex}`} style={ui.body}><Text style={{ fontWeight: "800" }}>{formatQuantity(line.quantity)} {line.unit_snapshot}</Text> · {line.product_name_snapshot}</Text>)}
       </View>
       {item.customer_note ? <Text style={[ui.small, { color: colors.orange, marginTop: 4 }]}>« {item.customer_note} »</Text> : null}
-      {item.status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.primary, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
-        : !canUpdate ? null : <Button label={item.status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
-    </View>}
+      {status === "ready" ? <Text style={[ui.small, { marginTop: 8, color: colors.primary, fontWeight: "700" }]}>Prête · en attente d’expédition</Text>
+        : !canUpdate ? null : <Button label={status === "confirmed" ? "COMMENCER LA PRÉPARATION" : "MARQUER PRÊTE"} onPress={() => advance(item)} busy={busyId === item.id} style={{ marginTop: 10 }} />}
+    </View>; }}
   />;
 }
 

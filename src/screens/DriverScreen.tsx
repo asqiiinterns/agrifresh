@@ -8,9 +8,9 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { fetchDeliveryHistory, fetchPickups, fetchShipments, forgetShipments, lookupDeliveryNote, type DeliveredOrder, type Pickup, type ScannedDeliveryNote, type Shipment } from "../data/delivery";
 import { flushQueue, useOfflineQueue, useOnline } from "../data/offline";
 import { SignatureModal, type Signature } from "../ui/SignaturePad";
-import { deliverOrders } from "../data/fleet";
+import { deliverOrders, depositMethods, type DepositMethod } from "../data/fleet";
 import { useCan } from "../data/permissions";
-import { Button, CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime, formatDay, formatQuantity, toDayKey } from "../ui/components";
+import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, Sheets, formatDateTime, formatDay, formatPrice, formatQuantity, toDayKey } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { parseQr } from "../ui/Qr";
 import { FilterBar, type Filter } from "../ui/FilterBar";
@@ -182,15 +182,18 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (groups: Shipment
   function deliver() {
     if (!chosen.length) return;
     const groups = [...new Map(chosen.map((item) => [item.client_id, chosen.filter((other) => other.client_id === item.client_id)])).values()];
-    // Clients who sign at delivery always go through the hand-over screen.
-    const direct = groups.filter((group) => !group[0].scan_delivery_note && !group[0].scan_client_qr && !group[0].delivery_signature);
-    const scanned = groups.filter((group) => group[0].scan_delivery_note || group[0].scan_client_qr || group[0].delivery_signature);
+    // Clients who sign at delivery, or whose amounts the driver collects, always go through the hand-over screen.
+    const handover = (group: Shipment[]) => group[0].scan_delivery_note || group[0].scan_client_qr || group[0].delivery_signature || group[0].show_prices;
+    const direct = groups.filter((group) => !handover(group));
+    const scanned = groups.filter(handover);
     if (!direct.length) {
       onDeliver(scanned);
       return;
     }
-    notify("Confirmer la remise", `${direct.map((group) => `${group[0].business_name} : ${group.length} commande(s)`).join("\n")}${scanned.length ? `\n\nEnsuite, scans pour : ${scanned.map((group) => group[0].business_name).join(", ")}.` : ""}`, [
+    notify("Confirmer la remise", `${direct.map((group) => `${group[0].business_name} : ${group.length} commande(s)`).join("\n")}${scanned.length ? `\n\nEnsuite, remise détaillée pour : ${scanned.map((group) => group[0].business_name).join(", ")}.` : ""}`, [
       { text: "Retour", style: "cancel" },
+      // An amount received: the hand-over screen records it as a deposit.
+      { text: "Avec un acompte", onPress: () => onDeliver([...direct, ...scanned]) },
       { text: "Confirmer", onPress: () => void confirmWithoutScan(direct, scanned) },
     ]);
   }
@@ -250,6 +253,7 @@ function ShipmentList({ onDeliver, onDelivered }: { onDeliver: (groups: Shipment
             <Text style={ui.small}>{item.address_line}, {item.city}{item.phone ? ` · ${item.phone}` : ""}</Text>
             <Text style={ui.small}>{item.item_count} produit(s){item.requested_delivery_date ? ` · souhaitée ${formatDay(item.requested_delivery_date)}` : ""}{item.vehicle_label ? ` · ${item.vehicle_label}` : ""}{item.shipment_number ? ` · exp. #${item.shipment_number}` : ""}</Text>
           </View>
+          {item.show_prices && item.total_ttc !== null && item.total_ttc !== undefined ? <Text style={styles.amount}>{formatPrice(item.total_ttc)}</Text> : null}
         </Pressable>;
       }}
     />
@@ -356,11 +360,20 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
     if (!visible) setStep(0);
   }, [visible]);
 
+  // Money received at delivery, recorded as a deposit on the client's account.
+  const [depositText, setDepositText] = useState("");
+  const [depositMethod, setDepositMethod] = useState<DepositMethod>("cash");
+  const depositAmount = Number(depositText.replace(",", ".").replace(/\s/g, ""));
+  const depositInvalid = depositText.trim() !== "" && (!Number.isFinite(depositAmount) || depositAmount < 0);
+  const deposit = !depositInvalid && depositAmount > 0 ? { amount: Math.round(depositAmount * 1000) / 1000, method: depositMethod } : null;
+
   useEffect(() => {
     if (!visible) return;
     setNotes([]);
     setMessage("");
     setError("");
+    setDepositText("");
+    setDepositMethod("cash");
     lastScan.current = { data: "", at: 0 };
   }, [visible, step]);
 
@@ -375,15 +388,23 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
   const [signing, setSigning] = useState<{ clientQr: { kind: "point" | "client"; token: string } | null } | null>(null);
   const [signature, setSignature] = useState<{ value: Signature | null; signer: string } | null>(null);
   const needsSignature = chosen.some((item) => item.delivery_signature);
+  // Scans asked (or nothing preselected: the driver starts by scanning a delivery note).
+  const needsCamera = !first || !!rules?.notes || !!rules?.qr;
+  const priced = chosen.filter((item) => item.show_prices && item.total_ttc !== null && item.total_ttc !== undefined);
+  const amountDue = priced.length ? Math.round(priced.reduce((sum, item) => sum + Number(item.total_ttc), 0) * 1000) / 1000 : null;
 
   async function deliver(clientQr: { kind: "point" | "client"; token: string } | null) {
     if (needsSignature && !signature?.value) {
       setSigning({ clientQr });
       return;
     }
+    if (depositInvalid) {
+      setError("Montant de l’acompte invalide.");
+      return;
+    }
     setBusy(true);
     try {
-      const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), clientQr, signature?.value ?? null, signature?.signer ?? "");
+      const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), clientQr, signature?.value ?? null, signature?.signer ?? "", deposit);
       if (count < 0) await forgetShipments(orderIds);
       setSignature(null);
       onDelivered();
@@ -465,7 +486,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
         if (pending?.clientQr && value) void (async () => {
           setBusy(true);
           try {
-            const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), pending.clientQr, value, signer);
+            const count = await deliverOrders(orderIds, notes.map((note) => note.delivery_token), pending.clientQr, value, signer, deposit);
             if (count < 0) await forgetShipments(orderIds);
             setSignature(null);
             onDelivered();
@@ -481,14 +502,15 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
     />
     <SafeAreaView style={ui.modalSafe}>
       <ScreenHeader eyebrow={total > 1 ? `REMISE · CLIENT ${step + 1}/${total}` : "REMISE AU CLIENT"} title={businessName} right={<CloseButton onPress={onClose} />} />
-      {!permission ? <Loading /> : !permission.granted ? <EmptyState
+      {needsCamera && !permission ? <Loading /> : needsCamera && !permission?.granted ? <EmptyState
         title="Accès à la caméra"
         body="La caméra sert uniquement à lire les QR codes des bons de livraison et des clients."
-        action={permission.canAskAgain
+        action={permission?.canAskAgain
           ? <Button label="AUTORISER LA CAMÉRA" onPress={() => requestPermission()} />
           : <Button label="OUVRIR LES RÉGLAGES DU TÉLÉPHONE" onPress={() => Linking.openSettings()} />}
       /> : <View style={{ flex: 1 }}>
-        <View style={styles.cameraFrame}>
+        {/* No scan asked for this client: no camera, the hand-over is confirmed with a button. */}
+        {needsCamera ? <View style={styles.cameraFrame}>
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
@@ -496,11 +518,21 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
             onBarcodeScanned={({ data }) => { void onScan(data); }}
           />
           <View pointerEvents="none" style={styles.viewfinder} />
-        </View>
-        <ScrollView contentContainerStyle={ui.content}>
+        </View> : null}
+        <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
           <Text style={[ui.strong, { marginTop: 10, textAlign: "center" }]}>{busy ? "Vérification…" : instruction}</Text>
           {message && !error ? <Text style={[ui.success, { textAlign: "center", marginTop: 4 }]}>{message}</Text> : null}
           {error ? <Text style={[ui.error, { textAlign: "center", marginTop: 4 }]}>{error}</Text> : null}
+          {orderIds.length ? <View style={[ui.card, styles.payCard]}>
+            <Text style={ui.strong}>Paiement à la livraison</Text>
+            {amountDue !== null ? <Text style={ui.body}>Montant des bons : <Text style={{ fontWeight: "800" }}>{formatPrice(amountDue)}</Text> TTC</Text> : null}
+            <Field label="Acompte reçu (TND), facultatif" value={depositText} onChangeText={setDepositText} keyboardType="decimal-pad" placeholder="0,000" />
+            {deposit ? <View style={ui.wrapRow}>
+              {depositMethods.map((item) => <Chip key={item.key} label={item.label} selected={depositMethod === item.key} onPress={() => setDepositMethod(item.key)} />)}
+            </View> : null}
+            {depositInvalid ? <Text style={ui.error}>Montant invalide.</Text>
+              : deposit ? <Text style={ui.small}>Enregistré sur le compte du client à la confirmation de la remise, et imputé sur la facture si elle est déjà émise.</Text> : null}
+          </View> : null}
           {readyForClient && !rules?.qr ? <Button label="CONFIRMER LA REMISE" onPress={() => deliver(null)} busy={busy} style={{ marginTop: 10 }} /> : null}
           {orderIds.length ? <Button label={signature?.value ? "✓ SIGNÉ · REFAIRE LA SIGNATURE" : needsSignature ? "FAIRE SIGNER (OBLIGATOIRE)" : "FAIRE SIGNER (FACULTATIF)"} variant="secondary" onPress={() => setSigning({ clientQr: null })} style={{ marginTop: 8 }} /> : null}
           {[...chosen.map((item) => ({ id: item.id, number: item.order_number, label: item.point_label })), ...notes.filter((note) => !chosen.some((item) => item.id === note.id)).map((note) => ({ id: note.id, number: note.order_number, label: note.point_label }))].map((line) => {
@@ -522,6 +554,8 @@ const styles = StyleSheet.create({
   clientName: { color: colors.text, fontSize: 15, fontWeight: "800" },
   offline: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginTop: 8, padding: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.danger, backgroundColor: "#fdecea" },
   link: { color: colors.primary, fontSize: 12, fontWeight: "800" },
+  amount: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  payCard: { borderColor: colors.primary },
   selectable: { flexDirection: "row", alignItems: "center", gap: 10 },
   selectedCard: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   sectionHeader: { marginTop: 14, marginBottom: 2 },

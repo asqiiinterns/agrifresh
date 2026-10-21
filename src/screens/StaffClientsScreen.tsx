@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { formatClientNumber } from "../data/account";
 import { type BillingSettings, createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
+import { InviteModal } from "../ui/InviteModal";
 import { errorMessage, notify } from "../ui/notify";
 import { boolToOption, clientOptionKeys, fetchClientDefaults, useCan, type ClientOptionKey } from "../data/permissions";
 import { ClientOptionsEditor } from "./SettingsScreen";
@@ -85,7 +86,7 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
 }
 
 type Options = Pick<ClientRecord, ClientOptionKey | "custom_settings">;
-const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, payment_reminders: true, reminder_opt_out_allowed: true, delivery_signature: false, custom_settings: [] };
+const blankOptions: Options = { show_prices: true, show_origin: false, show_stock: false, stock_managed: true, invoice_mode: "manual", reception_qr: false, history_enabled: true, reconfirm_declined: true, scan_delivery_note: true, scan_client_qr: true, payment_reminders: true, reminder_opt_out_allowed: true, delivery_signature: false, driver_prices: false, custom_settings: [] };
 const blankBilling: BillingSettings = { payment_terms_days: 30, reminder_interval_days: 7, billing_frequency: "manual", billing_every_days: 7, billing_start: null, billing_month_day: 1 };
 const pickOptions = (record: ClientRecord): Options => ({ ...Object.fromEntries(clientOptionKeys.map((key) => [key, record[key]])), custom_settings: record.custom_settings ?? [] }) as Options;
 
@@ -183,7 +184,14 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
     });
   }
 
+  // Invitation link (e-mail, WhatsApp, Messenger, SMS…): the person becomes the Responsable of this client's space.
+  // Before 20261120, the former message sent with the client's e-mail.
+  const [inviting, setInviting] = useState(false);
   function invite() {
+    if (!record) return;
+    setInviting(true);
+  }
+  function inviteByEmailOnly() {
     if (!record?.email) {
       setError("Ajoutez l’adresse e-mail du client avant de l’inviter.");
       return;
@@ -265,7 +273,9 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
           </View> : null}
 
           {canEdit ? <Button label={record ? "ENREGISTRER LA FICHE" : "CRÉER LE CLIENT"} onPress={saveClient} busy={busy} style={{ marginTop: 14 }} /> : <Text style={[ui.small, { marginTop: 14 }]}>Consultation seule : votre profil ne permet pas de modifier les fiches.</Text>}
-          {record ? <Button label="PARTAGER L’INVITATION" variant="secondary" onPress={invite} disabled={busy} style={{ marginTop: 10 }} /> : null}
+          {record ? <Button label={record.has_account ? "INVITER UNE AUTRE PERSONNE" : "INVITER (E-MAIL, WHATSAPP, SMS…)"} variant="secondary" onPress={invite} disabled={busy} style={{ marginTop: 10 }} /> : null}
+          {record && record.email && !record.has_account ? <Button label="ENVOYER L’ANCIEN MESSAGE (E-MAIL DE LA FICHE)" variant="secondary" onPress={inviteByEmailOnly} disabled={busy} style={{ marginTop: 6 }} /> : null}
+          {record && inviting ? <InviteModal visible side="client" clientId={record.id} name={record.contact_name || record.business_name} phone={record.phone} email={record.email ?? ""} onClose={() => setInviting(false)} /> : null}
 
           {record ? <View style={ui.card}>
             <View style={ui.row}>

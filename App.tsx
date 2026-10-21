@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Linking, Modal, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
+import { Animated, Linking, Modal, Platform, Pressable, ScrollView, StatusBar, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Text } from "./src/ui/Text";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
-import { fetchMyAccount, type Account } from "./src/data/account";
+import { fetchMyAccount, roleLabels, type Account } from "./src/data/account";
 import { loadCompanyProfile } from "./src/data/company";
 import { confirmSignOut } from "./src/ui/signOut";
 import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
@@ -20,10 +20,12 @@ import { ProductionScreen } from "./src/screens/ProductionScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { PlatformTeamScreen, ProsScreen } from "./src/screens/PlatformScreens";
 import { PlatformSettingsScreen } from "./src/screens/PlatformAdmin";
-import { ProPendingCard, RegisterProCard } from "./src/screens/ProSignup";
+import { BrowseCatalogButton, InviteCodeCard, ProPendingCard, RegisterProCard } from "./src/screens/ProSignup";
 import { fetchMyPro, fetchMySpaces, switchSpace, type MyPro, type Space } from "./src/data/pros";
 import { NetworkScreen } from "./src/screens/NetworkScreen";
-import { fetchMySuppliers, switchSupplier, type MySupplier } from "./src/data/directory";
+import { acceptInvitation, expireTrials, fetchMySuppliers, fetchPublicSettings, switchSupplier, type MySupplier } from "./src/data/directory";
+import { getPendingInvite, onPendingInvite, setPendingInvite, startInviteCapture } from "./src/data/invite";
+import { PublicCatalogScreen } from "./src/screens/PublicCatalogScreen";
 import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -52,7 +54,7 @@ import { MoreScreen } from "./src/screens/MoreScreen";
 import { StaffOrderEntryScreen } from "./src/screens/StaffOrderEntryScreen";
 import { Ionicons } from "@expo/vector-icons";
 import { NavContext, type IconName, type NavParams, type TabDef, type TabKey } from "./src/ui/navigation";
-import { Button, EmptyState, Loading } from "./src/ui/components";
+import { Button, EmptyState, Loading, formatDateTime } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
 
@@ -81,6 +83,7 @@ const TAB = {
   pros: { key: "pros", label: "Pros", icon: "business-outline", description: "Valider, suspendre ou réactiver les Pros." },
   platformTeam: { key: "platformTeam", label: "Équipe Appro+", icon: "people-circle-outline", description: "Les comptes de la plateforme et leurs rôles." },
   network: { key: "network", label: "Réseau", icon: "git-network-outline", description: "Vos clients et fournisseurs, l’annuaire des Pros validés." },
+  discover: { key: "discover", label: "Découvrir", icon: "compass-outline", description: "Les produits des fournisseurs ouverts à tous." },
   platformSettings: { key: "platformSettings", label: "Paramétrage", icon: "options-outline", description: "Comptes, modules, modèles de rôles, alertes et e-mails." },
 } satisfies Record<TabKey, TabDef>;
 
@@ -101,7 +104,9 @@ function tabsFor(account: Account, modules: ModuleState = {}, pro: MyPro | null 
   // The Appro+ team: its own console, separate from every Pro.
   if (account.role === "platform") return { kind: "platform", tabs: [TAB.pros, TAB.platformSettings, TAB.platformTeam, TAB.account] };
   if (account.role === "customer") {
-    if (!account.client) return { kind: "unlinked", tabs: network ? [TAB.network, TAB.account] : [TAB.account] };
+    // Découvrir: the public catalogue, for a buyer's space (also before its first supplier).
+    const discover = pro?.status === "active" && pro.is_buyer;
+    if (!account.client) return { kind: "unlinked", tabs: [...(discover ? [TAB.discover] : []), ...(network ? [TAB.network] : []), TAB.account] };
     const tabs: TabDef[] = [];
     add(tabs, TAB.home, has("client.home"));
     add(tabs, TAB.order, has("client.order"));
@@ -110,6 +115,7 @@ function tabsFor(account: Account, modules: ModuleState = {}, pro: MyPro | null 
     add(tabs, TAB.alerts, has("client.alerts"));
     add(tabs, TAB.invoices, has("client.invoices"));
     add(tabs, TAB.recurring, has("client.recurring"));
+    add(tabs, TAB.discover, discover);
     add(tabs, TAB.network, network);
     tabs.push(TAB.account);
     return { kind: "client", tabs };
@@ -289,6 +295,7 @@ function useUnreadMessages(enabled: boolean, isStaff: boolean, sources: { client
 function Main({ session }: { session: Session }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [accountError, setAccountError] = useState("");
+  const { width } = useWindowDimensions();
   const [nav, setNav] = useState<{ tab: TabKey | null; params?: NavParams; nonce: number }>({ tab: null, nonce: 0 });
   const tab = nav.tab;
   const [ordersKey, setOrdersKey] = useState(0);
@@ -309,8 +316,8 @@ function Main({ session }: { session: Session }) {
     setAccountError("");
     clearShared();
     try {
-      // All in parallel: each request costs a round trip to the server.
-      const [next, nextModules, nextPro, nextSuppliers, nextSpaces] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro(), fetchMySuppliers(), fetchMySpaces()]);
+      // All in parallel: each request costs a round trip to the server. Trials over are closed in the same wave.
+      const [next, nextModules, nextPro, nextSuppliers, nextSpaces] = await Promise.all([fetchMyAccount(), fetchModules(), fetchMyPro(), fetchMySuppliers(), fetchMySpaces(), expireTrials().catch(() => undefined)]);
       setModules(nextModules);
       setMyPro(nextPro);
       setSuppliers(next.role === "customer" ? nextSuppliers : []);
@@ -331,6 +338,35 @@ function Main({ session }: { session: Session }) {
   }, [session.user.id, loadAccount]);
   // A module switched on or off changes the rights: reload both.
   useEffect(() => onModulesChanged(() => { void loadAccount(); }), [loadAccount]);
+
+  // An invitation link opened before signing in (or a code captured since): accepted once signed in.
+  useEffect(() => {
+    let busy = false;
+    const accept = async (code: string | null) => {
+      if (!code || busy) return;
+      busy = true;
+      try {
+        const result = await acceptInvitation(code);
+        await setPendingInvite(null);
+        notify("Invitation", result.linked ? `Bienvenue : vous êtes en relation avec ${result.org_name}.`
+          : result.needs_space ? `Invitation de ${result.org_name} : créez votre espace (Plus → Mon compte), la relation se fera aussitôt.`
+          : `Invitation de ${result.org_name} enregistrée.`);
+        await loadAccount();
+      } catch (cause) {
+        await setPendingInvite(null);
+        notify("Invitation", errorMessage(cause, "L’invitation n’a pas pu être utilisée."));
+      } finally {
+        busy = false;
+      }
+    };
+    void getPendingInvite().then(accept);
+    return onPendingInvite((code) => void accept(code));
+  }, [session.user.id, loadAccount]);
+
+  // Trial length set by Appro+, shown to a new account creating its space.
+  const [trialHours, setTrialHours] = useState(0);
+  const [pendingAccount, setPendingAccount] = useState(false);
+  useEffect(() => { void fetchPublicSettings().then((settings) => setTrialHours(settings.trial_hours)); }, []);
 
   const { kind, tabs } = account ? tabsFor(account, modules, myPro) : { kind: null, tabs: [] as TabDef[] };
   // Screens that still work with one supplier at a time (the others cover all suppliers).
@@ -407,15 +443,42 @@ function Main({ session }: { session: Session }) {
       refused: { title: "Demande refusée", body: "L’administrateur n’a pas validé ce compte. Contactez-le si vous pensez qu’il s’agit d’une erreur." },
       suspended: { title: "Compte suspendu", body: "Votre accès est suspendu. Contactez l’administrateur pour le réactiver." },
     }[status];
-    // A free sign-up (no Pro, no client record) can create its Pro; a Pro waiting for Appro+ says so.
+    // A free sign-up (no space, no client record) creates its space (business or private person); a space
+    // waiting for Appro+ says so. Both can browse the suppliers' public products and use an invitation code.
     const free = !myPro && !account.client && account.role !== "platform";
+    const reason = myPro?.status === "suspended" && myPro.trial_until ? "Votre période d’essai est terminée : vous pourrez commander dès que l’équipe Appro+ aura validé votre espace."
+      : free ? "Créez votre espace (entreprise ou particulier) pour commander."
+      : "Vous pourrez commander dès que votre compte sera validé.";
     return <View style={{ flex: 1 }}>
-      <EmptyState title={myPro ? "Espace Pro en attente" : message.title} body={myPro ? "" : free ? "Votre compte est créé. Si vous êtes une entreprise, créez votre espace Pro ci-dessous ; sinon, attendez la validation d’Appro+." : message.body}
-        action={<Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} />} />
-      <View style={{ paddingHorizontal: 14 }}>
-        {myPro ? <ProPendingCard pro={myPro} /> : free && status === "pending" ? <RegisterProCard onDone={() => void loadAccount()} /> : null}
+      <View style={styles.topBar}>
+        <Text style={styles.brand}>Appro<Text style={styles.brandPlus}>+</Text></Text>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={confirmSignOut} style={styles.topIcon} accessibilityLabel="Se déconnecter" hitSlop={6}>
+          <Ionicons name="log-out-outline" size={22} color={colors.danger} />
+        </Pressable>
+        <Pressable onPress={() => setPendingAccount(true)} style={styles.me} accessibilityLabel="Mon compte" hitSlop={4}>
+          <View style={styles.meAvatar}><Ionicons name="person" size={14} color={colors.white} /></View>
+          <Text style={[styles.meName, { maxWidth: width < 400 ? 110 : 200 }]} numberOfLines={1}>{account.full_name || session.user.email}</Text>
+        </Pressable>
       </View>
-      <AccountScreen session={session} account={account} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+      <EmptyState title={myPro ? "Espace en attente" : message.title} body={myPro ? "" : free ? "Votre compte est créé. Créez votre espace ci-dessous : entreprise (fournisseur, acheteur) ou particulier." : message.body}
+        action={<Button label="ACTUALISER" variant="secondary" onPress={() => loadAccount()} />} />
+      <View style={{ paddingHorizontal: 14, gap: 10 }}>
+        {myPro ? <ProPendingCard pro={myPro} /> : free && status === "pending" ? <RegisterProCard trialHours={trialHours} onDone={() => void loadAccount()} /> : null}
+        {status !== "refused" ? <BrowseCatalogButton reason={reason} /> : null}
+        {account.role !== "platform" ? <InviteCodeCard onDone={() => void loadAccount()} /> : null}
+        <Button label="MON COMPTE (MOT DE PASSE, LANGUE…)" variant="secondary" onPress={() => setPendingAccount(true)} />
+      </View>
+      </ScrollView>
+      <Modal visible={pendingAccount} animationType="slide" onRequestClose={() => setPendingAccount(false)}>
+        <SafeAreaView style={ui.modalSafe}>
+          <View style={[styles.topBar, { justifyContent: "flex-end" }]}>
+            <Button label="FERMER" variant="secondary" onPress={() => setPendingAccount(false)} />
+          </View>
+          <AccountScreen session={session} account={account} />
+        </SafeAreaView>
+      </Modal>
     </View>;
   }
 
@@ -465,6 +528,10 @@ function Main({ session }: { session: Session }) {
         return <PlatformSettingsScreen />;
       case "network":
         return <NetworkScreen onChanged={() => void loadAccount()} />;
+      case "discover":
+        return <PublicCatalogScreen canOrder={account.role === "customer" && myPro?.status === "active"}
+          reason={account.role !== "customer" ? "Passez dans votre espace Acheteur pour commander." : "Votre espace doit être actif pour commander."}
+          onOrdered={() => void loadAccount()} />;
       case "admin":
         return <AdminScreen isAdmin={account.role === "admin"} initialPage={nav.params?.page} />;
       default:
@@ -481,6 +548,15 @@ function Main({ session }: { session: Session }) {
 
   const badgeFor = (key: TabKey) => key === "messages" ? unread : key === "alerts" ? alerts.unread : key === "decide" ? decideCount : 0;
   const topTabs = tabs.filter((item) => TOP_KEYS.includes(item.key));
+  const currentSpace = spaces.find((item) => item.current);
+  const who = (() => {
+    const name = account.full_name?.trim() || session.user.email || "Mon compte";
+    const words = name.split(/[\s@.]+/).filter(Boolean);
+    const initials = ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || "?";
+    const detail = currentSpace ? `${currentSpace.org_name} · ${currentSpace.mode === "buyer" ? "Acheteur" : "Fournisseur"}`
+      : account.client?.business_name ?? myPro?.name ?? roleLabels[account.role];
+    return { name, initials, detail };
+  })();
 
   return <ModulesContext.Provider value={modules}><PermissionsContext.Provider value={permissions}><NavContext.Provider value={navValue}>
     <View style={styles.topBar}>
@@ -497,6 +573,14 @@ function Main({ session }: { session: Session }) {
       })}
       <Pressable onPress={confirmSignOut} style={styles.topIcon} accessibilityLabel="Se déconnecter" hitSlop={6}>
         <Ionicons name="log-out-outline" size={22} color={colors.danger} />
+      </Pressable>
+      {/* Who is signed in, always visible: name, then the space (Pro · side) or the role. */}
+      <Pressable onPress={() => navigate("account")} style={styles.me} accessibilityLabel={`Compte connecté : ${who.name}`} hitSlop={4}>
+        <View style={styles.meAvatar}><Text style={styles.meInitials}>{who.initials}</Text></View>
+        <View style={{ maxWidth: width < 400 ? 84 : 150 }}>
+          <Text style={styles.meName} numberOfLines={1}>{who.name}</Text>
+          {who.detail ? <Text style={styles.meDetail} numberOfLines={1}>{who.detail}</Text> : null}
+        </View>
       </Pressable>
     </View>
     {/* One pill: the space (when there are several) and, only on the screens that still work with one supplier
@@ -544,6 +628,10 @@ function Main({ session }: { session: Session }) {
         </View>
       </Pressable>
     </Modal>
+    {myPro?.status === "active" && myPro.trial_until ? <View style={styles.unavailable}>
+      <Ionicons name="time-outline" size={16} color={colors.amber} />
+      <Text style={styles.unavailableText}>Espace en essai jusqu’au {formatDateTime(myPro.trial_until)} : il reste actif dès que l’équipe Appro+ l’a validé.</Text>
+    </View> : null}
     {nav.params?.back && nav.params.back !== current ? <Pressable onPress={() => setTab(nav.params!.back!)} style={styles.backBar}>
       <Ionicons name="chevron-back" size={16} color={colors.primary} />
       <Text style={styles.backText}>Retour aux {TAB[nav.params.back]?.label.toLocaleLowerCase("fr") ?? "alertes"}</Text>
@@ -573,6 +661,8 @@ function Main({ session }: { session: Session }) {
 export default function App() {
   const { session, ready } = useSession();
   useAuthCallback();
+  // An invitation link (…/?invite=CODE) is kept until the person has signed in.
+  useEffect(() => startInviteCapture(), []);
 
   return <DisplayProvider><SafeAreaProvider>
     <SafeAreaView style={ui.screen} edges={["top", "left", "right", "bottom"]}>
@@ -633,6 +723,11 @@ const styles = StyleSheet.create({
   brand: { color: colors.primary, fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
   brandPlus: { color: colors.accent, fontWeight: "900" },
   topIcon: { width: 40, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  me: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 4, paddingRight: 8, paddingVertical: 3, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
+  meAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  meInitials: { color: colors.white, fontSize: 12, fontWeight: "800" },
+  meName: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  meDetail: { color: colors.muted, fontSize: 10, fontWeight: "600" },
   tabBar: { flexDirection: "row", paddingTop: 6, paddingBottom: 6, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.white },
   tab: { flex: 1, alignItems: "center", gap: 3, paddingHorizontal: 2 },
   tabPill: { width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },

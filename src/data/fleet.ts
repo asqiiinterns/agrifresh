@@ -43,17 +43,26 @@ export async function shipOrders(orderIds: string[], vehicleId: string | null): 
 
 // Hand-over: proof required depends on the client's options (delivery-note scans, client QR).
 // Returns the number delivered, or -1 when recorded offline (sent and checked when back online).
-export async function deliverOrders(orderIds: string[], deliveryTokens: string[], clientQr: { kind: "point" | "client"; token: string } | null, signature: Signature | null = null, signer = ""): Promise<number> {
+export type DepositMethod = "cash" | "check" | "transfer" | "other";
+export const depositMethods: { key: DepositMethod; label: string }[] = [
+  { key: "cash", label: "Espèces" }, { key: "check", label: "Chèque" }, { key: "transfer", label: "Virement" }, { key: "other", label: "Autre" },
+];
+
+// deposit: money received by the driver at delivery (goes to the client's account, applied to issued invoices).
+export async function deliverOrders(orderIds: string[], deliveryTokens: string[], clientQr: { kind: "point" | "client"; token: string } | null, signature: Signature | null = null, signer = "",
+  deposit: { amount: number; method: DepositMethod } | null = null): Promise<number> {
   const base = { p_order_ids: orderIds, p_delivery_tokens: deliveryTokens, p_client_qr_kind: clientQr?.kind ?? null, p_client_qr_token: clientQr?.token ?? null };
-  const rpc = signature ? "driver_deliver_v2" : "driver_deliver";
-  const args = signature ? { ...base, p_signature: signature, p_signer: signer.trim() || null } : base;
+  const withDeposit = !!deposit && deposit.amount > 0;
+  const rpc = withDeposit ? "driver_deliver_v3" : signature ? "driver_deliver_v2" : "driver_deliver";
+  const args = withDeposit ? { ...base, p_signature: signature, p_signer: signer.trim() || null, p_deposit: deposit.amount, p_deposit_method: deposit.method }
+    : signature ? { ...base, p_signature: signature, p_signer: signer.trim() || null } : base;
   if (!(await isOnline())) {
     await enqueue("deliver", rpc, args, `Remise de ${Math.max(orderIds.length, deliveryTokens.length)} commande(s)`);
     return -1;
   }
   const { data, error } = await client().rpc(rpc, args);
   if (error) throw error;
-  return Number(data);
+  return Number(withDeposit ? (data as { count: number }).count : data);
 }
 
 export const vehicleName = (vehicle: Pick<Vehicle, "label" | "plate">) => vehicle.plate ? `${vehicle.label} · ${vehicle.plate}` : vehicle.label;

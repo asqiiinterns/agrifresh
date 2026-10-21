@@ -23,6 +23,9 @@ export type Shipment = {
   // Present once 20261104 is installed: offline QR recognition and signature requirement.
   delivery_token?: string;
   delivery_signature?: boolean;
+  // 20261120: amount incl. VAT, only when the client's option shows amounts to the driver.
+  show_prices?: boolean;
+  total_ttc?: number | string | null;
 };
 
 export type ScannedDeliveryNote = {

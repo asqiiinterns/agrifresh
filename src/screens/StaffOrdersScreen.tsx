@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { claimReasonLabel, claimStatusStyle, fetchClaims, updateClaim, type Claim, type ClaimStatus } from "../data/claims";
 import { deliveryNoteNumber, formatOrigin, shareDeliveryNote } from "../data/orders";
-import { executionQueue, fetchAllOrders, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
+import { closedAt, executionQueue, fetchAllOrders, groupOf, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { PlanningScreen } from "./PlanningScreen";
@@ -37,7 +37,9 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
   const [section, setSection] = useState<Section>(mode === "closed" ? "done" : isSection(initialSection) && !(mode === "open" && initialSection === "done") ? initialSection : "decide");
   const [search, setSearch] = useState("");
   const [delivery, setDelivery] = useState<DateFilterValue>(null);
-  // Orders of the day by default; the filter chip clears it in one tap.
+  // Orders of the day by default (closed orders: closed today, even if placed earlier); the chip clears it in one tap.
+  const dateTitle = mode === "closed" ? "Clôturées le" : "Commandes du";
+  const dateOf = (order: StaffOrder) => mode === "closed" ? closedAt(order) : order.created_at;
   const [placed, setPlaced] = useState<DateFilterValue>(() => presets.today.value());
   const [shipping, setShipping] = useState<StaffOrder[] | null>(null);
   const { navigate } = useNav();
@@ -84,7 +86,7 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
   // Search and date filters apply to every list.
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("fr");
-    return orders.filter((order) => matchesDate(order.requested_delivery_date, delivery) && matchesDate(order.created_at, placed)
+    return orders.filter((order) => matchesDate(order.requested_delivery_date, delivery) && matchesDate(dateOf(order), placed)
       && (!term || `${order.clients?.business_name ?? ""} ${order.address_snapshot?.point_label ?? ""} ${order.order_number}`.toLocaleLowerCase("fr").includes(term)));
   }, [orders, search, delivery, placed]);
 
@@ -102,7 +104,10 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
     { key: "done", label: "Clôturées", count: closed.length },
   ];
   const sections = allSections.filter((item) => mode === "closed" ? item.key === "done" : mode === "open" ? item.key !== "done" : true);
-  const hiddenByDate = placed ? orders.filter((order) => !matchesDate(order.created_at, placed)).length : 0;
+  const shown = (order: StaffOrder) => sections.some((item) => item.key === groupOf(order));
+  const hiddenByDate = placed ? orders.filter((order) => shown(order) && !matchesDate(dateOf(order), placed)).length : 0;
+  // Open orders: the period's orders already closed (delivered, declined, cancelled) are counted, with a way to see them.
+  const closedInPeriod = mode === "open" ? filtered.filter((order) => groupOf(order) === "done").length : 0;
 
   const focused = focusId ? orders.find((order) => order.id === focusId) ?? null : null;
   useEffect(() => {
@@ -126,7 +131,7 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
   }, [filtered, section, stage, positions, focused]);
 
   const filters: Filter[] = [
-    { kind: "date", title: "Commandes du", presets: [presets.today, presets.yesterday, presets.last7, presets.last30, presets.thisMonth], value: placed, onChange: setPlaced },
+    { kind: "date", title: dateTitle, presets: [presets.today, presets.yesterday, presets.last7, presets.last30, presets.thisMonth], value: placed, onChange: setPlaced },
     { kind: "date", title: "Livraison", presets: [presets.late, presets.today, presets.tomorrow, presets.next7, presets.noDate], value: delivery, onChange: setDelivery },
     ...(section === "queue" ? [{
       kind: "choice" as const,
@@ -172,7 +177,13 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
             <Text style={[ui.small, { flex: 1, color: colors.text }]}>Commande #{focused.order_number} ouverte depuis une alerte.</Text>
             <Button label="VOIR TOUTES" variant="secondary" onPress={() => setFocusId(null)} />
           </View>
-          : hiddenByDate ? <Text style={[ui.small, { marginTop: 8 }]}>{placed?.label ?? "Période"} : {hiddenByDate} autre(s) commande(s) masquée(s). Changez « Commandes du » pour les voir.</Text> : null}
+          : closedInPeriod || hiddenByDate ? <View>
+            {closedInPeriod ? <Pressable onPress={() => navigate("orders", { section: "done" })} style={[ui.row, styles.closedBar]}>
+              <Text style={[ui.small, { flex: 1, color: colors.text }]}>{closedInPeriod} commande(s) de la période déjà clôturée(s) : livrées, déclinées ou annulées.</Text>
+              <Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>VOIR ›</Text>
+            </Pressable> : null}
+            {hiddenByDate ? <Text style={[ui.small, { marginTop: 8 }]}>{placed?.label ?? "Période"} : {hiddenByDate} autre(s) commande(s) masquée(s). Changez « {dateTitle} » pour les voir.</Text> : null}
+          </View> : null}
         ListEmptyComponent={error ? null : <EmptyState title="Aucune commande" body="Aucune commande ne correspond à ces filtres." />}
         renderItem={({ item }) => <OrderCard
           order={item}
@@ -243,12 +254,15 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   }
 
   async function apply(action: StaffAction) {
+    if (busy) return;
     setBusy(true);
     try {
       await updateOrderStatus(order.id, action.status, action.askReason ? reason : undefined);
       onLocalUpdate({ ...order, status: action.status, status_note: action.askReason ? reason.trim() || null : order.status_note });
       setReason("");
       onChanged();
+      // A second tap right after a step does not trigger the next one.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (cause) {
       notify("Mise à jour impossible", errorMessage(cause, "Le statut n’a pas pu être modifié."));
       onChanged();
@@ -414,6 +428,7 @@ function ClaimsView({ claims, refreshControl, onChanged }: { claims: Claim[]; re
 }
 
 const styles = StyleSheet.create({
+  closedBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, gap: 8 },
   focusBar: { marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Modal, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { FlatList, Modal, Platform, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { fetchPublicSettings, setPlatformSetting, type PublicSettings } from "../data/directory";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../ui/Text";
 import {
@@ -136,11 +137,12 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
 // ---------------------------------------------------------------------------
 // Appro+ → Paramétrage: everything that applies to the whole platform.
 // ---------------------------------------------------------------------------
-type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories";
+type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories" | "signup";
 
 export function PlatformSettingsScreen() {
   const [page, setPage] = useState<SettingsPage>("menu");
   const back = <BackButton label="Paramétrage" onPress={() => setPage("menu")} />;
+  if (page === "signup") return <SignupSettingsPage header={back} />;
   if (page === "modules") return <ModulesPage header={back} mode={{ kind: "platform" }} />;
   if (page === "templates") return <TemplatesPage header={back} />;
   if (page === "accounts") return <PlatformAccountsPage header={back} />;
@@ -154,6 +156,7 @@ export function PlatformSettingsScreen() {
     <ScrollView contentContainerStyle={ui.content}>
       <ListGroup title="Comptes">
         <ListRow icon="people-outline" title="Tous les comptes" detail="Rechercher, valider les inscriptions, suspendre ou réactiver un compte." onPress={() => setPage("accounts")} />
+        <ListRow icon="person-add-outline" title="Nouveaux inscrits et invitations" detail="Période d’essai des nouveaux espaces (commande possible avant validation) et adresse des liens d’invitation." onPress={() => setPage("signup")} />
       </ListGroup>
       <ListGroup title="Fonctions et droits">
         <ListRow icon="apps-outline" title="Modules par défaut" detail="La valeur par défaut de chaque fonction pour tous les Pros ; la formule de chaque Pro se règle dans sa fiche." onPress={() => setPage("modules")} />
@@ -166,6 +169,56 @@ export function PlatformSettingsScreen() {
         <ListRow icon="notifications-outline" title="Alertes et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi des e-mails." onPress={() => setPage("alerts")} />
       </ListGroup>
     </ScrollView>
+  </View>;
+}
+
+// New sign-ups: active at once for N hours (then suspended until validated), or waiting for Appro+
+// (they browse the public catalogue but cannot order). Plus the web address used in invitation links.
+function SignupSettingsPage({ header }: { header: React.ReactNode }) {
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
+  const [hours, setHours] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function reload() {
+    const next = await fetchPublicSettings();
+    setSettings(next);
+    setHours(String(next.trial_hours));
+    setUrl(next.app_url || (Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin : ""));
+  }
+  useEffect(() => { void reload(); }, []);
+  async function save(key: "new_accounts_trial_hours" | "app_url", value: number | string) {
+    setBusy(true);
+    try {
+      await setPlatformSetting(key, value);
+      await reload();
+      notify("Paramétrage", "Réglage enregistré.");
+    } catch (cause) {
+      notify("Paramétrage", errorMessage(cause, "Le réglage n’a pas pu être enregistré. La migration 20261120 est-elle exécutée ?"));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const trial = Number(hours) || 0;
+  return <View style={ui.screen}>
+    <ScreenHeader eyebrow="APPRO+ · PARAMÉTRAGE" title="Nouveaux inscrits" right={header} />
+    {!settings ? <Loading /> : <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+      <View style={ui.card}>
+        <Text style={ui.strong}>Activation automatique des nouveaux espaces</Text>
+        <Text style={ui.small}>Activé : un nouvel espace (entreprise ou particulier) peut commander tout de suite pendant la durée choisie ; sans validation de votre part, il est ensuite suspendu. Désactivé : il parcourt les produits mais ne peut valider une commande qu’après votre validation.</Text>
+        <View style={[ui.wrapRow, { marginTop: 8 }]}>
+          {[0, 24, 48, 72].map((value) => <Chip key={value} label={value === 0 ? "Désactivée" : `${value} h`} selected={trial === value} onPress={() => setHours(String(value))} />)}
+        </View>
+        <Field label="Durée de l’essai (heures, 0 = désactivée)" value={hours} onChangeText={setHours} keyboardType="number-pad" />
+        <Button label="ENREGISTRER LA DURÉE" onPress={() => save("new_accounts_trial_hours", Math.max(0, Math.round(trial)))} busy={busy} disabled={trial === settings.trial_hours} style={{ marginTop: 8 }} />
+        <Text style={[ui.small, { marginTop: 6 }]}>Actuellement : {settings.trial_hours > 0 ? `essai de ${settings.trial_hours} h` : "validation obligatoire avant la première commande"}. Les espaces en essai sont en tête de la liste des Pros.</Text>
+      </View>
+      <View style={ui.card}>
+        <Text style={ui.strong}>Adresse de l’application web</Text>
+        <Text style={ui.small}>Utilisée dans les liens d’invitation envoyés par e-mail, WhatsApp, Messenger ou SMS. Sans adresse, la personne invitée saisit le code dans l’application.</Text>
+        <Field label="Adresse (https://…)" value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" />
+        <Button label="ENREGISTRER L’ADRESSE" onPress={() => save("app_url", url.trim())} busy={busy} disabled={url.trim() === settings.app_url} style={{ marginTop: 8 }} />
+      </View>
+    </ScrollView>}
   </View>;
 }
 
