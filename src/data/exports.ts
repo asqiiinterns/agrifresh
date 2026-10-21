@@ -10,6 +10,7 @@ const cell = (value: unknown) => {
   return /[;"\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 const csv = (rows: unknown[][]) => "﻿" + rows.map((row) => row.map(cell).join(";")).join("\r\n");
+export const toCsv = csv;
 const day = (value: string | null | undefined) => value ? value.slice(0, 10).split("-").reverse().join("/") : "";
 const inPeriod = (value: string | null | undefined, from: string, to: string) => !!value && value.slice(0, 10) >= from && value.slice(0, 10) <= to;
 

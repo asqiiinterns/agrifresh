@@ -36,6 +36,7 @@ from (values
                                                  and coalesce(pg_get_functiondef(to_regprocedure('public.driver_ship_orders(uuid[],uuid)')) like '%planned_vehicle_id%', false)),
   (29, '20261122_cleanup.sql',                   to_regprocedure('public.buyer_returns()') is not null and to_regprocedure('public.buyer_save_recurring(uuid,uuid,jsonb,uuid,int[],int,text,boolean)') is not null),
   (30, '20261123_location.sql',                  to_regclass('public.location_requests') is not null and to_regprocedure('public.location_request_status(uuid)') is not null),
-  (31, '20261124_rights.sql',                    to_regclass('public.platform_assist') is not null and to_regprocedure('public.rights_catalogue(uuid)') is not null)
+  (31, '20261124_rights.sql',                    to_regclass('public.platform_assist') is not null and to_regprocedure('public.rights_catalogue(uuid)') is not null),
+  (32, '20261125_rights_accounts.sql',           to_regprocedure('public.org_members_rights(uuid)') is not null and to_regprocedure('public.org_set_member_permission(uuid,text,boolean)') is not null)
 ) as checks(position, migration, installed)
 order by position;
