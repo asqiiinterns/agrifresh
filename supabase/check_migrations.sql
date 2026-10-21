@@ -26,6 +26,6 @@ from (values
   (22, '20261115_multi_supplier_cart.sql',        to_regprocedure('public.place_multi_order(jsonb, date, text)') is not null),
   (23, '20261116_catalog_numbers.sql',           to_regclass('public.org_counters') is not null),
   (24, '20261117_buyer_journey.sql',             to_regprocedure('public.client_cancel_order(uuid, text)') is not null),
-  (25, '20261118_pro_modules_pricing.sql',       to_regclass('public.pricing_rules') is not null)
+  (25, '20261118_pro_modules_pricing.sql',       to_regclass('public.pricing_rules') is not null and to_regprocedure('public.platform_set_org_module(uuid,text,boolean)') is not null and to_regprocedure('public.buyer_price_cart(jsonb)') is not null)
 ) as checks(position, migration, installed)
 order by position;

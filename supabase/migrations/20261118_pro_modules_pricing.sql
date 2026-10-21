@@ -996,3 +996,6 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- Make the new functions visible to the API right away.
+notify pgrst, 'reload schema';
