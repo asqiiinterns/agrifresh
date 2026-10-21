@@ -70,6 +70,25 @@ export const setTemplatePermission = (templateKey: string, permission: string, a
 export const fetchPlatformAccounts = (search: string) => call<PlatformAccount[]>("platform_accounts", { p_search: search });
 export const setPlatformAccountStatus = (userId: string, status: string) => call<void>("platform_set_account_status", { p_user_id: userId, p_status: status });
 
+// Rights in cascade (20261124): catalogue of functions, hidden or locked display, Appro+ assisting a Pro.
+export type CatalogueFunction = { key: string; side: "supplier" | "buyer"; area: string; kind: "read" | "write"; label: string; sort: number; module: string | null;
+  display: "hidden" | "locked"; display_default: "hidden" | "locked"; display_own: "hidden" | "locked" | null };
+export const fetchRightsCatalogue = (orgId?: string | null) => call<CatalogueFunction[]>("rights_catalogue", { p_org_id: orgId ?? null });
+export const setFeatureDisplay = (orgId: string | null, permission: string, display: "hidden" | "locked" | null) =>
+  call<void>("platform_set_feature_display", { p_org_id: orgId, p_permission: permission, p_display: display });
+export type MemberRights = { id: string; name: string; email: string; status: string; side: "supplier" | "buyer"; granted: string[]; overrides: Record<string, boolean> };
+export const fetchMembersRights = (orgId?: string | null) => call<MemberRights[]>("org_members_rights", { p_org_id: orgId ?? null });
+export const setMemberPermission = (userId: string, permission: string, allowed: boolean | null) =>
+  call<void>("org_set_member_permission", { p_user_id: userId, p_permission: permission, p_allowed: allowed });
+export type Assisting = { org_id: string; org_name: string; can_edit: boolean; expires_at: string; reason: string | null };
+export const startAssist = (orgId: string, canEdit: boolean, reason: string) =>
+  call<{ org_id: string; org_name: string; can_edit: boolean }>("platform_start_assist", { p_org_id: orgId, p_edit: canEdit, p_reason: reason.trim() || null, p_hours: 2 });
+export const stopAssist = () => call<void>("platform_stop_assist");
+// Starting or ending an assistance reloads the whole account (menus, rights, space).
+const assistListeners = new Set<() => void>();
+export const onAssistChanged = (listener: () => void) => { assistListeners.add(listener); return () => { assistListeners.delete(listener); }; };
+export const assistChanged = () => assistListeners.forEach((listener) => listener());
+
 // Spaces: one account may work in several Pros, as a supplier or a buyer (20261113).
 export type Space = { org_id: string; org_name: string; mode: "supplier" | "buyer"; status: string; current: boolean };
 export async function fetchMySpaces(): Promise<Space[]> {

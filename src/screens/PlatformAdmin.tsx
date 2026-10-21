@@ -4,9 +4,11 @@ import { fetchPublicSettings, setPlatformSetting, type PublicSettings } from "..
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../ui/Text";
 import {
-  fetchPlatformAccounts, fetchProCard, fetchTemplates, saveProAsPlatform, setPlatformAccountStatus, setTemplatePermission,
+  assistChanged, fetchPlatformAccounts, fetchProCard, fetchTemplates, saveProAsPlatform, setPlatformAccountStatus, setTemplatePermission, startAssist,
   type PlatformAccount, type ProCard, type ProInput, type RolePermission, type RoleTemplate,
 } from "../data/pros";
+import { confirmWithPassword } from "../ui/PasswordConfirm";
+import { InviteModal } from "../ui/InviteModal";
 import { setProStatus } from "../data/platform";
 import { allModules } from "../data/modules";
 import { BackButton, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDay } from "../ui/components";
@@ -68,6 +70,26 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
     }
   }
 
+  // Appro+ works in the Pro as its administrator for two hours: reading, or changes (password asked).
+  const [inviting, setInviting] = useState(false);
+  function assist(target: ProCard) {
+    const begin = async (edit: boolean) => {
+      if (edit && !(await confirmWithPassword(`Vous allez pouvoir modifier les réglages et les données de ${target.name} pendant 2 heures. Le Pro en est prévenu.`))) return;
+      try {
+        await startAssist(target.id, edit, edit ? "Assistance avec modifications" : "Assistance en lecture");
+        onClose();
+        assistChanged();
+      } catch (cause) {
+        notify("Assistance", errorMessage(cause, "L’assistance n’a pas pu commencer. La migration 20261124 est-elle exécutée ?"));
+      }
+    };
+    notify(`Assister ${target.name}`, "Vous voyez l’espace comme son administrateur, pendant 2 heures. Ses Responsables sont prévenus, et chaque modification figure dans son journal à votre nom.", [
+      { text: "Annuler", style: "cancel" },
+      { text: "Lecture seule", onPress: () => void begin(false) },
+      { text: "Lecture et modification", onPress: () => void begin(true) },
+    ]);
+  }
+
   function changeStatus(status: "active" | "suspended" | "refused") {
     if (!card) return;
     void setProStatus(card.id, status).then(async () => { onChanged(); setCard(await fetchProCard(card.id)); })
@@ -76,6 +98,7 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
 
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
+      {inviting && card ? <InviteModal visible side="client" forOrgId={card.id} forOrgName={card.name} onClose={() => setInviting(false)} /> : null}
       {plan && card ? <ModulesPage mode={{ kind: "plan", orgId: card.id, orgName: card.name }} header={<BackButton label="Fiche" onPress={() => setPlan(false)} />} />
       : roles && card ? <RolesManager orgId={card.id} header={<ScreenHeader eyebrow={card.name.toLocaleUpperCase("fr")} title="Rôles et accès" right={<BackButton label="Fiche" onPress={() => setRoles(false)} />} />} /> : <>
         <ScreenHeader eyebrow="APPRO+ · PROS" title={isNew ? "Nouveau Pro" : card?.name ?? "Pro"} subtitle={card ? `${statusLabels[card.status]} · ${card.products} produit(s) · ${card.clients} client(s) · ${card.suppliers} fournisseur(s)` : undefined} right={<CloseButton onPress={onClose} />} />
@@ -86,6 +109,8 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
             {card.status === "pending" ? <Button label="REFUSER" variant="danger" onPress={() => changeStatus("refused")} /> : null}
             <Button label="RÔLES ET ACCÈS" variant="secondary" onPress={() => setRoles(true)} />
             <Button label="MODULES (FORMULE)" variant="secondary" onPress={() => setPlan(true)} />
+            <Button label="ASSISTER CE PRO" variant="secondary" onPress={() => assist(card)} />
+            <Button label="INVITER UN CLIENT POUR CE PRO" variant="secondary" onPress={() => setInviting(true)} />
           </View> : null}
           <View style={ui.card}>
             <Text style={ui.strong}>Type et activités</Text>

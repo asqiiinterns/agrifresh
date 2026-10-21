@@ -12,6 +12,7 @@ import { allModules } from "../data/modules";
 import { Button, Chip, CloseButton, EmptyState, Field, ListGroup, Loading, ScreenHeader } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
+import { RightsMatrix } from "./RightsMatrix";
 
 // Labels of the rights, as shown in Paramétrage (the key when a right has no label yet).
 const rightLabels: Record<string, string> = Object.fromEntries(featureBlocks.flatMap((block) => block.items.map((item) => [item.key, item.label])));
@@ -25,7 +26,7 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
   const [matrix, setMatrix] = useState<RolesMatrix | null>(null);
   const [error, setError] = useState("");
   const [roleId, setRoleId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"roles" | "people">("roles");
+  const [tab, setTab] = useState<"matrix" | "roles" | "people">("matrix");
   const [creating, setCreating] = useState(false);
   const [seeing, setSeeing] = useState<OrgMember | null>(null);
 
@@ -76,10 +77,13 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
   return <View style={ui.screen}>
     {header}
     <View style={[ui.wrapRow, styles.tabs]}>
-      <Chip label="Rôles et droits" selected={tab === "roles"} onPress={() => setTab("roles")} />
+      <Chip label="Matrice" selected={tab === "matrix"} onPress={() => setTab("matrix")} />
+      <Chip label="Un rôle en détail" selected={tab === "roles"} onPress={() => setTab("roles")} />
       <Chip label={`Personnes (${matrix.members.length})`} selected={tab === "people"} onPress={() => setTab("people")} />
     </View>
-    {tab === "roles" ? <ScrollView contentContainerStyle={ui.content}>
+    {/* The matrix: every function and every role (or account) at a glance; Appro+ (orgId given) also sets the ceiling and the display. */}
+    {tab === "matrix" ? <RightsMatrix orgId={orgId} matrix={matrix} platform={!!orgId} onChanged={reload} />
+    : tab === "roles" ? <ScrollView contentContainerStyle={ui.content}>
       {!matrix.can_edit ? <Text style={[ui.small, styles.note]}>Les rôles de ce Pro sont gérés par Appro+. Vous pouvez les attribuer à vos équipes dans « Personnes ».</Text> : null}
       {sides.map((side) => <View key={side}>
         <Text style={[ui.fieldLabel, { marginTop: 10 }]}>{side === "supplier" ? "Rôles fournisseur" : "Rôles acheteur"}</Text>

@@ -36,10 +36,13 @@ type Props = {
   name?: string;
   phone?: string;
   email?: string;
+  // Appro+ invites on behalf of a Pro (20261126).
+  forOrgId?: string;
+  forOrgName?: string;
 };
 
 // Invite someone to install Appro+: one code, sent by WhatsApp, Messenger, SMS, e-mail or any app.
-export function InviteModal({ visible, side, onClose, clientId = null, name: initialName = "", phone: initialPhone = "", email: initialEmail = "" }: Props) {
+export function InviteModal({ visible, side, onClose, clientId = null, name: initialName = "", phone: initialPhone = "", email: initialEmail = "", forOrgId, forOrgName }: Props) {
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [email, setEmail] = useState(initialEmail);
@@ -58,7 +61,7 @@ export function InviteModal({ visible, side, onClose, clientId = null, name: ini
     setBusy(true);
     setError("");
     try {
-      setInvitation(await createInvitation(side, clientId, forName, phone || email));
+      setInvitation(await createInvitation(side, clientId, forName, phone || email, forOrgId ?? null));
     } catch (cause) {
       setError(errorMessage(cause, "L’invitation n’a pas pu être créée. La migration 20261120 est-elle exécutée ?"));
     } finally {
@@ -114,7 +117,7 @@ export function InviteModal({ visible, side, onClose, clientId = null, name: ini
 
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
-      <ScreenHeader eyebrow="INVITATION" title={side === "client" ? "Inviter un client" : "Inviter un fournisseur"} right={<CloseButton onPress={onClose} />} />
+      <ScreenHeader eyebrow={forOrgName ? `INVITATION POUR ${forOrgName.toLocaleUpperCase("fr")}` : "INVITATION"} title={side === "client" ? "Inviter un client" : "Inviter un fournisseur"} right={<CloseButton onPress={onClose} />} />
       <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
         <Text style={[ui.small, { marginTop: 8 }]}>{side === "client"
           ? "La personne installe Appro+ et crée son compte avec votre lien : elle devient votre client dès que son espace existe."

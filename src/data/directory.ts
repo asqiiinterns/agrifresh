@@ -53,8 +53,11 @@ export const sendOrgMessage = (orgId: string, body: string) => call<string>("org
 export type InvitationSide = "client" | "supplier";
 export type Invitation = { code: string; org_name: string; side: InvitationSide; name: string | null; app_url: string };
 export type InvitationInfo = { org_name: string; side: InvitationSide; client_name: string | null; valid: boolean } | null;
-export const createInvitation = (side: InvitationSide, clientId: string | null = null, name = "", contact = "") =>
-  call<Invitation>("create_invitation", { p_side: side, p_client_id: clientId, p_name: name.trim() || null, p_contact: contact.trim() || null });
+// forOrgId: Appro+ invites on behalf of that Pro (20261126).
+export const createInvitation = (side: InvitationSide, clientId: string | null = null, name = "", contact = "", forOrgId: string | null = null) =>
+  forOrgId
+    ? call<Invitation>("platform_create_invitation", { p_org_id: forOrgId, p_side: side, p_name: name.trim() || null, p_contact: contact.trim() || null })
+    : call<Invitation>("create_invitation", { p_side: side, p_client_id: clientId, p_name: name.trim() || null, p_contact: contact.trim() || null });
 export const fetchInvitationInfo = (code: string) => call<InvitationInfo>("invitation_info", { p_code: code });
 export const acceptInvitation = (code: string) => call<{ linked: boolean; org_name: string; side: InvitationSide; needs_space: boolean }>("accept_invitation", { p_code: code });
 

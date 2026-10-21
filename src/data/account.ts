@@ -58,6 +58,9 @@ export type Account = {
   // The user's own layout, else the one set by the admin for the role (null = built-in default).
   home_layout?: HomeLayout | null;
   role_home_layout?: HomeLayout | null;
+  // 20261124: functions not allowed but shown locked; Appro+ assisting a Pro.
+  locked_features?: string[];
+  assisting?: { org_id: string; org_name: string; can_edit: boolean; expires_at: string; reason: string | null } | null;
 };
 
 export async function fetchMyAccount(): Promise<Account> {

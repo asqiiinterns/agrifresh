@@ -22,12 +22,14 @@ import { AdminScreen } from "./src/screens/AdminScreen";
 import { PlatformTeamScreen, ProsScreen } from "./src/screens/PlatformScreens";
 import { PlatformSettingsScreen } from "./src/screens/PlatformAdmin";
 import { BrowseCatalogButton, InviteCodeCard, ProPendingCard, RegisterProCard } from "./src/screens/ProSignup";
-import { fetchMyPro, fetchMySpaces, switchSpace, type MyPro, type Space } from "./src/data/pros";
+import { fetchMyPro, fetchMySpaces, onAssistChanged, stopAssist, switchSpace, type MyPro, type Space } from "./src/data/pros";
 import { NetworkScreen } from "./src/screens/NetworkScreen";
 import { acceptInvitation, expireTrials, fetchMySuppliers, fetchPublicSettings, switchSupplier, type MySupplier } from "./src/data/directory";
 import { getPendingInvite, onPendingInvite, setPendingInvite, startInviteCapture } from "./src/data/invite";
 import { PublicCatalogScreen } from "./src/screens/PublicCatalogScreen";
 import { LocationRequestHost } from "./src/ui/LocationRequestHost";
+import { PasswordConfirmHost } from "./src/ui/PasswordConfirm";
+import { guardedLeave } from "./src/ui/unsavedGuard";
 import { countNeedingReply, countUnread } from "./src/data/messages";
 import { countTeamUnread } from "./src/data/teamMessages";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -303,7 +305,8 @@ function Main({ session }: { session: Session }) {
   const [ordersKey, setOrdersKey] = useState(0);
   // A tile, a shortcut or a menu button opens a tab (at a given section); each call remounts the target
   // screen, so tapping the open tab again reloads it.
-  const navigate = useCallback((next: TabKey, params?: NavParams) => setNav((state) => ({ tab: next, params, nonce: state.nonce + 1 })), []);
+  // Leaving a page with changes not saved asks first (see ui/unsavedGuard).
+  const navigate = useCallback((next: TabKey, params?: NavParams) => guardedLeave(() => setNav((state) => ({ tab: next, params, nonce: state.nonce + 1 }))), []);
   const setTab = useCallback((next: TabKey | null) => setNav((state) => ({ tab: next, nonce: state.nonce })), []);
   const navValue = useMemo(() => ({ navigate }), [navigate]);
 
@@ -341,6 +344,8 @@ function Main({ session }: { session: Session }) {
   }, [session.user.id, loadAccount]);
   // A module switched on or off changes the rights: reload both.
   useEffect(() => onModulesChanged(() => { void loadAccount(); }), [loadAccount]);
+  // Appro+ starts or ends assisting a Pro: everything follows (menus, rights, space).
+  useEffect(() => onAssistChanged(() => { setTab(null); void loadAccount(); }), [loadAccount]);
 
   // An invitation link opened before signing in (or a code captured since): accepted once signed in.
   useEffect(() => {
@@ -633,6 +638,14 @@ function Main({ session }: { session: Session }) {
         </View>
       </Pressable>
     </Modal>
+    {/* Appro+ assisting this Pro: always visible, with the way out. */}
+    {account.assisting ? <View style={styles.assistBar}>
+      <Ionicons name="headset-outline" size={16} color={colors.white} />
+      <Text style={styles.assistText} numberOfLines={2}>Vous assistez {account.assisting.org_name} · {account.assisting.can_edit ? "lecture et modification" : "lecture seule"} · jusqu’à {new Date(account.assisting.expires_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</Text>
+      <Pressable onPress={() => void stopAssist().then(() => { setTab(null); return loadAccount(); }).catch((cause: unknown) => notify("Assistance", errorMessage(cause, "L’assistance n’a pas pu être terminée.")))} style={styles.assistStop} hitSlop={6}>
+        <Text style={styles.assistStopText}>TERMINER</Text>
+      </Pressable>
+    </View> : null}
     {myPro?.status === "active" && myPro.trial_until ? <View style={styles.unavailable}>
       <Ionicons name="time-outline" size={16} color={colors.amber} />
       <Text style={styles.unavailableText}>Espace en essai jusqu’au {formatDateTime(myPro.trial_until)} : il reste actif dès que l’équipe Appro+ l’a validé.</Text>
@@ -679,6 +692,7 @@ export default function App() {
         : <AuthScreen />}
       <DocumentViewerHost />
       <DialogHost />
+      <PasswordConfirmHost />
     </SafeAreaView>
   </SafeAreaProvider></DisplayProvider>;
 }
@@ -728,6 +742,10 @@ const styles = StyleSheet.create({
   brand: { color: colors.primary, fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
   brandPlus: { color: colors.accent, fontWeight: "900" },
   topIcon: { width: 40, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  assistBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#7a2e8a" },
+  assistText: { flex: 1, color: colors.white, fontSize: 12, fontWeight: "800" },
+  assistStop: { borderWidth: 1, borderColor: colors.white, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  assistStopText: { color: colors.white, fontSize: 11, fontWeight: "800" },
   me: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 4, paddingRight: 8, paddingVertical: 3, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
   meAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   meInitials: { color: colors.white, fontSize: 12, fontWeight: "800" },
