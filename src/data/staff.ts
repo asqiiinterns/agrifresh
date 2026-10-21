@@ -17,7 +17,8 @@ export const staffActions: Partial<Record<OrderStatus, StaffAction[]>> = {
     { status: "confirmed", label: "ACCEPTER", variant: "primary" },
     { status: "declined", label: "DÉCLINER", variant: "danger", askReason: true },
   ],
-  declined: [{ status: "awaiting_client", label: "PROPOSER À RECONFIRMER", variant: "secondary", askReason: true }],
+  // A declined order is reopened and accepted at once (client reconfirmation was removed, 20261122).
+  declined: [{ status: "awaiting_client", label: "ROUVRIR ET ACCEPTER", variant: "secondary", askReason: true }],
   awaiting_client: [{ status: "cancelled", label: "ANNULER", variant: "danger", askReason: true }],
   // Stopping an accepted order (not shipped yet): cancelled, with a reason the client sees.
   confirmed: [{ status: "preparing", label: "COMMENCER LA PRÉPARATION", variant: "primary" }, { status: "cancelled", label: "ARRÊTER ET ANNULER", variant: "danger", askReason: true }],

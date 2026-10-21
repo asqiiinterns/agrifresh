@@ -1,4 +1,4 @@
-import { shared } from "./shared";
+import { isBuyerMode, rpcOr, shared } from "./shared";
 import { supabase } from "../lib/supabase";
 import { QR, qrSvg } from "../ui/Qr";
 import { company } from "../config/company";
@@ -149,8 +149,14 @@ export async function fetchBuyerOrders(): Promise<BuyerOrder[] | null> {
 // Answer to an order reopened by the supplier ("awaiting_client").
 export async function respondToOrder(orderId: string, accept: boolean, note?: string): Promise<void> {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");
-  const { error } = await supabase.rpc("client_respond_order", { p_order_id: orderId, p_accept: accept, p_note: note?.trim() || null });
-  if (error) throw error;
+  const client = supabase;
+  const args = { p_order_id: orderId, p_accept: accept, p_note: note?.trim() || null };
+  const own = async () => {
+    const { error } = await client.rpc("client_respond_order", args);
+    if (error) throw error;
+  };
+  // A buyer answers for any of its suppliers (20261122), not only the selected one.
+  if (isBuyerMode()) await rpcOr("buyer_respond_order", args, own); else await own();
 }
 
 // Number given when the order is accepted (configurable format); older orders fall back to their order number.

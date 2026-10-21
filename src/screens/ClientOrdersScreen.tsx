@@ -143,7 +143,8 @@ export function ClientOrdersScreen({ session, client, initialOrderId, onOpenSupp
   const rulesOf = (order: ListedOrder) => ({ show_prices: order.show_prices ?? client.show_prices, show_origin: order.show_origin ?? client.show_origin, history: order.history_enabled ?? client.history_enabled !== false });
   const supplierNames = useMemo(() => new Map(orders.filter((order) => order.supplier_name).map((order) => [order.client_id as string, order.supplier_name as string])), [orders]);
   const multi = supplierNames.size > 1;
-  const elsewhere = (order: ListedOrder) => !!order.client_id && order.client_id !== client.id;
+  // Every action works for every supplier (20261122): no more "go to this supplier first".
+  const elsewhere = (_order: ListedOrder) => false;
 
   async function share(order: ListedOrder) {
     setSharingId(order.id);

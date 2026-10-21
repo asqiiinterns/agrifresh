@@ -235,12 +235,8 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
-  // Without client reconfirmation, reopening a declined order accepts it at once.
-  const actions = (staffActions[order.status as OrderStatus] ?? [])
-    .filter((action) => can(actionFeature(action.status)))
-    .map((action) => action.status === "awaiting_client" && order.clients?.reconfirm_declined === false
-      ? { ...action, label: "ROUVRIR ET ACCEPTER", askReason: true }
-      : action);
+  // Reopening a declined order accepts it at once (no client reconfirmation any more).
+  const actions = (staffActions[order.status as OrderStatus] ?? []).filter((action) => can(actionFeature(action.status)));
   const needsReason = actions.some((action) => action.askReason);
   const canRevert = can("orders.revert") && revertableStatuses.includes(order.status);
   const address = order.address_snapshot ?? {};
@@ -395,7 +391,7 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
       {needsReason || canRevert ? <TextInput
         value={reason}
         onChangeText={setReason}
-        placeholder={order.status === "declined" ? "Message au client (visible) : pourquoi reconfirmer ?" : "Motif (facultatif, visible par le client)"}
+        placeholder={order.status === "declined" ? "Motif de la réouverture (facultatif, visible par le client)" : "Motif (facultatif, visible par le client)"}
         placeholderTextColor={colors.muted}
         style={[ui.input, { marginTop: 10 }]}
       /> : null}

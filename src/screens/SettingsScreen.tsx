@@ -25,7 +25,7 @@ import type { IconName } from "../ui/navigation";
 type Page = { kind: "menu" } | { kind: "block"; block: SettingsBlock } | { kind: "clientOptions"; theme?: string } | { kind: "home" } | { kind: "numbering" } | { kind: "alerts" } | { kind: "company" } | { kind: "modules" } | { kind: "autoDeliver" };
 
 // Admin settings, by theme: each theme is set per role, then per user (and per client record).
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen({ onBack, onRoles }: { onBack: () => void; onRoles?: () => void }) {
   const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
   const [page, setPage] = useState<Page>({ kind: "menu" });
   const [rolePerms, setRolePerms] = useState<Record<string, boolean>>({});
@@ -142,11 +142,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <ListGroup title="Fonctions de l’application">
         <ListRow icon="apps-outline" title="Modules" detail="Activer ou masquer chaque fonction de votre formule pour votre équipe et vos clients (remises, retours, statistiques…)." onPress={() => setPage({ kind: "modules" })} />
       </ListGroup>
-      <ListGroup title="Onglets et droits de l’équipe">
-        {featureBlocks.filter((block) => block.audience === "team").map((block) => {
-          const count = exceptionCount(block);
-          return <ListRow key={block.key} icon={block.icon as IconName} title={block.title} detail={`${block.items.length} réglage(s)${count ? ` · ${count} exception(s) utilisateur` : ""}`} onPress={() => setPage({ kind: "block", block })} />;
-        })}
+      {/* The team's rights live in one place: Rôles et accès (roles of the Pro, exceptions per person). */}
+      <ListGroup title="Droits de l’équipe">
+        <ListRow icon="key-outline" title="Rôles et accès" detail="Ce que chaque rôle permet, qui a quel rôle, exceptions par personne." onPress={() => onRoles?.()} />
       </ListGroup>
       <ListGroup title="Clients : espace et options">
         {featureBlocks.filter((block) => block.audience === "customer").map((block) => {

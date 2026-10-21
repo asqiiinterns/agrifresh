@@ -9,7 +9,7 @@ import { loadCompanyProfile } from "./src/data/company";
 import { confirmSignOut } from "./src/ui/signOut";
 import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
 import { PermissionsContext } from "./src/data/permissions";
-import { clearShared } from "./src/data/shared";
+import { clearShared, setBuyerMode } from "./src/data/shared";
 import { autoDeliverOrders } from "./src/data/staff";
 import { DisplayProvider } from "./src/ui/display";
 import { alertTarget, countUnreadAlerts, fetchAlertConversation, markAlertsRead } from "./src/data/alerts";
@@ -322,6 +322,7 @@ function Main({ session }: { session: Session }) {
       setModules(nextModules);
       setMyPro(nextPro);
       setSuppliers(next.role === "customer" ? nextSuppliers : []);
+      setBuyerMode(next.role === "customer");
       setSpaces(nextSpaces);
       // Several spaces: choose one when signing in (once per session).
       if (nextSpaces.length > 1 && !spaceAsked.current) { spaceAsked.current = true; setSpacePicker(true); }
@@ -370,8 +371,8 @@ function Main({ session }: { session: Session }) {
   useEffect(() => { void fetchPublicSettings().then((settings) => setTrialHours(settings.trial_hours)); }, []);
 
   const { kind, tabs } = account ? tabsFor(account, modules, myPro) : { kind: null, tabs: [] as TabDef[] };
-  // Screens that still work with one supplier at a time (the others cover all suppliers).
-  const supplierPill = suppliers.length > 1 && (tab === "recurring" || (tab === "invoices" && (nav.params?.section === "credits" || nav.params?.section === "returns")));
+  // Every buyer screen covers all its suppliers (20261122): no "selected supplier" pill any more.
+  const supplierPill = false;
   const { bar, overflow } = splitBar(tabs.filter((item) => !TOP_KEYS.includes(item.key)));
   // Commandes / Planning requested by a tile, an alert or a button open the matching sheet of "Production".
   const hub = kind === "team" && tabs.some((item) => item.key === "production");

@@ -22,7 +22,6 @@ export const moduleGroups: { title: string; modules: ModuleDef[] }[] = [
     { key: "pricing", label: "Remises et tarifs clients", description: "Remises, prix négociés, groupes de clients, calculés en direct dans le panier.", icon: "pricetag-outline" },
     { key: "recurring", label: "Commandes récurrentes", description: "Une commande se répète automatiquement (jours, fréquence).", icon: "repeat-outline" },
     { key: "order_tags", label: "Étiquettes de commande", description: "★ Suivi spécial et ↻ À reprogrammer.", icon: "pricetags-outline" },
-    { key: "reconfirm", label: "Reconfirmation par le client", description: "Une commande rouverte attend l’accord du client.", icon: "help-circle-outline" },
     { key: "stock", label: "Gestion du stock", description: "Stock affiché et commandes limitées au stock.", icon: "cube-outline" },
     { key: "origin", label: "Origine des produits", description: "Producteur, région et label affichés.", icon: "leaf-outline" },
   ] },

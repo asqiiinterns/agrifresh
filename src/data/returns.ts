@@ -1,4 +1,4 @@
-import { shared } from "./shared";
+import { isBuyerMode, rpcOr, shared } from "./shared";
 import { supabase } from "../lib/supabase";
 import { company } from "../config/company";
 import { formatClientNumber } from "./account";
@@ -78,6 +78,11 @@ function client() {
 }
 
 async function loadReturns(): Promise<ProductReturn[]> {
+  if (isBuyerMode()) return rpcOr<ProductReturn[]>("buyer_returns", {}, loadOwnReturns);
+  return loadOwnReturns();
+}
+
+async function loadOwnReturns(): Promise<ProductReturn[]> {
   const { data, error } = await client()
     .from("returns")
     .select("id, return_number, client_id, order_id, status, reason, description, staff_note, restocked, created_at, received_at, return_items(id, product_id, product_name, unit, quantity, unit_price, vat_rate), clients(business_name), orders(order_number, delivery_note_number), credit_notes(id, credit_number, status)")
@@ -88,6 +93,11 @@ async function loadReturns(): Promise<ProductReturn[]> {
 }
 
 async function loadCreditNotes(): Promise<CreditNote[]> {
+  if (isBuyerMode()) return rpcOr<CreditNote[]>("buyer_credit_notes", {}, loadOwnCreditNotes);
+  return loadOwnCreditNotes();
+}
+
+async function loadOwnCreditNotes(): Promise<CreditNote[]> {
   const { data, error } = await client()
     .from("credit_notes")
     .select("id, credit_number, client_id, return_id, invoice_id, status, reason, client_snapshot, total_ht, total_vat, total_ttc, created_at, issued_at, settled_at, credit_note_items(id, label, quantity, unit, unit_price, vat_rate), clients(business_name, client_number), client_invoices(invoice_number)")
@@ -98,9 +108,15 @@ async function loadCreditNotes(): Promise<CreditNote[]> {
 }
 
 export async function requestReturn(orderId: string, items: { product_id: string; quantity: number }[], reason: ReturnReason, description: string): Promise<string> {
-  const { data, error } = await client().rpc("client_request_return", { p_order_id: orderId, p_items: items, p_reason: reason, p_description: description.trim() || null });
-  if (error) throw error;
-  return (data as { return_number: string }).return_number;
+  const args = { p_order_id: orderId, p_items: items, p_reason: reason, p_description: description.trim() || null };
+  const own = async () => {
+    const { data, error } = await client().rpc("client_request_return", args);
+    if (error) throw error;
+    return data as { return_number: string };
+  };
+  // A buyer asks the supplier of that order, whichever supplier is selected.
+  const result = isBuyerMode() ? await rpcOr("buyer_request_return", args, own) : await own();
+  return result.return_number;
 }
 
 export async function staffCreateReturn(orderId: string, items: { product_id: string; quantity: number }[], reason: ReturnReason, description: string): Promise<string> {

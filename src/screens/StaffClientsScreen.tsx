@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshCont
 import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatClientNumber } from "../data/account";
-import { type BillingSettings, createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, shareInvitation, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
+import { type BillingSettings, createClient, fetchClients, printDeliveryPointQr, saveDeliveryPoint, setDeliveryPointActive, updateClient, type ClientRecord, type DeliveryPoint, type DeliveryPointInput } from "../data/clients";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader } from "../ui/components";
 import { InviteModal } from "../ui/InviteModal";
 import { errorMessage, notify } from "../ui/notify";
@@ -17,7 +17,7 @@ import { QR, QrCode } from "../ui/Qr";
 export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
   const can = useCan();
   // Clients are chosen in Réseau → Annuaire among the Pros validated by Appro+.
-  const canCreate = false;
+  const [inviting, setInviting] = useState(false);
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,9 +50,11 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
 
   return <View style={embedded ? { flex: 1 } : ui.screen}>
     {embedded ? <View style={[ui.row, { paddingHorizontal: 14, paddingTop: 8 }]}>
-      <Text style={[ui.small, { flex: 1 }]}>{clients.length} fiche(s) client · nouveaux clients : Réseau → Annuaire</Text>
-      {canCreate ? <Button label="+ NOUVEAU CLIENT" onPress={() => setEditing("new")} /> : null}
-    </View> : <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={canCreate ? <Button label="+ NOUVEAU" onPress={() => setEditing("new")} /> : undefined} />}
+      <Text style={[ui.small, { flex: 1 }]}>{clients.length} fiche(s) client · nouveaux clients : invitation ou Réseau → Annuaire</Text>
+      <Button label="INVITER UN CLIENT" onPress={() => setInviting(true)} />
+    </View> : <ScreenHeader eyebrow={`${clients.length} FICHES`} title="Clients" right={<Button label="INVITER" onPress={() => setInviting(true)} />} />}
+    {/* A new client joins by invitation (link, e-mail, WhatsApp…) or through the directory: records are never typed by hand. */}
+    {inviting ? <InviteModal visible side="client" onClose={() => setInviting(false)} /> : null}
     <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher un client" placeholderTextColor={colors.muted} style={ui.input} />
     </View>
@@ -62,7 +64,7 @@ export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
       contentContainerStyle={ui.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload("refresh")} tintColor={colors.primary} />}
       ListHeaderComponent={error ? <Text style={[ui.error, { marginTop: 12 }]}>{error}</Text> : null}
-      ListEmptyComponent={error ? null : <EmptyState title="Aucun client" body="Créez la fiche de vos clients pour qu’ils puissent commander." />}
+      ListEmptyComponent={error ? null : <EmptyState title="Aucun client" body="Invitez vos clients ou trouvez-les dans Réseau → Annuaire : leur fiche se crée à leur arrivée." />}
       renderItem={({ item }) => {
         const points = item.client_delivery_points.filter((point) => point.active);
         return <Pressable style={[ui.card, !item.active && ui.disabled]} onPress={() => setEditing(item)}>
@@ -185,21 +187,10 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
   }
 
   // Invitation link (e-mail, WhatsApp, Messenger, SMS…): the person becomes the Responsable of this client's space.
-  // Before 20261120, the former message sent with the client's e-mail.
   const [inviting, setInviting] = useState(false);
   function invite() {
     if (!record) return;
     setInviting(true);
-  }
-  function inviteByEmailOnly() {
-    if (!record?.email) {
-      setError("Ajoutez l’adresse e-mail du client avant de l’inviter.");
-      return;
-    }
-    void run(async () => {
-      const result = await shareInvitation(record);
-      if (result === "copied") notify("Invitation copiée", "Collez-la dans un e-mail ou un message au client.");
-    });
   }
 
   function print(points: DeliveryPoint[]) {
@@ -274,7 +265,6 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
 
           {canEdit ? <Button label={record ? "ENREGISTRER LA FICHE" : "CRÉER LE CLIENT"} onPress={saveClient} busy={busy} style={{ marginTop: 14 }} /> : <Text style={[ui.small, { marginTop: 14 }]}>Consultation seule : votre profil ne permet pas de modifier les fiches.</Text>}
           {record ? <Button label={record.has_account ? "INVITER UNE AUTRE PERSONNE" : "INVITER (E-MAIL, WHATSAPP, SMS…)"} variant="secondary" onPress={invite} disabled={busy} style={{ marginTop: 10 }} /> : null}
-          {record && record.email && !record.has_account ? <Button label="ENVOYER L’ANCIEN MESSAGE (E-MAIL DE LA FICHE)" variant="secondary" onPress={inviteByEmailOnly} disabled={busy} style={{ marginTop: 6 }} /> : null}
           {record && inviting ? <InviteModal visible side="client" clientId={record.id} name={record.contact_name || record.business_name} phone={record.phone} email={record.email ?? ""} onClose={() => setInviting(false)} /> : null}
 
           {record ? <View style={ui.card}>

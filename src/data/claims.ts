@@ -1,4 +1,4 @@
-import { shared } from "./shared";
+import { isBuyerMode, rpcOr, shared } from "./shared";
 import { supabase } from "../lib/supabase";
 
 export type ClaimReason = "missing" | "quantity" | "quality" | "late" | "other";
@@ -45,14 +45,22 @@ function client() {
 
 // RLS: clients get their own claims, staff get all of them.
 async function loadClaims(): Promise<Claim[]> {
-  const { data, error } = await client().from("claims").select(FIELDS).order("created_at", { ascending: false }).limit(300);
-  if (error) throw error;
-  return (data ?? []) as unknown as Claim[];
+  const own = async () => {
+    const { data, error } = await client().from("claims").select(FIELDS).order("created_at", { ascending: false }).limit(300);
+    if (error) throw error;
+    return (data ?? []) as unknown as Claim[];
+  };
+  // A buyer sees its claims with all its suppliers.
+  return isBuyerMode() ? rpcOr<Claim[]>("buyer_claims", {}, own) : own();
 }
 
 export async function createClaim(orderId: string, reason: ClaimReason, description: string): Promise<void> {
-  const { error } = await client().rpc("client_create_claim", { p_order_id: orderId, p_reason: reason, p_description: description.trim() });
-  if (error) throw error;
+  const args = { p_order_id: orderId, p_reason: reason, p_description: description.trim() };
+  const own = async () => {
+    const { error } = await client().rpc("client_create_claim", args);
+    if (error) throw error;
+  };
+  if (isBuyerMode()) await rpcOr("buyer_create_claim", args, own); else await own();
 }
 
 export async function updateClaim(claimId: string, status: ClaimStatus, response?: string): Promise<void> {

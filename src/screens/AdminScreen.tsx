@@ -30,12 +30,12 @@ export function AdminScreen({ isAdmin = true, initialPage }: { isAdmin?: boolean
   const can = useCan();
   const pricingOn = useModules()("pricing");
 
-  if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} />;
+  if (page === "accounts") return <AccountsPage onBack={() => setPage("menu")} onRoles={() => setPage("roles")} />;
   if (page === "alerts") return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Alertes et e-mails" right={<BackButton onPress={() => setPage("menu")} />} />
     <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled"><AlertSettingsPanel /></ScrollView>
   </View>;
-  if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} />;
+  if (page === "settings") return <SettingsScreen onBack={() => setPage("menu")} onRoles={() => setPage("roles")} />;
   if (page === "fleet") return <FleetPage onBack={() => setPage("menu")} />;
   if (page === "audit") return <AuditPage onBack={() => setPage("menu")} />;
   if (page === "location") return <LocationPage onBack={() => setPage("menu")} />;
@@ -82,7 +82,7 @@ const statusStyle: Record<AccountStatus, { label: string; color: string; backgro
   refused: { label: "Refusé", color: colors.danger, background: "#f8e5e1" },
 };
 
-function AccountsPage({ onBack }: { onBack: () => void }) {
+function AccountsPage({ onBack, onRoles }: { onBack: () => void; onRoles: () => void }) {
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -182,13 +182,9 @@ function AccountsPage({ onBack }: { onBack: () => void }) {
                 <Button label="REMETTRE EN ATTENTE" variant="secondary" onPress={() => changeStatus(item, "pending")} disabled={busy} />
               </>}
           </View> : null}
+          {/* One place for roles: Rôles et accès (the former profile chips here followed another set of rights). */}
           {!item.is_self && !item.client_name ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
-            {assignableRoles.filter((option) => option.role !== item.role && !(option.role === "supervisor" && item.role === "staff")).map((option) => <Chip
-              key={option.role}
-              label={option.role === "customer" ? "Retirer de l’équipe" : `→ ${option.label}`}
-              selected={false}
-              onPress={() => void run(item, () => setAccountRole(item.email, option.role))}
-            />)}
+            <Button label="RÔLES ET ACCÈS" variant="secondary" onPress={onRoles} />
           </View> : null}
         </View>;
       }}

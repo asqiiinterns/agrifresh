@@ -3,6 +3,7 @@ import { FlatList, Modal, RefreshControl, ScrollView, Switch, View } from "react
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../ui/Text";
 import { supabase } from "../lib/supabase";
+import { isBuyerMode, rpcOr } from "../data/shared";
 import type { Order } from "../data/orders";
 import { Button, Chip, CloseButton, EmptyState, Field, Loading, ScreenHeader, formatDay, formatQuantity } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
@@ -12,6 +13,8 @@ type Item = { product_id: string; quantity: number; name?: string; unit?: string
 export type RecurringOrder = {
   id: string; client_id: string; items: Item[]; delivery_point_id: string | null; weekdays: number[]; lead_days: number;
   next_delivery: string; note: string | null; active: boolean; last_error: string | null; clients: { business_name: string } | null;
+  // For a buyer: the supplier of this recurring order.
+  supplier_name?: string;
 };
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -20,18 +23,34 @@ function client() {
   return supabase;
 }
 
+// A buyer's recurring orders with all its suppliers (20261122); the team's, from the table.
 export async function fetchRecurring(): Promise<RecurringOrder[]> {
-  const { data, error } = await client().from("recurring_orders").select("*, clients(business_name)").order("next_delivery");
-  if (error) throw error;
-  return (data ?? []) as RecurringOrder[];
+  const own = async () => {
+    const { data, error } = await client().from("recurring_orders").select("*, clients(business_name)").order("next_delivery");
+    if (error) throw error;
+    return (data ?? []) as RecurringOrder[];
+  };
+  return isBuyerMode() ? rpcOr<RecurringOrder[]>("buyer_recurring", {}, own) : own();
 }
 
 async function saveRecurring(input: { id: string | null; clientId: string | null; items: Item[]; pointId: string | null; weekdays: number[]; leadDays: number; note: string; active: boolean }) {
-  const { error } = await client().rpc("save_recurring_order", {
+  const args = {
     p_id: input.id, p_client_id: input.clientId, p_items: input.items, p_delivery_point_id: input.pointId,
     p_weekdays: input.weekdays, p_lead_days: input.leadDays, p_note: input.note.trim() || null, p_active: input.active,
-  });
-  if (error) throw error;
+  };
+  const own = async () => {
+    const { error } = await client().rpc("save_recurring_order", args);
+    if (error) throw error;
+  };
+  if (isBuyerMode()) await rpcOr("buyer_save_recurring", args, own); else await own();
+}
+
+async function deleteRecurring(id: string) {
+  const own = async () => {
+    const { error } = await client().rpc("delete_recurring_order", { p_id: id });
+    if (error) throw error;
+  };
+  if (isBuyerMode()) await rpcOr("buyer_delete_recurring", { p_id: id }, own); else await own();
 }
 
 // Creates the orders that are due; called when the team opens the app (pg_cron does it hourly when enabled).
@@ -128,7 +147,8 @@ export function RecurringScreen({ team }: { team: boolean }) {
   function remove(row: RecurringOrder) {
     notify("Supprimer la commande récurrente", "Les commandes déjà créées ne sont pas touchées.", [
       { text: "Retour", style: "cancel" },
-      { text: "Supprimer", style: "destructive", onPress: () => void client().rpc("delete_recurring_order", { p_id: row.id }).then(() => reload()) },
+      { text: "Supprimer", style: "destructive", onPress: () => void deleteRecurring(row.id).then(() => reload())
+        .catch((cause: unknown) => notify("Commandes récurrentes", errorMessage(cause, "Suppression impossible."))) },
     ]);
   }
 
@@ -142,7 +162,7 @@ export function RecurringScreen({ team }: { team: boolean }) {
       ListEmptyComponent={<EmptyState title="Aucune commande récurrente" body="Dans une commande, touchez « Répéter automatiquement » pour la recevoir chaque semaine aux jours choisis." />}
       renderItem={({ item }) => <View style={[ui.card, !item.active && { opacity: 0.6 }]}>
         <View style={ui.row}>
-          <Text style={[ui.strong, { flex: 1 }]}>{team ? item.clients?.business_name ?? "Client" : item.weekdays.map((day) => DAYS[day - 1]).join(", ")}</Text>
+          <Text style={[ui.strong, { flex: 1 }]}>{team ? item.clients?.business_name ?? "Client" : `${item.supplier_name ? `${item.supplier_name} · ` : ""}${item.weekdays.map((day) => DAYS[day - 1]).join(", ")}`}</Text>
           <Text style={[ui.small, { color: item.active ? colors.primary : colors.muted, fontWeight: "800" }]}>{item.active ? "ACTIVE" : "EN PAUSE"}</Text>
         </View>
         <Text style={ui.small}>{team ? `${item.weekdays.map((day) => DAYS[day - 1]).join(", ")} · ` : ""}prochaine livraison {formatDay(item.next_delivery)} · créée {item.lead_days === 0 ? "le jour même" : `${item.lead_days} j avant`}</Text>

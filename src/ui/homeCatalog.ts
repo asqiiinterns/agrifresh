@@ -75,7 +75,7 @@ export const homeShortcuts: HomeShortcutDef[] = [
 // Built-in layout when neither the user nor the admin chose one: the usual figures and every shortcut.
 export const defaultLayout = (audience: Audience): HomeLayout => audience === "team"
   ? { tiles: ["pending", "decide", "placedToday", "queue", "prepare", "ready", "shipping", "deliveredToday", "claims", "accounts", "messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "team").map((item) => item.key) }
-  : { tiles: ["c_progress", "c_reconfirm", "c_shipped", "c_invoices", "c_messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "customer").map((item) => item.key) };
+  : { tiles: ["c_progress", "c_shipped", "c_invoices", "c_messages"], shortcuts: homeShortcuts.filter((item) => item.audience === "customer").map((item) => item.key) };
 
 // A module that is off hides its items, for administrators too.
 export function allowedFor(item: { need: Need; module?: ModuleKey }, can: (feature: Feature) => boolean, isAdmin: boolean, moduleOn: (key: ModuleKey) => boolean = () => true) {

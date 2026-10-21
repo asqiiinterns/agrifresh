@@ -104,7 +104,6 @@ export const clientOptionBlocks: { title: string; icon: string; items: { key: Cl
     { key: "stock_managed", label: "Commandes limitées au stock", hint: "Sinon : production à la demande, sans limite." },
     { key: "auto_accept", label: "Commandes acceptées automatiquement", hint: "La commande passe directement en « Acceptée » et entre dans la file de production." },
     { key: "history_enabled", label: "Historique visible par le client", hint: "Commandes livrées ou annulées et suivi détaillé." },
-    { key: "reconfirm_declined", label: "Reconfirmation par le client", hint: "Désactivée : une commande rouverte repasse directement en acceptée." },
   ] },
   { title: "Livraison et remise", icon: "car-outline", items: [
     { key: "scan_delivery_note", label: "Scan du bon de livraison", hint: "Le livreur scanne le QR de chaque bon à la remise." },

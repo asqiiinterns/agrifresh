@@ -33,6 +33,7 @@ from (values
   (27, '20261120_lot4.sql',                      to_regprocedure('public.order_from_public(uuid,jsonb,date,text)') is not null and to_regprocedure('public.accept_invitation(text)') is not null
                                                  and to_regprocedure('public.driver_deliver_v3(uuid[],uuid[],text,uuid,jsonb,text,numeric,text)') is not null and to_regclass('public.org_messages') is not null),
   (28, '20261121_lot5_workflow.sql',             to_regprocedure('public.staff_revert_order(uuid,text)') is not null and to_regprocedure('public.auto_deliver_orders()') is not null
-                                                 and coalesce(pg_get_functiondef(to_regprocedure('public.driver_ship_orders(uuid[],uuid)')) like '%planned_vehicle_id%', false))
+                                                 and coalesce(pg_get_functiondef(to_regprocedure('public.driver_ship_orders(uuid[],uuid)')) like '%planned_vehicle_id%', false)),
+  (29, '20261122_cleanup.sql',                   to_regprocedure('public.buyer_returns()') is not null and to_regprocedure('public.buyer_save_recurring(uuid,uuid,jsonb,uuid,int[],int,text,boolean)') is not null)
 ) as checks(position, migration, installed)
 order by position;
