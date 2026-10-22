@@ -1,9 +1,9 @@
 import { company } from "../config/company";
-import { brandColor } from "./pdf";
+import { brandColor , escapeHtml, outputPdf } from "./pdf";
 import { Platform, Share } from "react-native";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "./account";
-import { escapeHtml, outputPdf } from "./pdf";
+
 import { QR, qrSvg } from "../ui/Qr";
 import type { ClientOptionKey } from "./permissions";
 

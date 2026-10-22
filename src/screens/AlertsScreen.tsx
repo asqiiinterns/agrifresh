@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
-import { Text } from "../ui/Text";
+import { Text , TextInput } from "../ui/Text";
 import { supabase } from "../lib/supabase";
 import { alertKinds, alertTarget, fetchAlerts, markAlertsRead, markAlertsUnread, setAlertImportant, setAlertNote, type AppAlert } from "../data/alerts";
-import { TextInput } from "../ui/Text";
+
 import { useNav } from "../ui/navigation";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, EmptyState, Loading, ScreenHeader, formatDateTime } from "../ui/components";

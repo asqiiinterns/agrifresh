@@ -136,7 +136,6 @@ export function SettingsScreen({ onBack, onRoles, initialPage }: { onBack: () =>
 
   const exceptionCount = (block: SettingsBlock) => Object.keys(userPerms).filter((key) => block.items.some((item) => key.endsWith(`|${item.key}`))).length
     + (block.audience === "customer" ? clients.reduce((sum, record) => sum + Object.keys(record.feature_overrides ?? {}).length, 0) : 0);
-  const customClients = clients.filter((record) => record.custom_settings?.length).length;
 
   return <View style={ui.screen}>
     <ScreenHeader eyebrow="ADMINISTRATION" title="Paramétrage" right={<BackButton label="Admin" onPress={onBack} />} />
@@ -386,7 +385,7 @@ function ClientOptionsPage({ theme, header, clients, defaults, setDefault, setCl
   setDefault: (key: ClientOptionKey, value: boolean) => void;
   setClientOption: (record: ClientRecord, key: ClientOptionKey, value: boolean | null) => void;
 }) {
-  const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
+  const { clientOptionBlocks } = useVisibleSettings();
   const [sheet, setSheet] = useState<"all" | "client">("all");
   const [search, setSearch] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -423,7 +422,7 @@ export function ClientOptionsEditor({ record, defaults, onChange, disabled, them
   onChange: (key: ClientOptionKey, value: boolean | null) => void;
   disabled?: boolean;
 }) {
-  const { featureBlocks, clientOptionBlocks } = useVisibleSettings();
+  const { clientOptionBlocks } = useVisibleSettings();
   return <>
     {clientOptionBlocks.filter((block) => !theme || block.title === theme).map((block) => <View key={block.title} style={{ marginTop: 10 }}>
       <Text style={styles.groupTitle}>{block.title.toLocaleUpperCase("fr")}</Text>

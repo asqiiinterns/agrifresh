@@ -5,14 +5,13 @@ import { Text } from "../ui/Text";
 import { formatClientNumber, type ClientSummary } from "../data/account";
 import { fetchClients, type ClientRecord } from "../data/clients";
 import { fetchClientOrders, staffPlaceOrder } from "../data/orders";
-import { EmptyState, Loading, ScreenHeader } from "../ui/components";
+import { EmptyState, Loading, ScreenHeader , formatPrice } from "../ui/components";
 import { FilterBar } from "../ui/FilterBar";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { OrderScreen } from "./OrderScreen";
 import { fetchStaffClientFigures } from "../data/buyer";
 import { netBalance, overLimit, type AccountFigures } from "../data/accounts";
-import { formatPrice } from "../ui/components";
 
 // Team order for a client (phone orders): pick the client, then the client's order screen.
 export function StaffOrderEntryScreen({ onPlaced }: { onPlaced: () => void }) {

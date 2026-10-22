@@ -6,7 +6,7 @@ import { Text } from "../ui/Text";
 import {
   addMember, createRole, fetchMemberPermissions, fetchRolesMatrix, removeMember, setMemberRole, setRolePermission,
   type OrgMember, type OrgRole, type RolePermission, type RolesMatrix,
-} from "../data/pros";
+ fetchRoleLayouts, setRoleLayout, type RoleLayout } from "../data/pros";
 import { featureBlocks } from "../data/permissions";
 import { allModules } from "../data/modules";
 import { Button, Chip, CloseButton, EmptyState, Field, ListGroup, Loading, ScreenHeader } from "../ui/components";
@@ -16,7 +16,7 @@ import { RightsMatrix } from "./RightsMatrix";
 import { HomeEditor } from "./HomeEditor";
 import { defaultLayout, homeShortcuts, homeTiles } from "../ui/homeCatalog";
 import { customerMenu, teamMenu } from "../ui/menuCatalog";
-import { fetchRoleLayouts, setRoleLayout, type RoleLayout } from "../data/pros";
+
 
 // Labels of the rights, as shown in Paramétrage (the key when a right has no label yet).
 const rightLabels: Record<string, string> = Object.fromEntries(featureBlocks.flatMap((block) => block.items.map((item) => [item.key, item.label])));

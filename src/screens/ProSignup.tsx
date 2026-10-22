@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Switch, View } from "react-native";
+import { Modal, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../ui/Text";
 import { registerPro, type MyPro, type ProKind } from "../data/pros";
@@ -7,7 +7,7 @@ import { acceptInvitation } from "../data/directory";
 import { setPendingInvite } from "../data/invite";
 import { Button, Chip, CloseButton, Field, formatDateTime } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
-import { colors, ui } from "../ui/theme";
+import { ui } from "../ui/theme";
 import { PublicCatalogScreen } from "./PublicCatalogScreen";
 
 // An account without a space creates its own: a business (supplier, buyer or both) or a private person

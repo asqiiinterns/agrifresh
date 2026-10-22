@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
 import { Text } from "../ui/Text";
 import { fetchInvoices, invoiceLabel, shareInvoice, type InvoiceWithOrders } from "../data/invoices";
 import { fetchBuyerInvoices, withSeller, type BuyerInvoice } from "../data/buyer";
 import { deliveryNoteNumber } from "../data/orders";
-import { Button, Chip, EmptyState, Loading, ScreenHeader, formatDay, formatPrice } from "../ui/components";
+import { Button, EmptyState, Loading, ScreenHeader, formatDay, formatPrice , Sheets } from "../ui/components";
 import { errorMessage, notify } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
-import { Sheets } from "../ui/components";
+
 import { useCan } from "../data/permissions";
 import { fetchCreditNotes, fetchReturns, type CreditNote, type ProductReturn } from "../data/returns";
 import { ClientReturnsList, CreditsList } from "./ReturnsScreen";
@@ -132,6 +132,3 @@ export function ClientInvoicesScreen({ initialSheet, onSheet }: { initialSheet?:
   </View>;
 }
 
-const styles = StyleSheet.create({
-  filters: { paddingHorizontal: 18, paddingVertical: 10, gap: 7 },
-});

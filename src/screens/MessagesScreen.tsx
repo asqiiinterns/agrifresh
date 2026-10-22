@@ -6,19 +6,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
 import { countUnread, fetchInbox, fetchMessages, flagMessage, markMessagesRead, sendMessage, type InboxEntry, type Message } from "../data/messages";
-import { uploadAttachment, type LocalFile } from "../data/attachments";
+import { uploadAttachment, type LocalFile , Attachment } from "../data/attachments";
 import { AttachmentPicker, AttachmentView, NeedsReplyTag, NeedsReplyToggle } from "../ui/Attachments";
 import { ReplyAction, ReplyBanner, ReplyQuote, messagePreview } from "../ui/MessageReply";
 import { Ionicons } from "@expo/vector-icons";
 import { countTeamUnread } from "../data/teamMessages";
-import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime } from "../ui/components";
+import { CloseButton, EmptyState, Loading, ScreenHeader, Sheets, formatDateTime , Button } from "../ui/components";
 import { TeamMessagesList } from "./TeamMessagesScreen";
 import { errorMessage } from "../ui/notify";
 import { colors, ui } from "../ui/theme";
 import { useModules } from "../data/modules";
 import { buyerSendMessage, fetchBuyerInbox, fetchBuyerThread, staffSendMessages, type BuyerConversation } from "../data/buyer";
-import type { Attachment } from "../data/attachments";
-import { Button } from "../ui/components";
+
+
 import { ComposeModal } from "./ComposeModal";
 
 type ThreadSource = {

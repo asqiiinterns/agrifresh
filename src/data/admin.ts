@@ -61,18 +61,22 @@ export function temporaryPassword() {
 
 // Creates the account with an isolated client (the admin stays signed in), makes it active
 // at once and gives it its role. A client e-mail that matches a client record is linked automatically.
-export async function createAccount(input: { email: string; fullName: string; role: Role; password: string }): Promise<void> {
+// A member of the team: the account is created, then given its role (which attaches it to this Pro), then activated.
+// In that order: activating an account that belongs to no team yet is refused by the database.
+// An e-mail already used by an account that belongs to no team (e.g. a previous attempt that stopped half-way)
+// is attached the same way instead of being refused.
+export async function createAccount(input: { email: string; fullName: string; role: Exclude<Role, "customer">; password: string }): Promise<{ existing: boolean }> {
   const isolated = createIsolatedClient();
   if (!isolated) throw new Error("Supabase n’est pas configuré.");
   const email = input.email.trim().toLowerCase();
   const { data, error } = await isolated.auth.signUp({ email, password: input.password, options: { data: { full_name: input.fullName.trim() } } });
-  if (error) throw error;
+  if (error && !/already|registered|existe/i.test(error.message)) throw error;
   // Supabase answers an existing e-mail with a user that has no identity.
-  if (!data.user || (data.user.identities && data.user.identities.length === 0)) {
-    throw new Error("Un compte existe déjà avec cet e-mail : retrouvez-le dans la liste.");
-  }
-  await setAccountStatus(data.user.id, "active");
-  if (input.role !== "customer") await setAccountRole(email, input.role);
+  const existing = !!error || !data.user || (!!data.user.identities && data.user.identities.length === 0);
+  const { data: attached, error: roleError } = await client().rpc("admin_set_role", { p_email: email, p_role: input.role });
+  if (roleError) throw existing ? new Error(`Un compte existe déjà avec cet e-mail et ne peut pas rejoindre votre équipe (${roleError.message})`) : roleError;
+  await setAccountStatus((attached as { id: string }).id, "active");
+  return { existing };
 }
 
 export const fetchAccounts = () => shared("fetchAccounts", loadAccounts);

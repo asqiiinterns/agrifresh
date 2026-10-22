@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { roleLabels, type Role } from "../data/account";
-import { createAccount, deleteAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, invitedByLabel, type AdminAccount } from "../data/admin";
-import type { AccountStatus } from "../data/account";
+import { roleLabels, type Role , AccountStatus } from "../data/account";
+import { createAccount, deleteAccount, fetchAccounts, setAccountStatus, temporaryPassword, invitedByLabel, type AdminAccount } from "../data/admin";
 import { assignableRoles } from "../data/team";
-import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, formatDateTime } from "../ui/components";
+import { BackButton as Back, Button, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, formatDateTime } from "../ui/components";
 import { useCan } from "../data/permissions";
 import { RolesManager } from "./RolesManager";
 import { InvitationsPage } from "./InvitationsPage";
@@ -243,8 +242,13 @@ function AddAccountModal({ visible, onClose, onCreated }: { visible: boolean; on
     setBusy(true);
     setError("");
     try {
-      await createAccount({ email, fullName, role, password });
-      notify("Compte créé", `${email.trim().toLowerCase()} est actif${role === "customer" ? "" : ` (${roleLabels[role]})`}.\nMot de passe provisoire : ${password}\nTransmettez-le à la personne : elle pourra le changer dans Compte.`);
+      if (role === "customer") return;
+      const { existing } = await createAccount({ email, fullName, role, password });
+      notify(existing ? "Compte rattaché" : "Compte créé", existing
+        ? `${email.trim().toLowerCase()} existait déjà : il rejoint votre équipe (${roleLabels[role]}) et il est actif. Il garde son mot de passe actuel (« Mot de passe oublié » s’il ne le connaît pas).`
+        : `${email.trim().toLowerCase()} est actif (${roleLabels[role]}).
+Mot de passe provisoire : ${password}
+Transmettez-le à la personne : elle pourra le changer dans Compte.`);
       onCreated();
     } catch (cause) {
       setError(errorMessage(cause, "Le compte n’a pas pu être créé."));
@@ -262,7 +266,8 @@ function AddAccountModal({ visible, onClose, onCreated }: { visible: boolean; on
           <Field label="Nom (facultatif)" value={fullName} onChangeText={setFullName} autoCapitalize="words" />
           <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Profil</Text>
           <View style={{ gap: 8, marginTop: 6 }}>
-            {assignableRoles.map((option) => {
+            {/* A client has its own space: it joins with an invitation (Clients → Inviter), not from here. */}
+            {assignableRoles.filter((option) => option.role !== "customer").map((option) => {
               const selected = role === option.role;
               const label = option.role === "customer" ? "Client" : option.label;
               const body = option.role === "customer" ? "Accès client : l’e-mail doit être celui d’une fiche client pour pouvoir commander." : option.description;

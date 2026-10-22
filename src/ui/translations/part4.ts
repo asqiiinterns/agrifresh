@@ -324,6 +324,7 @@ export const part4: [string, string, string][] = [
   ["VOIR TOUS", "SEE ALL", "عرض الكل"],
   ["Se déconnecter", "Sign out", "تسجيل الخروج"],
   ["Répondre", "Reply", "رد"],
+  ["Compte rattaché", "Account attached", "تم ربط الحساب"],
   ["Aucun écran n’a planté. Les erreurs apparaîtront ici dès qu’elles se produisent.", "No screen has crashed. Errors will appear here as soon as they happen.", "لم تتعطل أي شاشة. ستظهر الأخطاء هنا فور حدوثها."],
   ["Aucune erreur", "No errors", "لا أخطاء"],
   ["Cet écran a rencontré un problème", "This screen ran into a problem", "واجهت هذه الشاشة مشكلة"],

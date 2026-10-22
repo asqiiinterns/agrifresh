@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentProps, type ReactElement } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Text, TextInput } from "../ui/Text";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber } from "../data/account";
@@ -13,9 +13,6 @@ import { ProCardModal } from "./NetworkScreen";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { PlanningScreen } from "./PlanningScreen";
 import { useCan, type Feature } from "../data/permissions";
-
-const actionFeature = (status: OrderStatus): Feature =>
-  status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
 import { Button, Chip, EmptyState, Loading, ScreenHeader, Sheets, StatusBadge, formatDateTime, formatDay, formatPrice, formatQuantity, statusLabel, statusStyles } from "../ui/components";
 import { ShipModal } from "../ui/ShipModal";
 import { RecurringModal } from "./RecurringScreen";
@@ -24,6 +21,9 @@ import { errorMessage, notify } from "../ui/notify";
 import { OrderTimeline } from "../ui/OrderTimeline";
 import { colors, ui } from "../ui/theme";
 import { useModules } from "../data/modules";
+
+const actionFeature = (status: OrderStatus): Feature =>
+  status === "preparing" || status === "ready" ? "production.update" : status === "out_for_delivery" ? "orders.ship" : "orders.decide";
 
 type Section = "decide" | "queue" | "claims" | "done";
 const isSection = (value?: string): value is Section => value === "decide" || value === "queue" || value === "claims" || value === "done";

@@ -15,7 +15,6 @@ import { QR, QrCode } from "../ui/Qr";
 
 // Creating and editing client records follow the admin-defined permissions (also enforced by the database).
 export function StaffClientsScreen({ embedded }: { embedded?: boolean } = {}) {
-  const can = useCan();
   // Clients are chosen in Réseau → Annuaire among the Pros validated by Appro+.
   const [inviting, setInviting] = useState(false);
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -95,8 +94,8 @@ const pickOptions = (record: ClientRecord): Options => ({ ...Object.fromEntries(
 const emptyPoint: DeliveryPointInput = { label: "Principal", address_line: "", city: "", phone: "", instructions: "" };
 
 function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRecord | null; visible: boolean; onClose: () => void; onSaved: () => void }) {
-  const [shownQr, setShownQr] = useState<DeliveryPoint | null>(null);
   const can = useCan();
+  const [shownQr, setShownQr] = useState<DeliveryPoint | null>(null);
   const canEdit = record ? can("clients.edit") : can("clients.create");
   const [businessName, setBusinessName] = useState("");
   const [contactName, setContactName] = useState("");

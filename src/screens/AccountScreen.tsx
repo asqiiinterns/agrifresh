@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, View , Switch } from "react-native";
 import { Text, TextInput } from "../ui/Text";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { formatClientNumber, roleLabels, type Account } from "../data/account";
 import { BackButton, Button, Chip, Field, ListGroup, ListRow, ScreenHeader } from "../ui/components";
 import { errorMessage } from "../ui/notify";
-import { ui } from "../ui/theme";
+import { ui , colors } from "../ui/theme";
 import { StaffProductsModal } from "./StaffProductsScreen";
 import { PricingModal } from "./PricingScreen";
 import { useCan } from "../data/permissions";
@@ -18,8 +18,6 @@ import { useNav, type TabDef } from "../ui/navigation";
 import { HomeCustomizeCard } from "./HomeScreen";
 import { StaffClientsScreen } from "./StaffClientsScreen";
 import { PermissionsCard } from "./PermissionsCard";
-import { Switch } from "react-native";
-import { colors } from "../ui/theme";
 import { useModules } from "../data/modules";
 import { confirmSignOut } from "../ui/signOut";
 import { fetchMyPro, type MyPro } from "../data/pros";
@@ -245,16 +243,6 @@ function PasswordCard() {
       {error ? <Text style={ui.error}>{error}</Text> : null}
       <Button label="ENREGISTRER" onPress={() => changePassword()} busy={busy} />
     </View>
-  </View>;
-}
-
-function ProductsCard() {
-  const [visible, setVisible] = useState(false);
-  return <View style={ui.card}>
-    <Text style={ui.strong}>Catalogue</Text>
-    <Text style={ui.small}>Produits, prix, TVA, stock, nouveautés et origine (producteur, région, label).</Text>
-    <Button label="GÉRER LES PRODUITS" onPress={() => setVisible(true)} style={{ marginTop: 10 }} />
-    <StaffProductsModal visible={visible} onClose={() => setVisible(false)} />
   </View>;
 }
 

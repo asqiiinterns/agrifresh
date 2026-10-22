@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, RefreshControl, ScrollView, StyleSheet, View , Pressable } from "react-native";
 import { Text } from "../ui/Text";
 import {
   fetchMyPlatformRole, fetchPlatformTeam, fetchPros, platformRoleLabels, setPlatformMember, setProStatus,
@@ -9,7 +9,7 @@ import { Button, Chip, EmptyState, Field, ListGroup, Loading, ScreenHeader, form
 import { FilterBar } from "../ui/FilterBar";
 import { errorMessage, notify } from "../ui/notify";
 import { ProDetailModal } from "./PlatformAdmin";
-import { Pressable } from "react-native";
+
 import { colors, ui } from "../ui/theme";
 import { fetchInvitations, type InvitationRecord } from "../data/directory";
 import { useNav } from "../ui/navigation";

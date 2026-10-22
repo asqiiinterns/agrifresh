@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Linking, Platform, View } from "react-native";
+import { Linking, Platform, View , Switch } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
@@ -9,7 +9,7 @@ import * as Location from "expo-location";
 import { Text } from "../ui/Text";
 import { Button, formatDateTime } from "../ui/components";
 import { registerForPush } from "../notifications";
-import { Switch } from "react-native";
+
 import { useCan } from "../data/permissions";
 import { fetchMyLocationConsent, fetchMyLocationViews, setLocationConsent } from "../data/workplace";
 import { errorMessage, notify } from "../ui/notify";
