@@ -7,7 +7,11 @@ import { setMyHomeLayout, type Account } from "../data/account";
 import { fetchAccounts } from "../data/admin";
 import { fetchClaims } from "../data/claims";
 import { balanceOf, fetchInvoices, isOverdue } from "../data/invoices";
-import { decisionCount, fetchDecisionBoard } from "../data/decisions";
+import { decisionCount, fetchDecisionBoard, fetchWaitingMessages } from "../data/decisions";
+import { fetchBillingBoard } from "../data/invoices";
+import { fetchHomeCounts } from "../data/home";
+import { isBuyerMode } from "../data/shared";
+import { fetchLeaves } from "../data/workplace";
 import { fetchCreditNotes, fetchReturns } from "../data/returns";
 import { fetchMyOrders, type Order } from "../data/orders";
 import { useCan } from "../data/permissions";
@@ -54,7 +58,37 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     const today = toDayKey(new Date());
     const count = (orders: Order[], statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length;
     try {
-      if (audience === "team") {
+      // Counted by the database (one small answer instead of every order and invoice).
+      const counts = audience === "team" && !isBuyerMode() ? await fetchHomeCounts() : null;
+      if (counts) {
+        Object.assign(next, counts);
+        const pendingShown = shows("pending");
+        const ordersAllowed = can("orders.view") || can("orders.decide") || can("orders.plan");
+        const deliveryLists = can("deliveries") && (shows("ready") || shows("shipping"));
+        // The few lists that are not counts: each one only when a figure shown needs it.
+        const [messages, billing, accounts, leaves, pickups, shipments] = await Promise.all([
+          (pendingShown || shows("waitingReply")) && (can("messages.manage") || can("team.messages")) ? fetchWaitingMessages() : Promise.resolve(null),
+          (pendingShown || shows("toInvoice")) && can("invoices.manage") ? fetchBillingBoard().catch(() => null) : Promise.resolve(null),
+          (pendingShown || shows("accounts")) && isAdmin ? fetchAccounts().catch(() => []) : Promise.resolve([]),
+          pendingShown && (can("leave.manage") || isAdmin) ? fetchLeaves(today, "2100-01-01").catch(() => []) : Promise.resolve([]),
+          deliveryLists && shows("ready") && can("orders.ship") ? fetchPickups().catch(() => null) : Promise.resolve(null),
+          deliveryLists && shows("shipping") ? fetchShipments().catch(() => null) : Promise.resolve(null),
+        ]);
+        // The same rules as « À décider »: each list only if the person may act on it.
+        next.special = ordersAllowed ? counts.special ?? 0 : 0;
+        next.reschedule = can("orders.plan") ? counts.reschedule ?? 0 : 0;
+        next.waitingReply = messages ? messages.clients.length + messages.team.length : 0;
+        next.toInvoice = billing ? billing.due.length : 0;
+        next.accounts = accounts.filter((item) => item.status === "pending").length;
+        if (pickups) next.ready = pickups.length;
+        if (shipments) next.shipping = shipments.length;
+        next.pending = (can("orders.decide") ? counts.decide ?? 0 : 0) + next.special + next.reschedule
+          + (can("claims.manage") ? counts.claims ?? 0 : 0) + next.waitingReply
+          + (billing ? billing.due.length + billing.overdue.length : 0)
+          + (can("returns.manage") ? counts.returns ?? 0 : 0) + (isAdmin ? next.accounts : 0)
+          + leaves.filter((leave) => leave.status === "pending" && !leave.mine).length
+          + (can("incidents.manage") ? counts.incidents ?? 0 : 0);
+      } else if (audience === "team") {
         const needsOrders = ["decide", "placedToday", "queue", "prepare", "ready", "shipping", "deliveredToday", "dueToday"].some(shows);
         const money = ["invoicedMonth", "collectedMonth", "outstanding", "overdue", "toInvoice"].some(shows);
         const decisions = ["pending", "special", "reschedule", "waitingReply", "toInvoice"].some(shows);

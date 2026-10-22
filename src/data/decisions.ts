@@ -29,7 +29,7 @@ export type DecisionBoard = {
 export const decisionCount = (board: DecisionBoard) => board.toDecide.length + board.special.length + board.reschedule.length + board.claims.length
   + board.messages.clients.length + board.messages.team.length + board.billing.due.length + board.billing.overdue.length + board.returns.length + board.accounts + board.leaves.length + board.incidents.length;
 
-async function fetchWaitingMessages(): Promise<WaitingMessages> {
+export async function fetchWaitingMessages(): Promise<WaitingMessages> {
   if (!supabase) return { clients: [], team: [] };
   const { data, error } = await supabase.rpc("messages_needing_reply");
   if (error || !data || Array.isArray(data)) return { clients: [], team: [] };
