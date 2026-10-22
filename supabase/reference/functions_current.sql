@@ -1,5 +1,5 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261206 are installed
--- (generated from the test database, 369 functions). Read-only: do not run it. New migrations copy a function from here
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261207 are installed
+-- (generated from the test database, 370 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
 -- ===== accept_invitation
@@ -138,6 +138,50 @@ CREATE OR REPLACE FUNCTION public.active_uid()
  SET search_path TO ''
 AS $function$
   select pr.id from public.profiles pr where pr.id = (select auth.uid()) and pr.account_status = 'active';
+$function$
+;
+
+-- ===== admin_add_member
+CREATE OR REPLACE FUNCTION public.admin_add_member(p_email text, p_role app_role)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_org uuid := public.current_org_id();
+  v_user uuid;
+  v_profile public.profiles%rowtype;
+begin
+  if not public.is_admin() or v_org is null then
+    raise exception using errcode = '42501', message = 'Réservé aux administrateurs d’un espace actif.';
+  end if;
+  if p_role not in ('admin', 'supervisor', 'production', 'driver', 'staff') then
+    raise exception using errcode = '22023', message = 'Profil invalide pour un membre de l’équipe.';
+  end if;
+  select u.id into v_user from auth.users u where lower(u.email) = lower(btrim(p_email));
+  if v_user is null then
+    raise exception using errcode = 'P0002', message = 'Aucun compte avec cet e-mail.';
+  end if;
+  if v_user = auth.uid() then
+    raise exception using errcode = '22023', message = 'Vous ne pouvez pas modifier votre propre compte.';
+  end if;
+  select * into v_profile from public.profiles where id = v_user;
+  if v_profile.client_id is not null then
+    raise exception using errcode = '22023', message = 'Ce compte est rattaché à une fiche client : utilisez une autre adresse pour l’équipe.';
+  end if;
+  if v_profile.org_id is not null and v_profile.org_id <> v_org then
+    raise exception using errcode = '42501', message = 'Ce compte appartient déjà à un autre espace : la personne doit le quitter ou utiliser une autre adresse.';
+  end if;
+  if v_profile.role = 'platform' or coalesce(v_profile.is_superadmin, false) then
+    raise exception using errcode = '42501', message = 'Ce compte appartient à l’équipe Appro+.';
+  end if;
+  update public.profiles
+  set org_id = v_org, role = p_role, account_status = 'active', disabled = false, deleted_at = null
+  where id = v_user;
+  update auth.users set banned_until = null, email_confirmed_at = coalesce(email_confirmed_at, now()) where id = v_user;
+  return jsonb_build_object('id', v_user, 'role', p_role, 'org_id', v_org);
+end;
 $function$
 ;
 
@@ -541,7 +585,11 @@ begin
   if p_role <> 'customer' and exists (select 1 from public.profiles pr where pr.id = v_user_id and pr.client_id is not null) then
     raise exception using errcode = '22023', message = 'Ce compte est rattaché à une fiche client : utilisez une autre adresse pour l’équipe.';
   end if;
-  update public.profiles set role = p_role where id = v_user_id;
+  -- 20261207: a free account (no team yet) joins the administrator's team explicitly.
+  update public.profiles
+  set role = p_role,
+      org_id = case when org_id is null and client_id is null and p_role <> 'customer' then public.current_org_id() else org_id end
+  where id = v_user_id;
   return jsonb_build_object('id', v_user_id, 'role', p_role);
 end;
 $function$

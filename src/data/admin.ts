@@ -61,7 +61,7 @@ export function temporaryPassword() {
 
 // Creates the account with an isolated client (the admin stays signed in), makes it active
 // at once and gives it its role. A client e-mail that matches a client record is linked automatically.
-// A member of the team: the account is created, then given its role (which attaches it to this Pro), then activated.
+// A member of the team: the account is created, then attached to this Pro with its role and activated.
 // In that order: activating an account that belongs to no team yet is refused by the database.
 // An e-mail already used by an account that belongs to no team (e.g. a previous attempt that stopped half-way)
 // is attached the same way instead of being refused.
@@ -73,8 +73,15 @@ export async function createAccount(input: { email: string; fullName: string; ro
   if (error && !/already|registered|existe/i.test(error.message)) throw error;
   // Supabase answers an existing e-mail with a user that has no identity.
   const existing = !!error || !data.user || (!!data.user.identities && data.user.identities.length === 0);
+  // 20261207: team, role and activation in one server call (all or nothing).
+  const added = await client().rpc("admin_add_member", { p_email: email, p_role: input.role });
+  if (!added.error) return { existing };
+  if (added.error.code !== "PGRST202" && added.error.code !== "42883") {
+    throw existing ? new Error(`Un compte existe déjà avec cet e-mail et ne peut pas rejoindre votre équipe : ${added.error.message}`) : added.error;
+  }
+  // Migration not installed yet: the former calls, role first.
   const { data: attached, error: roleError } = await client().rpc("admin_set_role", { p_email: email, p_role: input.role });
-  if (roleError) throw existing ? new Error(`Un compte existe déjà avec cet e-mail et ne peut pas rejoindre votre équipe (${roleError.message})`) : roleError;
+  if (roleError) throw existing ? new Error(`Un compte existe déjà avec cet e-mail et ne peut pas rejoindre votre équipe : ${roleError.message}`) : roleError;
   await setAccountStatus((attached as { id: string }).id, "active");
   return { existing };
 }

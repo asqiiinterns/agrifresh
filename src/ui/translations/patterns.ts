@@ -1,6 +1,7 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  ["Un compte existe déjà avec cet e-mail et ne peut pas rejoindre votre équipe : {0}", "An account already exists with this e-mail and cannot join your team: {0}", "يوجد حساب بهذا البريد ولا يمكنه الانضمام إلى فريقك: {0}"],
   ["{0} existait déjà : il rejoint votre équipe ({1}) et il est actif. Il garde son mot de passe actuel (« Mot de passe oublié » s’il ne le connaît pas).", "{0} already existed: it joins your team ({1}) and is active. It keeps its current password (« Forgot password » if unknown).", "{0} كان موجودًا: ينضم إلى فريقك ({1}) وأصبح نشطًا. يحتفظ بكلمة مروره الحالية (« نسيت كلمة المرور » إن لم يعرفها)."],
   ["{0} est actif ({1}).\nMot de passe provisoire : {2}\nTransmettez-le à la personne : elle pourra le changer dans Compte.", "{0} is active ({1}).\nTemporary password: {2}\nGive it to the person: they can change it in Account.", "{0} نشط ({1}).\nكلمة المرور المؤقتة: {2}\nأرسلها إلى الشخص: يمكنه تغييرها في الحساب."],
   ["Un compte existe déjà avec cet e-mail et ne peut pas rejoindre votre équipe ({0})", "An account already exists with this e-mail and cannot join your team ({0})", "يوجد حساب بهذا البريد ولا يمكنه الانضمام إلى فريقك ({0})"],
