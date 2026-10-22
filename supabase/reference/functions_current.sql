@@ -1,5 +1,5 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261205 are installed
--- (generated from the test database, 366 functions). Read-only: do not run it. New migrations copy a function from here
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261206 are installed
+-- (generated from the test database, 369 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
 -- ===== accept_invitation
@@ -3958,6 +3958,42 @@ end;
 $function$
 ;
 
+-- ===== log_client_error
+CREATE OR REPLACE FUNCTION public.log_client_error(p jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+  v_message text := left(coalesce(nullif(btrim(p ->> 'message'), ''), 'Erreur inconnue'), 2000);
+  v_screen text := left(p ->> 'screen', 120);
+  v_id uuid;
+begin
+  if jsonb_typeof(p) is distinct from 'object' then return; end if;
+  -- At most 100 new errors per person per hour.
+  if (select count(*) from public.client_errors e where e.user_id is not distinct from v_uid and e.created_at > now() - interval '1 hour') >= 100 then
+    return;
+  end if;
+  select e.id into v_id from public.client_errors e
+  where e.user_id is not distinct from v_uid and e.message = v_message and e.screen is not distinct from v_screen
+    and e.last_seen_at > now() - interval '1 day' and e.resolved_at is null
+  order by e.last_seen_at desc limit 1;
+  if v_id is not null then
+    update public.client_errors set occurrences = occurrences + 1, last_seen_at = now() where id = v_id;
+    return;
+  end if;
+  insert into public.client_errors (user_id, org_id, screen, kind, message, stack, component_stack, platform, app_version, url)
+  values (v_uid, (select pr.org_id from public.profiles pr where pr.id = v_uid), v_screen,
+    left(coalesce(p ->> 'kind', 'render'), 30), v_message, left(p ->> 'stack', 8000), left(p ->> 'component_stack', 8000),
+    left(p ->> 'platform', 40), left(p ->> 'app_version', 40), left(p ->> 'url', 500));
+exception when others then
+  return;
+end;
+$function$
+;
+
 -- ===== mark_messages_read
 CREATE OR REPLACE FUNCTION public.mark_messages_read(p_client_id uuid)
  RETURNS void
@@ -5644,6 +5680,30 @@ AS $function$
 $function$
 ;
 
+-- ===== platform_client_errors
+CREATE OR REPLACE FUNCTION public.platform_client_errors(p_include_resolved boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if not public.platform_can('platform.pros.view') then
+    raise exception using errcode = '42501', message = 'Réservé à l’équipe Appro+.';
+  end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', e.id, 'created_at', e.created_at, 'last_seen_at', e.last_seen_at, 'occurrences', e.occurrences,
+      'screen', e.screen, 'kind', e.kind, 'message', e.message, 'stack', e.stack, 'component_stack', e.component_stack,
+      'platform', e.platform, 'app_version', e.app_version, 'url', e.url, 'resolved_at', e.resolved_at,
+      'user', coalesce(nullif(btrim(pr.full_name), ''), u.email), 'org_name', o.name) order by e.last_seen_at desc)
+    from (select * from public.client_errors x where p_include_resolved or x.resolved_at is null order by x.last_seen_at desc limit 300) e
+    left join public.profiles pr on pr.id = e.user_id
+    left join auth.users u on u.id = e.user_id
+    left join public.organizations o on o.id = e.org_id), '[]'::jsonb);
+end;
+$function$
+;
+
 -- ===== platform_create_invitation
 CREATE OR REPLACE FUNCTION public.platform_create_invitation(p_org_id uuid, p_side text, p_name text DEFAULT NULL::text, p_contact text DEFAULT NULL::text)
  RETURNS jsonb
@@ -5731,6 +5791,22 @@ begin
     ) order by (o.status = 'pending' or o.trial_until is not null) desc, o.is_supplier desc, o.name)
     from public.organizations o
   ), '[]'::jsonb);
+end;
+$function$
+;
+
+-- ===== platform_resolve_client_error
+CREATE OR REPLACE FUNCTION public.platform_resolve_client_error(p_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if not public.platform_can('platform.pros.manage') then
+    raise exception using errcode = '42501', message = 'Réservé à l’équipe Appro+.';
+  end if;
+  update public.client_errors set resolved_at = now() where (p_id is null or id = p_id) and resolved_at is null;
 end;
 $function$
 ;

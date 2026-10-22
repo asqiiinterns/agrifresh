@@ -62,6 +62,8 @@ import { NavContext, type IconName, type NavParams, type TabDef, type TabKey } f
 import { Button, EmptyState, Loading, formatDateTime } from "./src/ui/components";
 import { errorMessage, notify } from "./src/ui/notify";
 import { colors, ui } from "./src/ui/theme";
+import { ErrorBoundary } from "./src/ui/ErrorBoundary";
+import { installGlobalErrorReporting, setCurrentScreen } from "./src/data/errors";
 
 const TAB = {
   home: { key: "home", label: "Accueil", icon: "home-outline", description: "Tableau de bord du moment." },
@@ -404,6 +406,7 @@ function Main({ session }: { session: Session }) {
   const hubSheet: HubSheet | undefined = tab === "orders" ? "orders" : tab === "planning" ? "planning"
     : nav.params?.section === "prepare" || nav.params?.section === "planning" || nav.params?.section === "orders" ? nav.params.section as HubSheet : undefined;
   const current = requested && tabs.some((item) => item.key === requested) ? requested : bar[0]?.key ?? tabs[0]?.key;
+  setCurrentScreen(current ?? null);
   // A shortcut or alert pointing to a section this account cannot open says so instead of silently showing the home screen.
   const unavailable = !!account && !!requested && requested !== current;
   const barCurrent = overflow.some((item) => item.key === current) ? "account" : current;
@@ -675,7 +678,8 @@ function Main({ session }: { session: Session }) {
       <Text style={styles.unavailableText}>Cette rubrique n’est pas disponible pour votre compte (droit ou module désactivé).</Text>
       <Ionicons name="close" size={16} color={colors.muted} />
     </Pressable> : null}
-    <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}>{renderTab()}</View>
+    {/* A screen that crashes shows a card (and is reported to Appro+), never a white page. */}
+    <View key={`${current}-${nav.nonce}`} style={{ flex: 1 }}><ErrorBoundary screen={String(current ?? "accueil")} onHome={() => setTab(null)}>{renderTab()}</ErrorBoundary></View>
     {bar.length > 1 ? <View style={styles.tabBar}>
       {bar.map((item) => {
         const selected = item.key === barCurrent;
@@ -697,6 +701,7 @@ export default function App() {
   useAuthCallback();
   // An invitation link (…/?invite=CODE) is kept until the person has signed in.
   useEffect(() => startInviteCapture(), []);
+  useEffect(() => installGlobalErrorReporting(), []);
 
   return <DisplayProvider><SafeAreaProvider>
     <SafeAreaView style={ui.screen} edges={["top", "left", "right", "bottom"]}>
@@ -704,7 +709,7 @@ export default function App() {
       {!isSupabaseConfigured
         ? <EmptyState title="Configuration manquante" body="Renseignez EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY." />
         : !ready ? <Loading />
-        : session ? <Main session={session} />
+        : session ? <ErrorBoundary screen="application"><Main session={session} /></ErrorBoundary>
         : <AuthScreen />}
       <DocumentViewerHost />
       <DialogHost />

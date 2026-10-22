@@ -9,6 +9,7 @@ import {
   type PlatformAccount, type ProCard, type ProInput, type RolePermission, type RoleTemplate,
 } from "../data/pros";
 import { deleteAccount, invitedByLabel } from "../data/admin";
+import { ClientErrorsPage } from "./ClientErrorsPage";
 import { confirmWithPassword } from "../ui/PasswordConfirm";
 import { InviteModal } from "../ui/InviteModal";
 import { setProStatus } from "../data/platform";
@@ -164,8 +165,8 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
 // ---------------------------------------------------------------------------
 // Appro+ → Paramétrage: everything that applies to the whole platform.
 // ---------------------------------------------------------------------------
-type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories" | "signup" | "invitations";
-const settingsPages: SettingsPage[] = ["modules", "templates", "alerts", "accounts", "categories", "signup", "invitations"];
+type SettingsPage = "menu" | "modules" | "templates" | "alerts" | "accounts" | "categories" | "signup" | "invitations" | "errors";
+const settingsPages: SettingsPage[] = ["modules", "templates", "alerts", "accounts", "categories", "signup", "invitations", "errors"];
 
 export function PlatformSettingsScreen({ initialPage }: { initialPage?: string } = {}) {
   const [page, setPage] = useState<SettingsPage>(settingsPages.includes(initialPage as SettingsPage) ? initialPage as SettingsPage : "menu");
@@ -173,6 +174,7 @@ export function PlatformSettingsScreen({ initialPage }: { initialPage?: string }
   useEffect(() => { if (settingsPages.includes(initialPage as SettingsPage)) setPage(initialPage as SettingsPage); }, [initialPage]);
   const back = <BackButton label="Paramétrage" onPress={() => setPage("menu")} />;
   if (page === "invitations") return <InvitationsPage scope="platform" header={back} />;
+  if (page === "errors") return <ClientErrorsPage header={back} />;
   if (page === "signup") return <SignupSettingsPage header={back} />;
   if (page === "modules") return <ModulesPage header={back} mode={{ kind: "platform" }} />;
   if (page === "templates") return <TemplatesPage header={back} />;
@@ -200,6 +202,9 @@ export function PlatformSettingsScreen({ initialPage }: { initialPage?: string }
       </ListGroup>
       <ListGroup title="Communication">
         <ListRow icon="notifications-outline" title="Notifications et e-mails" detail="Événements notifiés (push, e-mail) et service d’envoi des e-mails." onPress={() => setPage("alerts")} />
+      </ListGroup>
+      <ListGroup title="Suivi technique">
+        <ListRow icon="bug-outline" title="Erreurs de l’application" detail="Chaque écran qui plante, enregistré automatiquement : compte, appareil, message technique." onPress={() => setPage("errors")} />
       </ListGroup>
       </MenuSearch>
     </ScrollView>

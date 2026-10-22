@@ -47,6 +47,7 @@ from (values
   (39, '20261202_products.sql',                to_regprocedure('public.products_import(text,jsonb)') is not null),
   (40, '20261203_wording.sql',                 coalesce(pg_get_functiondef(to_regprocedure('public.send_email(text,text,text)')) like '%notifications par e-mail%', false)),
   (41, '20261204_reception_qr.sql',            coalesce(pg_get_functiondef(to_regprocedure('public.driver_deliver(uuid[],uuid[],text,uuid)')) like '%20261204%', false)),
-  (42, '20261205_home_counts.sql',             to_regprocedure('public.home_counts(date,int)') is not null)
+  (42, '20261205_home_counts.sql',             to_regprocedure('public.home_counts(date,int)') is not null),
+  (43, '20261206_client_errors.sql',            to_regclass('public.client_errors') is not null and to_regprocedure('public.log_client_error(jsonb)') is not null)
 ) as checks(position, migration, installed)
 order by position;

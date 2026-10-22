@@ -1,6 +1,9 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" · traitée le {0}", " · handled on {0}", " · عولجت في {0}"],
+  ["À traiter ({0})", "To handle ({0})", "للمعالجة ({0})"],
+  ["Écran {0}", "Screen {0}", "الشاشة {0}"],
   [" · acceptée par {0}", " · accepted by {0}", " · قبلها {0}"],
   [" · prix valables jusqu’au {0}", " · prices valid until {0}", " · الأسعار صالحة حتى {0}"],
   ["GÉNÉRER LE CATALOGUE ({0})", "GENERATE THE CATALOGUE ({0})", "إنشاء الكتالوج ({0})"],
