@@ -45,6 +45,7 @@ from (values
   (37, '20261130_workflow_steps.sql',           to_regprocedure('public.prep_tick(uuid[],boolean)') is not null),
   (38, '20261201_role_layouts.sql',             to_regprocedure('public.set_org_role_layout(uuid,jsonb,jsonb)') is not null),
   (39, '20261202_products.sql',                to_regprocedure('public.products_import(text,jsonb)') is not null),
-  (40, '20261203_wording.sql',                 coalesce(pg_get_functiondef(to_regprocedure('public.send_email(text,text,text)')) like '%notifications par e-mail%', false))
+  (40, '20261203_wording.sql',                 coalesce(pg_get_functiondef(to_regprocedure('public.send_email(text,text,text)')) like '%notifications par e-mail%', false)),
+  (41, '20261204_reception_qr.sql',            coalesce(pg_get_functiondef(to_regprocedure('public.driver_deliver(uuid[],uuid[],text,uuid)')) like '%20261204%', false))
 ) as checks(position, migration, installed)
 order by position;

@@ -1,4 +1,4 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261203 are installed
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261204 are installed
 -- (generated from the test database, 365 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
@@ -2780,6 +2780,12 @@ begin
         and p_client_qr_token is distinct from (select b.reception_token from public.organizations b where b.id = v_client.buyer_org_id)) then
         raise exception using errcode = '22023', message = 'QR client invalide : demandez au client d’afficher son QR de réception dans l’application Appro+.';
       end if;
+    elsif p_client_qr_kind = 'client' then
+      -- 20261204: the client's reception QR is also accepted where the wall QR is asked (stronger proof: the client confirms).
+      if p_client_qr_token is distinct from v_client.reception_token
+        and p_client_qr_token is distinct from (select b.reception_token from public.organizations b where b.id = v_client.buyer_org_id) then
+        raise exception using errcode = '22023', message = 'Ce QR de réception n’est pas celui de ce client.';
+      end if;
     else
       if v_points <> 1 then
         raise exception using errcode = '22023', message = 'Ces commandes concernent plusieurs points de livraison : livrez-les séparément.';
@@ -2795,7 +2801,7 @@ begin
   v_proof := concat_ws(' + ',
     case when (v_client.scan_delivery_note and public.module_enabled_for(v_client.supplier_org_id, 'delivery_qr')) then 'bon de livraison scanné' else 'sans scan du bon' end,
     case when not (v_client.scan_client_qr and public.module_enabled_for(v_client.supplier_org_id, 'delivery_qr')) then 'sans QR client'
-         when (v_client.reception_qr and public.module_enabled_for(v_client.supplier_org_id, 'delivery_qr')) then 'QR de réception du client'
+         when (v_client.reception_qr and public.module_enabled_for(v_client.supplier_org_id, 'delivery_qr')) or p_client_qr_kind = 'client' then 'QR de réception du client'
          else 'QR du point de livraison' end);
 
   update public.orders

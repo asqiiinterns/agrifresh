@@ -472,7 +472,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
 
   const instruction = !orderIds.length ? "① Scannez le QR code du bon de livraison."
     : missing.length ? `① Scannez le bon de ${missing.map((item) => `#${item.order_number}`).join(", ")}.`
-    : rules?.qr ? (rules.reception ? "② Scannez le QR de réception affiché dans l’application du client." : "② Scannez le QR code collé au point de livraison.")
+    : rules?.qr ? (rules.reception ? "② Scannez le QR de réception affiché dans l’application du client." : "② Scannez le QR code collé au point de livraison, ou le QR de réception affiché par le client.")
     : "Tout est prêt : confirmez la remise.";
 
   return <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>

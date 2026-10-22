@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import qrcode from "qrcode-generator";
-import { colors } from "./theme";
 
 // QR payloads: delivery note, delivery point (wall sticker) and client reception code.
 export const QR = {
@@ -28,18 +28,29 @@ export function qrSvg(text: string, cellSize = 6) {
   return matrix(text).createSvgTag({ cellSize, margin: 2, scalable: true });
 }
 
-// Drawn with plain views so it works in Expo Go without an SVG library.
+// One vector shape on a white square with the standard 4-module margin: no seams between the
+// modules (small views left thin white lines on some phones and drivers' cameras could not read it).
 export function QrCode({ value, size = 240 }: { value: string; size?: number }) {
-  const rows = useMemo(() => {
+  const { count, path } = useMemo(() => {
     const qr = matrix(value);
-    const count = qr.getModuleCount();
-    return Array.from({ length: count }, (_, row) => Array.from({ length: count }, (_, column) => qr.isDark(row, column)));
+    const total = qr.getModuleCount();
+    let d = "";
+    for (let row = 0; row < total; row += 1) {
+      for (let column = 0; column < total; column += 1) {
+        if (!qr.isDark(row, column)) continue;
+        // Consecutive dark modules of a row form one rectangle.
+        let end = column;
+        while (end + 1 < total && qr.isDark(row, end + 1)) end += 1;
+        d += `M${column} ${row}h${end - column + 1}v1h-${end - column + 1}z`;
+        column = end;
+      }
+    }
+    return { count: total, path: d };
   }, [value]);
-  const quiet = 2;
-  const cell = Math.floor(size / (rows.length + quiet * 2));
-  return <View style={{ padding: cell * quiet, backgroundColor: colors.white, alignSelf: "center" }}>
-    {rows.map((row, rowIndex) => <View key={rowIndex} style={{ flexDirection: "row" }}>
-      {row.map((dark, columnIndex) => <View key={columnIndex} style={{ width: cell, height: cell, backgroundColor: dark ? "#000" : colors.white }} />)}
-    </View>)}
+  const quiet = 4;
+  return <View style={{ width: size, height: size, backgroundColor: "#ffffff", alignSelf: "center" }}>
+    <Svg width={size} height={size} viewBox={`${-quiet} ${-quiet} ${count + quiet * 2} ${count + quiet * 2}`}>
+      <Path d={path} fill="#000000" />
+    </Svg>
   </View>;
 }

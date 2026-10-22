@@ -324,6 +324,8 @@ export const part4: [string, string, string][] = [
   ["VOIR TOUS", "SEE ALL", "عرض الكل"],
   ["Se déconnecter", "Sign out", "تسجيل الخروج"],
   ["Répondre", "Reply", "رد"],
+  ["② Scannez le QR code collé au point de livraison, ou le QR de réception affiché par le client.", "② Scan the QR code stuck at the delivery point, or the reception QR shown by the client.", "② امسح رمز QR الملصق في نقطة التوصيل، أو رمز الاستلام الذي يعرضه العميل."],
+  ["Ce QR de réception n’est pas celui de ce client.", "This reception QR is not this client's.", "رمز الاستلام هذا ليس لهذا العميل."],
   [" · prix en TND", " · prices in TND", " · الأسعار بالدينار"],
   ["2 par ligne", "2 per row", "2 في كل سطر"],
   ["3 par ligne", "3 per row", "3 في كل سطر"],
