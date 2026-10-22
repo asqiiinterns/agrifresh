@@ -24,8 +24,8 @@ export function ProductionHub({ initialSheet, ordersSection, orderId }: { initia
   return <View style={ui.screen}>
     {sheets.length > 1 ? <Sheets items={sheets} value={sheet} onChange={setSheet} /> : null}
     <View style={{ flex: 1 }}>
-      {sheet === "orders" ? <StaffOrdersScreen mode="open" initialSection={ordersSection} initialOrderId={orderId} />
-        : sheet === "closed" ? <StaffOrdersScreen mode="closed" initialOrderId={orderId} />
+      {sheet === "orders" ? <StaffOrdersScreen key="open" mode="open" initialSection={ordersSection} initialOrderId={orderId} />
+        : sheet === "closed" ? <StaffOrdersScreen key="closed" mode="closed" initialOrderId={orderId} />
         : sheet === "prepare" ? <ProductionScreen />
         : <PlanningTab />}
     </View>

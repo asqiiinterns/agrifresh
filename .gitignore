@@ -34,3 +34,4 @@ credentials.json
 /e2e/results
 /tests/server/fn_dump.sql
 /tests/server/last-run.log
+/e2e/shots
