@@ -324,6 +324,8 @@ export const part4: [string, string, string][] = [
   ["VOIR TOUS", "SEE ALL", "عرض الكل"],
   ["Se déconnecter", "Sign out", "تسجيل الخروج"],
   ["Répondre", "Reply", "رد"],
+  ["Aucun autre compte dans votre équipe", "No other account in your team", "لا يوجد حساب آخر في فريقك"],
+  ["Seuls les comptes actifs de votre équipe apparaissent ici (pas vous-même ni vos clients). Invitez un collègue ou validez son compte dans Admin → Comptes.", "Only the active accounts of your team appear here (not yourself nor your clients). Invite a colleague or approve their account in Admin → Accounts.", "تظهر هنا الحسابات النشطة لفريقك فقط (ليس أنت ولا عملاؤك). ادعُ زميلاً أو فعّل حسابه في الإدارة ← الحسابات."],
   ["② Scannez le QR code collé au point de livraison, ou le QR de réception affiché par le client.", "② Scan the QR code stuck at the delivery point, or the reception QR shown by the client.", "② امسح رمز QR الملصق في نقطة التوصيل، أو رمز الاستلام الذي يعرضه العميل."],
   ["Ce QR de réception n’est pas celui de ce client.", "This reception QR is not this client's.", "رمز الاستلام هذا ليس لهذا العميل."],
   [" · prix en TND", " · prices in TND", " · الأسعار بالدينار"],

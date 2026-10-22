@@ -167,6 +167,8 @@ export function LocationPage({ onBack, isAdmin = false }: { onBack: () => void; 
       contentContainerStyle={ui.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload(true)} tintColor={colors.primary} />}
       ListHeaderComponent={<Text style={[ui.small, { marginTop: 8 }]}>{error || "Touchez « Demander la position » : la personne est prévenue et accepte ou refuse. Sans réponse en une minute, sa dernière position n’est montrée que si le repérage est autorisé pour son compte (ou à l’administrateur), et elle en est informée."}</Text>}
+      ListEmptyComponent={error ? null : <EmptyState title="Aucun autre compte dans votre équipe"
+        body="Seuls les comptes actifs de votre équipe apparaissent ici (pas vous-même ni vos clients). Invitez un collègue ou validez son compte dans Admin → Comptes." />}
       renderItem={({ item }) => <View style={ui.card}>
         <View style={ui.row}>
           <View style={{ flex: 1 }}>
