@@ -15,8 +15,14 @@ export type AdminAccount = {
   // 20261126: soft delete, e-mail confirmation, who invited.
   deleted_at?: string | null;
   email_confirmed?: boolean;
-  invited_by?: string | null;
+  invited_by?: InvitedBy | string | null;
 };
+
+// Who invited the account (20261126: an object, not a text: shown as is, it emptied the screen).
+export type InvitedBy = { name: string | null; org_name: string | null; code?: string | null; created_at?: string | null; accepted_at?: string | null };
+export const invitedByLabel = (value: InvitedBy | string | null | undefined) => !value ? ""
+  : typeof value === "string" ? value
+  : [value.name, value.org_name ? `(${value.org_name})` : null].filter(Boolean).join(" ") || "une invitation";
 
 function client() {
   if (!supabase) throw new Error("Supabase n’est pas configuré.");

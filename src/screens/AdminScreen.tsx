@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshCont
 import { Text } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { roleLabels, type Role } from "../data/account";
-import { createAccount, deleteAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, type AdminAccount } from "../data/admin";
+import { createAccount, deleteAccount, fetchAccounts, setAccountRole, setAccountStatus, temporaryPassword, invitedByLabel, type AdminAccount } from "../data/admin";
 import type { AccountStatus } from "../data/account";
 import { assignableRoles } from "../data/team";
 import { BackButton as Back, Button, Chip, CloseButton, EmptyState, Field, ListGroup, ListRow, Loading, MenuSearch, ScreenHeader, formatDateTime } from "../ui/components";
@@ -189,7 +189,7 @@ function AccountsPage({ onBack, onRoles }: { onBack: () => void; onRoles: () => 
           </View>
           <Text style={ui.small}>{roleLabels[item.role] ?? item.role}{item.full_name ? ` · ${item.full_name}` : ""}{item.client_name ? ` · fiche ${item.client_name}` : ""}</Text>
           <Text style={ui.small}>Créé le {formatDateTime(item.created_at)}{item.last_sign_in_at ? ` · dernière connexion ${formatDateTime(item.last_sign_in_at)}` : " · jamais connecté"}</Text>
-          {item.invited_by ? <Text style={ui.small}>Invité par {item.invited_by}</Text> : null}
+          {item.invited_by ? <Text style={ui.small}>Invité par {invitedByLabel(item.invited_by)}</Text> : null}
           {item.email_confirmed === false ? <Text style={[ui.small, { color: colors.amber }]}>E-mail pas encore confirmé : le compte ne peut pas être activé avant.</Text> : null}
           {item.deleted_at ? <View style={[ui.wrapRow, { marginTop: 10 }]}>
             <Text style={[ui.small, { color: colors.danger, flex: 1 }]}>Supprimé le {formatDateTime(item.deleted_at)}</Text>

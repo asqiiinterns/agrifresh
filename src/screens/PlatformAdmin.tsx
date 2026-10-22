@@ -8,7 +8,7 @@ import {
   assistChanged, fetchPlatformAccounts, fetchProCard, fetchTemplates, saveProAsPlatform, setPlatformAccountStatus, setTemplatePermission, startAssist,
   type PlatformAccount, type ProCard, type ProInput, type RolePermission, type RoleTemplate,
 } from "../data/pros";
-import { deleteAccount } from "../data/admin";
+import { deleteAccount, invitedByLabel } from "../data/admin";
 import { confirmWithPassword } from "../ui/PasswordConfirm";
 import { InviteModal } from "../ui/InviteModal";
 import { setProStatus } from "../data/platform";
@@ -365,7 +365,7 @@ function PlatformAccountsPage({ header }: { header: React.ReactNode }) {
         </View>
         <Text style={ui.small}>{item.email} · {roleWords[item.role ?? "customer"] ?? item.role} · {item.org_name ?? (item.role === "platform" ? "Appro+" : "Sans Pro (inscription libre)")}</Text>
         <Text style={ui.small}>Créé le {formatDay(item.created_at, { day: "numeric", month: "short", year: "numeric" })}{item.last_sign_in_at ? ` · dernière connexion le ${formatDay(item.last_sign_in_at, { day: "numeric", month: "short" })}` : ""}</Text>
-        {item.invited_by ? <Text style={ui.small}>Invité par {item.invited_by}</Text> : null}
+        {item.invited_by ? <Text style={ui.small}>Invité par {invitedByLabel(item.invited_by)}</Text> : null}
         {item.email_confirmed === false ? <Text style={[ui.small, { color: colors.amber }]}>E-mail pas encore confirmé : reste suspendu jusqu’à la confirmation.</Text> : null}
         {item.deleted_at ? <View style={[ui.wrapRow, { marginTop: 6 }]}>
           <Text style={[ui.small, { color: colors.danger, flex: 1 }]}>Supprimé le {formatDay(item.deleted_at, { day: "numeric", month: "short", year: "numeric" })}</Text>
