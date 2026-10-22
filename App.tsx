@@ -591,7 +591,7 @@ function Main({ session }: { session: Session }) {
         const selected = item.key === current;
         const badge = badgeFor(item.key);
         if (item.key === "messages") return <MessagesButton key={item.key} selected={selected} unread={badge} needsReply={isModuleOn(modules, "needs_reply") ? needsReply : 0} onPress={() => navigate(item.key)} />;
-        return <Pressable key={item.key} onPress={() => navigate(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
+        return <Pressable key={item.key} testID={`top-${item.key}`} onPress={() => navigate(item.key)} style={[styles.topIcon, selected && styles.tabPillActive]} accessibilityLabel={`${item.label}${badge ? `, ${badge} non lu(s)` : ""}`} hitSlop={6}>
           <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.text} />
           {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
         </Pressable>;
@@ -680,7 +680,7 @@ function Main({ session }: { session: Session }) {
       {bar.map((item) => {
         const selected = item.key === barCurrent;
         const badge = badgeFor(item.key);
-        return <Pressable key={item.key} onPress={() => navigate(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}>
+        return <Pressable key={item.key} testID={`bar-${item.key}`} onPress={() => navigate(item.key)} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}>
           <View style={[styles.tabPill, selected && styles.tabPillActive]}>
             <Ionicons name={selected ? filledIcon(item.icon) : item.icon} size={22} color={selected ? colors.primary : colors.muted} />
             {badge > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text></View> : null}
@@ -730,7 +730,7 @@ function MessagesButton({ selected, unread, needsReply, onPress }: { selected: b
   }, [unread > 0]);
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
   const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
-  return <Pressable onPress={onPress} style={[styles.messagesButton, selected && styles.tabPillActive, needsReply > 0 && styles.messagesWaiting]} accessibilityLabel={`Messages${unread ? `, ${unread} non lu(s)` : ""}${needsReply ? `, ${needsReply} réponse(s) attendue(s)` : ""}`} hitSlop={6}>
+  return <Pressable onPress={onPress} testID="top-messages" style={[styles.messagesButton, selected && styles.tabPillActive, needsReply > 0 && styles.messagesWaiting]} accessibilityLabel={`Messages${unread ? `, ${unread} non lu(s)` : ""}${needsReply ? `, ${needsReply} réponse(s) attendue(s)` : ""}`} hitSlop={6}>
     {unread ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.messagesGlow, { opacity: glow }]} /> : null}
     <Animated.View style={{ transform: [{ scale }] }}>
       <Ionicons name={selected || unread || needsReply ? "chatbubbles" : "chatbubbles-outline"} size={28} color={unread ? colors.white : needsReply ? colors.danger : selected ? colors.primary : colors.text} />

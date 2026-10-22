@@ -23,3 +23,11 @@ supabase/.temp/
 /dist-apk
 credentials.json
 /credentials
+
+# Automated tests (local database, web build, reports)
+/e2e/web
+/e2e/report
+/e2e/.env.test
+/e2e/supabase/.temp
+/test-results
+/eslint-report.json

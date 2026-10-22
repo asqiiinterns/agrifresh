@@ -324,6 +324,7 @@ export const part4: [string, string, string][] = [
   ["VOIR TOUS", "SEE ALL", "عرض الكل"],
   ["Se déconnecter", "Sign out", "تسجيل الخروج"],
   ["Répondre", "Reply", "رد"],
+  ["ITINÉRAIRE (GOOGLE MAPS)", "DIRECTIONS (GOOGLE MAPS)", "الاتجاهات (خرائط غوغل)"],
   ["Réservé aux administrateurs d’un espace actif.", "Reserved to administrators of an active space.", "مخصص لمسؤولي فضاء نشط."],
   ["Profil invalide pour un membre de l’équipe.", "Invalid profile for a team member.", "ملف غير صالح لعضو في الفريق."],
   ["Aucun compte avec cet e-mail.", "No account with this e-mail.", "لا يوجد حساب بهذا البريد."],

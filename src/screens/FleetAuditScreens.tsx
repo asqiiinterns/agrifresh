@@ -6,6 +6,8 @@ import { roleLabels, type Role } from "../data/account";
 import { fetchVehicles, saveVehicle, setDefaultVehicle, type Vehicle, type VehicleInput } from "../data/fleet";
 import { fetchLocationRequestStatus, fetchTeamLocations, requestLocation, setLocationTracking, type LocationRequestStatus, type TeamLocation } from "../data/workplace";
 
+import { MapFrame } from "../ui/MapFrame";
+import { externalMapUrl } from "../ui/mapUrl";
 import { BackButton, Button, EmptyState, Field, ListGroup, ListRow, Loading, ScreenHeader, formatDateTime, toDayKey } from "../ui/components";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
@@ -196,7 +198,9 @@ export function LocationPage({ onBack, isAdmin = false }: { onBack: () => void; 
           </> : status.status === "accepted" || status.status === "automatic" ? <>
             {status.latitude !== null && status.longitude !== null ? <>
               <Text style={[ui.body, { marginTop: 8 }]}>{status.status === "accepted" ? "Position partagée à l’instant." : `Dernière position connue${status.located_at ? ` (${ago(status.located_at)})` : ""}, sans réponse de sa part : elle en est informée.`}{status.accuracy ? ` Précision ±${Math.round(status.accuracy)} m.` : ""}</Text>
-              <Button label="OUVRIR LA CARTE" onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${status.latitude},${status.longitude}`)} style={{ marginTop: 10 }} />
+              {/* The map inside the app; Google Maps stays available for directions. */}
+              <View style={{ marginTop: 10, alignSelf: "stretch" }}><MapFrame latitude={status.latitude} longitude={status.longitude} /></View>
+              <Button label="ITINÉRAIRE (GOOGLE MAPS)" variant="secondary" onPress={() => Linking.openURL(externalMapUrl(status.latitude!, status.longitude!))} style={{ marginTop: 8 }} />
             </> : <Text style={[ui.body, { marginTop: 8 }]}>Aucune position connue pour ce compte.</Text>}
           </> : <Text style={[ui.body, { marginTop: 8 }]}>{status.status === "refused" ? "Elle a refusé de partager sa position." : "Pas de réponse dans la minute : sa position ne peut pas être montrée sans son accord."}</Text>}
           <Button label="FERMER" variant="secondary" onPress={() => { setAsking(null); void reload(); }} style={{ marginTop: 12 }} />

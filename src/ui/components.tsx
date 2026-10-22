@@ -167,7 +167,7 @@ export function Sheets<K extends string>({ items, value, onChange }: { items: { 
     <View style={local.sheets}>
       {items.map((item) => {
         const selected = item.key === value;
-        return <Pressable key={item.key} onPress={() => onChange(item.key)} style={[local.sheet, selected && local.sheetSelected]} accessibilityRole="tab" accessibilityState={{ selected }}>
+        return <Pressable key={item.key} onPress={() => onChange(item.key)} testID="sheet-tab" style={[local.sheet, selected && local.sheetSelected]} accessibilityRole="tab" accessibilityState={{ selected }}>
           <Text style={[local.sheetText, selected && local.sheetTextSelected]}>{item.label}</Text>
           {item.count !== undefined ? <View style={[local.sheetCount, selected && local.sheetCountSelected]}><Text style={[local.sheetCountText, selected && { color: colors.primary }]}>{item.count}</Text></View> : null}
         </Pressable>;
@@ -223,7 +223,7 @@ export function MenuSearch({ children, placeholder = "Rechercher un réglage" }:
 export function ListRow({ icon, title, detail, onPress, right, badge, keywords, leading }: { icon?: ComponentProps<typeof Ionicons>["name"]; title: string; detail?: string; onPress?: () => void; right?: ReactNode; badge?: number; keywords?: string; leading?: ReactNode }) {
   const needle = useContext(MenuQuery);
   if (needle && onPress && !rowMatches(needle, title, detail, keywords)) return null;
-  return <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [local.listRow, pressed && { opacity: 0.7 }]}>
+  return <Pressable onPress={onPress} disabled={!onPress} testID={onPress ? "menu-row" : undefined} style={({ pressed }) => [local.listRow, pressed && { opacity: 0.7 }]}>
     {leading}
     {icon ? <View style={local.listIcon}><Ionicons name={icon} size={18} color={colors.primary} /></View> : null}
     <View style={{ flex: 1 }}>
