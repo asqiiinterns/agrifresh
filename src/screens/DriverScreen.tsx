@@ -470,6 +470,11 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
     await deliver({ kind: scanned.kind, token: scanned.token });
   }
 
+  // The camera may keep the first callback it received: it always calls the latest one, which sees
+  // the delivery notes already scanned (otherwise it kept asking for notes shown as scanned).
+  const scanRef = useRef(onScan);
+  scanRef.current = onScan;
+
   const instruction = !orderIds.length ? "① Scannez le QR code du bon de livraison."
     : missing.length ? `① Scannez le bon de ${missing.map((item) => `#${item.order_number}`).join(", ")}.`
     : rules?.qr ? (rules.reception ? "② Scannez le QR de réception affiché dans l’application du client." : "② Scannez le QR code collé au point de livraison, ou le QR de réception affiché par le client.")
@@ -518,7 +523,7 @@ function HandoverModal({ queue, onClose, onDelivered }: { queue: Shipment[][] | 
             style={StyleSheet.absoluteFill}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-            onBarcodeScanned={({ data }) => { void onScan(data); }}
+            onBarcodeScanned={({ data }) => { void scanRef.current(data); }}
           />
           <View pointerEvents="none" style={styles.viewfinder} />
         </View> : null}
