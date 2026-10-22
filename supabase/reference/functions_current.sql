@@ -1,4 +1,4 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261207 are installed
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261208 are installed
 -- (generated from the test database, 370 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
@@ -1261,7 +1261,8 @@ begin
         join (select * from (select * from public.orders where public.org_visible(supplier_org_id)) orders where public.org_visible(supplier_org_id)) o on o.client_id = c.id and o.client_invoice_id is null
           and o.status in ('confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered')
         where c.billing_frequency <> 'manual' and public.next_billing_date(c.id) <= current_date
-        group by c.id
+        -- 20261208: every client column used above (c is a filtered subquery: grouping by its id alone is refused).
+        group by c.id, c.business_name, c.billing_frequency, c.billing_every_days, c.billing_month_day
       ) rows
     ), '[]'::jsonb),
     'overdue', coalesce((

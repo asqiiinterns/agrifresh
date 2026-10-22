@@ -31,3 +31,6 @@ credentials.json
 /e2e/supabase/.temp
 /test-results
 /eslint-report.json
+/e2e/results
+/tests/server/fn_dump.sql
+/tests/server/last-run.log

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Before every push: the code check (types + lint) and the server tests (about 3 minutes).
+# The full robot (npm run e2e, ~15 min, needs Docker) is run before an APK or a big change.
+echo "Contrôles avant envoi : code puis tests serveur…"
+npm run --silent check || { echo "✖ Contrôle du code en échec : push annulé."; exit 1; }
+node tests/server/test.mjs . > tests/server/last-run.log 2>&1 || { echo "✖ Tests serveur en échec (tests/server/last-run.log) : push annulé."; grep "✗" tests/server/last-run.log | head -20; exit 1; }
+echo "✓ Contrôles passés."

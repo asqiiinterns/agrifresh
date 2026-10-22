@@ -14,7 +14,9 @@
     "build:apk": "npx eas-cli@latest build --platform android --profile preview",
     "apk": "node scripts/build-apk.mjs",
     "lint": "eslint .",
-    "check": "npm run typecheck && npm run lint"
+    "check": "npm run typecheck && npm run lint",
+    "e2e": "node e2e/run.mjs",
+    "test:server": "node tests/server/test.mjs ."
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.17",
@@ -46,6 +48,7 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
     "@playwright/test": "^1.56.1",
     "@types/react": "~19.2.3",
     "@types/react-dom": "~19.2.3",
