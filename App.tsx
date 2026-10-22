@@ -9,7 +9,7 @@ import { loadCompanyProfile } from "./src/data/company";
 import { confirmSignOut } from "./src/ui/signOut";
 import { fetchModules, isModuleOn, ModulesContext, onModulesChanged, type ModuleKey, type ModuleState } from "./src/data/modules";
 import { PermissionsContext } from "./src/data/permissions";
-import { clearShared, setBuyerMode } from "./src/data/shared";
+import { clearShared, isBuyerMode, setBuyerMode } from "./src/data/shared";
 import { autoDeliverOrders } from "./src/data/staff";
 import { loadWorkflow } from "./src/data/workflow";
 import { DisplayProvider } from "./src/ui/display";
@@ -18,6 +18,7 @@ import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { askPushOnce, hasPushToken, onAlertTapped, registerForPush, showLocalAlert } from "./src/notifications";
 import { DecideScreen } from "./src/screens/DecideScreen";
 import { decisionCount, fetchDecisionBoard } from "./src/data/decisions";
+import { fetchDecideCount } from "./src/data/home";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { PlatformTeamScreen, ProsScreen } from "./src/screens/PlatformScreens";
 import { PlatformSettingsScreen } from "./src/screens/PlatformAdmin";
@@ -432,7 +433,12 @@ function Main({ session }: { session: Session }) {
   useEffect(() => {
     if (!isActive || !hasDecide || !account) return;
     const can = (feature: string) => account.features.includes(feature);
-    const load = () => { void fetchDecisionBoard(can as never, account.role === "admin").then((board) => setDecideCount(decisionCount(board))).catch(() => {}); };
+    // Counted by the database when available (no download of every order every two minutes).
+    const load = () => {
+      void (isBuyerMode() ? Promise.resolve(null) : fetchDecideCount(can, account.role === "admin").catch(() => null))
+        .then((count) => count ?? fetchDecisionBoard(can as never, account.role === "admin").then(decisionCount))
+        .then(setDecideCount).catch(() => {});
+    };
     load();
     const timer = setInterval(load, 120000);
     return () => clearInterval(timer);

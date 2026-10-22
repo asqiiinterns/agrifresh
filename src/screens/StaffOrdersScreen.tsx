@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useMemo, useState, type ComponentProps, type ReactElement } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Text, TextInput } from "../ui/Text";
@@ -76,20 +77,22 @@ export function StaffOrdersScreen({ initialSection, initialOrderId, mode }: { in
     const realtime = supabase;
     void reload("initial");
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload("silent"); });
     const channel = realtime
       .channel("staff-orders")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
-        void reload("silent");
+        later();
         const created = payload.new as { order_number?: number };
         notify("Nouvelle commande", `La commande #${created.order_number ?? ""} attend votre décision.`);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, () => { void reload("silent"); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, later)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "claims" }, () => {
-        void reload("silent");
+        later();
         notify("Nouvelle réclamation", "Un client a signalé un problème sur une commande.");
       })
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, []);
 
   // Search and date filters apply to every list.

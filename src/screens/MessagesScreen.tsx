@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useState, useRef } from "react";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { KeyboardSpacer } from "../ui/KeyboardSpacer";
@@ -153,11 +154,13 @@ export function StaffInboxScreen({ onRead, embedded, moderator }: { onRead: () =
     const client = supabase;
     void reload("initial");
     if (!client) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload("silent"); });
     const channel = client
       .channel("staff-inbox")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => { void reload("silent"); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, later)
       .subscribe();
-    return () => { void client.removeChannel(channel); };
+    return () => { later.cancel(); void client.removeChannel(channel); };
   }, []);
 
   const term = search.trim().toLocaleLowerCase("fr");

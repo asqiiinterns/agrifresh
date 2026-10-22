@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -54,10 +55,12 @@ export function ReturnsScreen({ initialSheet, initialOrderId }: { initialSheet?:
     const realtime = supabase;
     void reload();
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload(); });
     const channel = realtime.channel("returns-screen")
-      .on("postgres_changes", { event: "*", schema: "public", table: "returns" }, () => { void reload(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "returns" }, later)
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, []);
 
   const pending = returns.filter((item) => ["requested", "approved", "received"].includes(item.status)).length;

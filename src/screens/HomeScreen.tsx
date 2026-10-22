@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -154,10 +155,12 @@ export function HomeScreen({ account, unreadMessages, unreadAlerts, onLayoutChan
     const realtime = supabase;
     void reload();
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload(false, true); });
     const channel = realtime.channel(`home-${audience}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(false, true); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, later)
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, [layout.tiles.join(",")]);
 
   const valueOf = (key: string) => key === "messages" || key === "c_messages" ? unreadMessages

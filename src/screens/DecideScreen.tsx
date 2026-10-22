@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
@@ -37,12 +38,14 @@ export function DecideScreen({ isAdmin, onCount }: { isAdmin: boolean; onCount: 
     const realtime = supabase;
     void reload();
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload(); });
     const channel = realtime.channel("decide-board")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => { void reload(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "claims" }, () => { void reload(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, later)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, later)
+      .on("postgres_changes", { event: "*", schema: "public", table: "claims" }, later)
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, []);
 
   async function remind() {

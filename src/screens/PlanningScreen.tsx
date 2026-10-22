@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import { FlatList, Modal, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
@@ -148,10 +149,12 @@ export function PlanningTab() {
     const realtime = supabase;
     void reload();
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload(false, true); });
     const channel = realtime.channel("planning-tab")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload(false, true); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, later)
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, []);
 
   const queue = useMemo(() => executionQueue(orders), [orders]);

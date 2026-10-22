@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Text , TextInput } from "../ui/Text";
@@ -40,11 +41,13 @@ export function AlertsScreen({ userId, team, platform = false, onRead }: { userI
     const realtime = supabase;
     void reload();
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload(); });
     const channel = realtime
       .channel(`alerts-screen-${userId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, () => { void reload(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, later)
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, [userId]);
 
   async function read(ids?: string[]) {

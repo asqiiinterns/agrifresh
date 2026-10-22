@@ -5,7 +5,7 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*", "dist-apk/*", "android/*", "ios/*", "node_modules/*", "supabase/*", "scripts/*", "eslint-report.json", "e2e/web/*", "e2e/report/*", "e2e/supabase/*", "test-results/*"],
+    ignores: ["dist/*", "dist-apk/*", "android/*", "ios/*", "node_modules/*", "supabase/*", "scripts/*", "eslint-report.json", "e2e/**", "tests/**", "test-results/*", "playwright.config.ts"],
   },
   {
     files: ["**/*.ts", "**/*.tsx"],

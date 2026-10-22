@@ -1,3 +1,4 @@
+import { coalesce } from "../data/live";
 import { useEffect, useMemo, useState, type ComponentProps, type ReactElement } from "react";
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "../ui/Text";
@@ -50,11 +51,13 @@ export function ProductionScreen() {
     const realtime = supabase;
     void reload("initial");
     if (!realtime) return;
+    // A burst of changes (several orders at once) reloads once.
+    const later = coalesce(() => { void reload("silent"); });
     const channel = realtime
       .channel("production-orders")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => { void reload("silent"); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, later)
       .subscribe();
-    return () => { void realtime.removeChannel(channel); };
+    return () => { later.cancel(); void realtime.removeChannel(channel); };
   }, []);
 
   const term = search.trim().toLocaleLowerCase("fr");
