@@ -230,9 +230,9 @@ function ClientEditor({ record, visible, onClose, onSaved }: { record: ClientRec
               custom_settings: value === null ? current.custom_settings.filter((item) => item !== key) : [...new Set([...current.custom_settings, key])],
               [key]: value === null ? defaults[key] ?? current[key] : boolToOption(key, value),
             }))} />
-            {record ? <View style={[ui.row, { marginTop: 12 }]}>
-              <Text style={ui.body}>Fiche active (peut commander)</Text>
+            {record ? <View style={[ui.row, { justifyContent: "flex-start", marginTop: 12 }]}>
               <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.primary, false: colors.line }} />
+              <Text style={ui.body}>Fiche active (peut commander)</Text>
             </View> : null}
             {record ? <Text style={[ui.small, { marginTop: 10, color: record.has_account ? colors.primary : colors.amber }]}>
               {record.has_account ? "Le client a activé son accès." : "Le client n’a pas encore activé son accès avec cet e-mail."}

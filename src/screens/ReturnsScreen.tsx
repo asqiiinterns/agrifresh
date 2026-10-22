@@ -142,9 +142,9 @@ function ReturnsList({ returns, refreshControl, onChanged, focused, onShowAll }:
           {item.credit_notes.map((credit) => <Text key={credit.id} style={[ui.small, { color: colors.primary, fontWeight: "700" }]}>Avoir {creditLabel(credit)} · {creditStatusStyle[credit.status].label}</Text>)}
 
           {item.status === "requested" || item.status === "approved" ? <TextInput value={notes[item.id] ?? ""} onChangeText={(text) => setNotes({ ...notes, [item.id]: text })} placeholder="Note au client (facultatif)" placeholderTextColor={colors.muted} style={[ui.input, { marginTop: 8 }]} /> : null}
-          {item.status === "approved" ? <View style={[ui.row, { marginTop: 8 }]}>
-            <Text style={[ui.body, { flex: 1 }]}>Remettre en stock à la réception</Text>
+          {item.status === "approved" ? <View style={[ui.row, { justifyContent: "flex-start", marginTop: 8 }]}>
             <Switch value={restock[item.id] ?? true} onValueChange={(value) => setRestock({ ...restock, [item.id]: value })} trackColor={{ true: colors.primary, false: colors.line }} />
+            <Text style={[ui.body, { flex: 1 }]}>Remettre en stock à la réception</Text>
           </View> : null}
           <View style={[ui.wrapRow, { marginTop: 8 }]}>
             {item.status === "requested" ? <>

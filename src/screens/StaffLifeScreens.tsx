@@ -76,11 +76,11 @@ export function LeavesScreen({ isAdmin }: { isAdmin: boolean }) {
       contentContainerStyle={ui.content}
       refreshControl={refresh}
       ListHeaderComponent={isAdmin && sheet === "validate" ? <View style={[ui.card, ui.row]}>
+        <Switch value={approval} onValueChange={(value) => { setApproval(value); void setLeaveApproval(value).catch((cause: unknown) => { setApproval(!value); notify("Congés", errorMessage(cause, "Réglage impossible.")); }); }} trackColor={{ true: colors.primary, false: colors.line }} />
         <View style={{ flex: 1 }}>
           <Text style={ui.strong}>Validation des congés requise</Text>
           <Text style={ui.small}>Désactivée : chaque demande est acceptée automatiquement.</Text>
         </View>
-        <Switch value={approval} onValueChange={(value) => { setApproval(value); void setLeaveApproval(value).catch((cause: unknown) => { setApproval(!value); notify("Congés", errorMessage(cause, "Réglage impossible.")); }); }} trackColor={{ true: colors.primary, false: colors.line }} />
       </View> : null}
       ListEmptyComponent={<EmptyState title={sheet === "validate" ? "Aucune demande à valider" : sheet === "mine" ? "Aucune demande" : "Aucune absence prévue"} body={sheet === "mine" ? "Touchez « + DEMANDE » pour poser un congé." : undefined} />}
       renderItem={({ item }) => <View style={ui.card}>
@@ -134,9 +134,9 @@ function LeaveForm({ onSaved }: { onSaved: () => void }) {
     <Text style={[ui.fieldLabel, { marginTop: 12 }]}>Dates : touchez le premier puis le dernier jour</Text>
     <View style={ui.card}><Calendar from={from} to={to} onChange={(start, end) => { setFrom(start); setTo(end); }} /></View>
     <Text style={[ui.body, { marginTop: 6 }]}>Du {formatDay(from, { weekday: "long", day: "numeric", month: "long" })} au {formatDay(to, { weekday: "long", day: "numeric", month: "long" })}</Text>
-    <View style={[ui.row, { marginTop: 8 }]}>
-      <Text style={[ui.body, { flex: 1 }]}>Demi-journée</Text>
+    <View style={[ui.row, { justifyContent: "flex-start", marginTop: 8 }]}>
       <Switch value={halfDay} onValueChange={setHalfDay} trackColor={{ true: colors.primary, false: colors.line }} />
+      <Text style={[ui.body, { flex: 1 }]}>Demi-journée</Text>
     </View>
     <Field label="Motif / commentaire (facultatif)" value={note} onChangeText={setNote} multiline />
     {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}

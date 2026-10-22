@@ -44,13 +44,13 @@ export function MyNotificationsCard() {
   return <View style={ui.card}>
     <Text style={ui.strong}>Notifications</Text>
     {!prefs ? <Loading /> : <>
-      <View style={[ui.row, { marginTop: 10 }]}>
-        <View style={{ flex: 1 }}><Text style={ui.body}>Notifications sur le téléphone</Text><Text style={ui.small}>Notifications affichées sur l’écran de verrouillage.</Text></View>
+      <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
         <Switch value={prefs.push} onValueChange={(value) => void save({ ...prefs, push: value })} trackColor={{ true: colors.primary, false: colors.line }} />
+        <View style={{ flex: 1 }}><Text style={ui.body}>Notifications sur le téléphone</Text><Text style={ui.small}>Notifications affichées sur l’écran de verrouillage.</Text></View>
       </View>
-      <View style={[ui.row, { marginTop: 10 }]}>
-        <View style={{ flex: 1 }}><Text style={ui.body}>E-mails</Text><Text style={ui.small}>Pour les notifications envoyées aussi par e-mail.</Text></View>
+      <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
         <Switch value={prefs.email} onValueChange={(value) => void save({ ...prefs, email: value })} trackColor={{ true: colors.primary, false: colors.line }} />
+        <View style={{ flex: 1 }}><Text style={ui.body}>E-mails</Text><Text style={ui.small}>Pour les notifications envoyées aussi par e-mail.</Text></View>
       </View>
       {pushStatus ? <Text style={[ui.small, { marginTop: 10, color: pushStatus === "registered" ? colors.primary : colors.amber }]}>{pushStatusText[pushStatus]}</Text> : null}
       {pushStatus === "denied" && Platform.OS !== "web" ? <Button label="AUTORISER LES NOTIFICATIONS" variant="secondary" onPress={() => enable()} busy={busy} style={{ marginTop: 10 }} /> : null}
@@ -116,9 +116,9 @@ export function AlertSettingsPanel() {
     <View style={ui.card}>
       <Text style={ui.strong}>Envoi des e-mails</Text>
       <Text style={ui.small}>Service Resend (resend.com) : créez une clé API, puis vérifiez votre domaine pour écrire à tous vos clients. Sans domaine vérifié, Resend n’envoie qu’à l’adresse du compte Resend.</Text>
-      <View style={[ui.row, { marginTop: 12 }]}>
-        <Text style={[ui.body, { flex: 1 }]}>Activer l’envoi d’e-mails</Text>
+      <View style={[ui.row, { justifyContent: "flex-start", marginTop: 12 }]}>
         <Switch value={email.enabled} onValueChange={(value) => void run("enabled", () => setEmailSettings(value, from || email.from))} trackColor={{ true: colors.primary, false: colors.line }} />
+        <Text style={[ui.body, { flex: 1 }]}>Activer l’envoi d’e-mails</Text>
       </View>
       <Field label="Expéditeur (ex. Ma Société <commandes@votre-domaine.tn>)" value={from} onChangeText={setFrom} autoCapitalize="none" />
       <Button label="ENREGISTRER L’EXPÉDITEUR" variant="secondary" onPress={() => run("from", () => setEmailSettings(email.enabled, from), "Expéditeur enregistré.")} busy={busy === "from"} style={{ marginTop: 8 }} />

@@ -69,12 +69,12 @@ export function PricingModal({ visible, onClose }: { visible: boolean; onClose: 
           <Button label="+ NOUVELLE REMISE" onPress={() => setEditing(emptyRule())} style={{ marginTop: 10 }} />
           {data.rules.length === 0 ? <EmptyState title="Aucune remise" body="Exemples : −5 % pour le groupe Hôtels, 10 + 1 offert sur un produit, −3 % dès 500 TND de commande, un prix net pour un client." /> : null}
           {data.rules.map((rule) => <Pressable key={rule.id} onPress={() => setEditing(rule)} style={[ui.card, !rule.active && { opacity: 0.6 }]}>
-            <View style={ui.row}>
+            <View style={[ui.row, { justifyContent: "flex-start" }]}>
+              <Switch value={rule.active} onValueChange={(value) => void toggle(rule, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
               <View style={{ flex: 1 }}>
                 <Text style={ui.strong}>{rule.name}</Text>
                 <Text style={styles.benefit}>{`${kindLabels[rule.kind]} · ${ruleBenefit(rule)}${rule.stackable ? " · cumulable" : ""}`}</Text>
               </View>
-              <Switch value={rule.active} onValueChange={(value) => void toggle(rule, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
             </View>
             <Text style={ui.small}>{`${targetText(rule)} · ${scopeText(rule)}`}</Text>
             {ruleConditions(rule).length || rule.starts_on ? <Text style={ui.small}>{[rule.starts_on ? `à partir du ${rule.starts_on}` : "", ...ruleConditions(rule)].filter(Boolean).join(" · ")}</Text> : null}
@@ -291,21 +291,21 @@ function RuleEditor({ rule, data, products, categories, onClose, onSaved }: {
             <View style={ui.wrapRow}>
               {weekdayLabels.map((label, index) => <Chip key={label} label={label} selected={form.weekdays.includes(index + 1)} onPress={() => set("weekdays", form.weekdays.includes(index + 1) ? form.weekdays.filter((day) => day !== index + 1) : [...form.weekdays, index + 1])} />)}
             </View>
-            <View style={[ui.row, { marginTop: 10 }]}>
-              <Text style={[ui.body, { flex: 1 }]}>Première commande du client seulement</Text>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
               <Switch value={form.first_order_only} onValueChange={(next) => set("first_order_only", next)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+              <Text style={[ui.body, { flex: 1 }]}>Première commande du client seulement</Text>
             </View>
             <Field label="Fidélité : à partir de combien de commandes passées" value={minPast} onChangeText={setMinPast} keyboardType="number-pad" />
-            <View style={[ui.row, { marginTop: 6 }]}>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 6 }]}>
+              <Switch value={form.stackable} onValueChange={(next) => set("stackable", next)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
               <View style={{ flex: 1 }}>
                 <Text style={ui.body}>Cumulable</Text>
                 <Text style={ui.small}>S’ajoute à la meilleure remise au lieu d’être comparée avec elle.</Text>
               </View>
-              <Switch value={form.stackable} onValueChange={(next) => set("stackable", next)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
             </View>
-            <View style={[ui.row, { marginTop: 6 }]}>
-              <Text style={[ui.body, { flex: 1 }]}>Active</Text>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 6 }]}>
               <Switch value={form.active} onValueChange={(next) => set("active", next)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+              <Text style={[ui.body, { flex: 1 }]}>Active</Text>
             </View>
           </View>
 

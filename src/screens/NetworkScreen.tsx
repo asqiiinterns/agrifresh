@@ -176,12 +176,12 @@ export function NetworkScreen({ onChanged, initialSection }: { onChanged?: () =>
 }
 
 function SettingRow({ label, hint, value, onChange }: { label: string; hint: string; value: boolean; onChange: (value: boolean) => void }) {
-  return <View style={[ui.row, { marginTop: 10 }]}>
+  return <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
+    <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
     <View style={{ flex: 1 }}>
       <Text style={ui.body}>{label}</Text>
       <Text style={ui.small}>{hint}</Text>
     </View>
-    <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
   </View>;
 }
 
@@ -297,11 +297,11 @@ function OrgThreadModal({ target, onClose }: { target: { conversationId?: string
 }
 
 // The card of a Pro: only what it chose to show (Réseau → Sur ma fiche).
-function ProCardModal({ target, onClose, onAnswer, onWrite }: {
+export function ProCardModal({ target, onClose, onAnswer, onWrite }: {
   target: { orgId: string } | null;
   onClose: () => void;
   onAnswer?: (accept: boolean) => void;
-  onWrite: (pro: ProCard) => void;
+  onWrite?: (pro: ProCard) => void;
 }) {
   const [card, setCard] = useState<ProCard | null>(null);
   const [error, setError] = useState("");
@@ -332,7 +332,7 @@ function ProCardModal({ target, onClose, onAnswer, onWrite }: {
             <Button label="ACCEPTER LA RELATION" onPress={() => onAnswer(true)} />
             <Button label="REFUSER" variant="danger" onPress={() => onAnswer(false)} />
           </> : null}
-          <Button label="ÉCRIRE" variant="secondary" onPress={() => onWrite(card)} />
+          {onWrite ? <Button label="ÉCRIRE" variant="secondary" onPress={() => onWrite(card)} /> : null}
         </View>
       </View>}
     </SafeAreaView>

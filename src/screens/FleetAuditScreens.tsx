@@ -70,9 +70,9 @@ export function FleetPage({ onBack }: { onBack: () => void }) {
         <Field label="Nom (ex. Camion frigo 1)" value={form.values.label} onChangeText={set("label")} />
         <Field label="Immatriculation" value={form.values.plate} onChangeText={set("plate")} autoCapitalize="characters" />
         <Field label="Notes (capacité, chauffeur habituel…)" value={form.values.notes} onChangeText={set("notes")} />
-        <View style={[ui.row, { marginTop: 10 }]}>
-          <Text style={ui.body}>En service</Text>
+        <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
           <Switch value={form.values.active} onValueChange={set("active")} trackColor={{ true: colors.primary, false: colors.line }} />
+          <Text style={ui.body}>En service</Text>
         </View>
         <View style={[ui.wrapRow, { marginTop: 10 }]}>
           <Button label="ENREGISTRER" onPress={() => save()} busy={busy} />
@@ -175,12 +175,12 @@ export function LocationPage({ onBack, isAdmin = false }: { onBack: () => void; 
           </View>
           <Button label="DEMANDER LA POSITION" variant="secondary" onPress={() => ask(item)} />
         </View>
-        {isAdmin ? <View style={[ui.row, { marginTop: 8 }]}>
+        {isAdmin ? <View style={[ui.row, { justifyContent: "flex-start", marginTop: 8 }]}>
+          <Switch value={!!item.tracking} onValueChange={(value) => void toggleTracking(item, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
           <View style={{ flex: 1 }}>
             <Text style={ui.body}>Repérage autorisé</Text>
             <Text style={ui.small}>Sans réponse dans la minute, sa dernière position est montrée ; elle est prévenue à chaque fois.</Text>
           </View>
-          <Switch value={!!item.tracking} onValueChange={(value) => void toggleTracking(item, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
         </View> : null}
       </View>}
     />}

@@ -219,10 +219,12 @@ export function MenuSearch({ children, placeholder = "Rechercher un réglage" }:
   </MenuQuery.Provider>;
 }
 
-export function ListRow({ icon, title, detail, onPress, right, badge, keywords }: { icon?: ComponentProps<typeof Ionicons>["name"]; title: string; detail?: string; onPress?: () => void; right?: ReactNode; badge?: number; keywords?: string }) {
+// leading: a control shown before the text (a switch), so it is never far from what it changes.
+export function ListRow({ icon, title, detail, onPress, right, badge, keywords, leading }: { icon?: ComponentProps<typeof Ionicons>["name"]; title: string; detail?: string; onPress?: () => void; right?: ReactNode; badge?: number; keywords?: string; leading?: ReactNode }) {
   const needle = useContext(MenuQuery);
   if (needle && onPress && !rowMatches(needle, title, detail, keywords)) return null;
   return <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [local.listRow, pressed && { opacity: 0.7 }]}>
+    {leading}
     {icon ? <View style={local.listIcon}><Ionicons name={icon} size={18} color={colors.primary} /></View> : null}
     <View style={{ flex: 1 }}>
       <Text style={ui.strong} numberOfLines={1}>{title}</Text>

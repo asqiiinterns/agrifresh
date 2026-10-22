@@ -1,4 +1,4 @@
--- Reference: the definition of every function of the public schema once ALL migrations up to 20261202 are installed
+-- Reference: the definition of every function of the public schema once ALL migrations up to 20261203 are installed
 -- (generated from the test database, 365 functions). Read-only: do not run it. New migrations copy a function from here
 -- and redefine it whole (create or replace … with the full body) instead of patching its text with replace().
 
@@ -457,7 +457,7 @@ begin
   end if;
   update public.notification_settings set push_enabled = p_push, email_enabled = p_email, updated_at = now() where event = p_event;
   if not found then
-    raise exception using errcode = 'P0002', message = 'Type d’alerte inconnu.';
+    raise exception using errcode = 'P0002', message = 'Type de notification inconnu.';
   end if;
 end;
 $function$
@@ -1099,7 +1099,7 @@ begin
     when 'vehicles' then 'Véhicule ' || (v_row ->> 'label')
     when 'shipments' then 'Expédition #' || (v_row ->> 'shipment_number')
     when 'messages' then 'Message · ' || coalesce((select c.business_name from public.clients c where c.id = (v_row ->> 'client_id')::uuid), 'client')
-    when 'notification_settings' then 'Alerte · ' || (v_row ->> 'label')
+    when 'notification_settings' then 'Notification · ' || (v_row ->> 'label')
     when 'app_settings' then 'Réglages e-mail'
     when 'home_layouts' then 'Accueil · rôle ' || (v_row ->> 'role')
     else tg_table_name
@@ -7822,7 +7822,7 @@ begin
       'from', v_settings.email_from,
       'to', jsonb_build_array(p_to),
       'subject', p_subject,
-      'text', p_text || E'\n\n— Appro+\nVous recevez cet e-mail car les alertes par e-mail sont activées sur votre compte (Compte → Notifications).'
+      'text', p_text || E'\n\n— Appro+\nVous recevez cet e-mail car les notifications par e-mail sont activées sur votre compte (Compte → Notifications).'
     ),
     headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_key)
   );
@@ -8143,7 +8143,7 @@ begin
   update public.notifications set important = coalesce(p_important, false)
   where id = p_id and user_id = (select public.active_uid());
   if not found then
-    raise exception using errcode = 'P0002', message = 'Alerte introuvable.';
+    raise exception using errcode = 'P0002', message = 'Notification introuvable.';
   end if;
 end;
 $function$
@@ -8163,7 +8163,7 @@ begin
   update public.notifications set note = nullif(btrim(coalesce(p_note, '')), '')
   where id = p_id and user_id = (select public.active_uid());
   if not found then
-    raise exception using errcode = 'P0002', message = 'Alerte introuvable.';
+    raise exception using errcode = 'P0002', message = 'Notification introuvable.';
   end if;
 end;
 $function$

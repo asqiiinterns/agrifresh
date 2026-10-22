@@ -119,6 +119,7 @@ export function ModulesPage({ header, mode = { kind: "org" } }: { header: React.
           const blocked = on && parentsOff(item).length > 0;
           const parents = parentsOff(item).map((key) => allModules.find((other) => other.key === key)?.label).filter(Boolean).join(", ");
           return <View key={item.key} style={[styles.row, item.requires && styles.child]}>
+            {mode.kind !== "plan" ? <Switch value={on} disabled={busy !== null || locked} onValueChange={(value) => void toggle(item.key, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} /> : null}
             <Ionicons name={locked ? "lock-closed-outline" : item.icon} size={18} color={on && !blocked ? colors.primary : colors.muted} />
             <View style={{ flex: 1 }}>
               <Text style={[ui.strong, !on && { color: colors.muted }]}>{item.label}</Text>
@@ -132,7 +133,6 @@ export function ModulesPage({ header, mode = { kind: "org" } }: { header: React.
                 <Chip label="Exclu" selected={entry?.granted === false} onPress={() => void setPlan(item.key, false)} />
               </View> : null}
             </View>
-            {mode.kind !== "plan" ? <Switch value={on} disabled={busy !== null || locked} onValueChange={(value) => void toggle(item.key, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} /> : null}
           </View>;
         })}
       </ListGroup>)}

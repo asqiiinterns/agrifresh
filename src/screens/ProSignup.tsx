@@ -38,19 +38,18 @@ export function RegisterProCard({ onDone, trialHours = 0 }: { onDone: () => void
     <Text style={ui.small}>{trialHours > 0
       ? `Votre espace est actif tout de suite pendant ${trialHours} h, le temps que l’équipe Appro+ le valide.`
       : "Il sera actif dès sa validation par l’équipe Appro+. En attendant, vous pouvez parcourir les produits."}</Text>
-    <View style={[ui.wrapRow, { marginTop: 8 }]}>
-      <Chip label="Entreprise" selected={!person} onPress={() => setKind("business")} />
-      <Chip label="Particulier" selected={person} onPress={() => setKind("person")} />
+    <Text style={[ui.fieldLabel, { marginTop: 10 }]}>Je suis</Text>
+    <View style={[ui.wrapRow, { marginTop: 6 }]}>
+      <Chip label="Une entreprise (Pro)" selected={!person} onPress={() => setKind("business")} />
+      <Chip label="Un particulier" selected={person} onPress={() => setKind("person")} />
     </View>
     <Field label={person ? "Nom et prénom" : "Nom de l’entreprise"} value={name} onChangeText={setName} />
     {!person ? <>
-      <View style={[ui.row, { marginTop: 6 }]}>
-        <Text style={[ui.body, { flex: 1 }]}>Je vends (fournisseur)</Text>
-        <Switch value={supplier} onValueChange={setSupplier} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
-      </View>
-      <View style={[ui.row, { marginTop: 6 }]}>
-        <Text style={[ui.body, { flex: 1 }]}>J’achète (acheteur)</Text>
-        <Switch value={buyer} onValueChange={setBuyer} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+      {/* Choices right under their question (no switch at the far end of the line). */}
+      <Text style={[ui.fieldLabel, { marginTop: 10 }]}>Mon activité (une ou les deux)</Text>
+      <View style={[ui.wrapRow, { marginTop: 6 }]}>
+        <Chip label={`${supplier ? "✓ " : ""}Je vends (fournisseur)`} selected={supplier} onPress={() => setSupplier(!supplier)} />
+        <Chip label={`${buyer ? "✓ " : ""}J’achète (acheteur)`} selected={buyer} onPress={() => setBuyer(!buyer)} />
       </View>
     </> : null}
     <Field label="Téléphone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />

@@ -120,17 +120,17 @@ export function ProDetailModal({ orgId, visible, onClose, onChanged }: { orgId: 
               <Chip label="Entreprise" selected={form.kind === "business"} onPress={() => set("kind", "business")} />
               <Chip label="Particulier" selected={form.kind === "person"} onPress={() => { set("kind", "person"); set("is_supplier", false); set("is_buyer", true); }} />
             </View>
-            <View style={[ui.row, { marginTop: 10 }]}>
-              <Text style={[ui.body, { flex: 1 }]}>Fournisseur (vend, livre, facture)</Text>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
               <Switch value={form.is_supplier} disabled={form.kind === "person"} onValueChange={(value) => set("is_supplier", value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+              <Text style={[ui.body, { flex: 1 }]}>Fournisseur (vend, livre, facture)</Text>
             </View>
-            <View style={[ui.row, { marginTop: 6 }]}>
-              <Text style={[ui.body, { flex: 1 }]}>Acheteur (commande à ses fournisseurs)</Text>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 6 }]}>
               <Switch value={form.is_buyer} onValueChange={(value) => set("is_buyer", value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+              <Text style={[ui.body, { flex: 1 }]}>Acheteur (commande à ses fournisseurs)</Text>
             </View>
-            <View style={[ui.row, { marginTop: 6 }]}>
-              <Text style={[ui.body, { flex: 1 }]}>Le Pro peut modifier ses rôles</Text>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 6 }]}>
               <Switch value={!!form.roles_delegated} onValueChange={(value) => set("roles_delegated", value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+              <Text style={[ui.body, { flex: 1 }]}>Le Pro peut modifier ses rôles</Text>
             </View>
           </View>
           <View style={ui.card}>
@@ -259,14 +259,14 @@ function SignupSettingsPage({ header }: { header: React.ReactNode }) {
         <Button label="ENREGISTRER" onPress={() => save("invited_trial_hours", Math.max(0, Math.round(invitedTrial)))} busy={busy} disabled={invitedTrial === (settings.invited_trial_hours ?? 0)} style={{ marginTop: 8 }} />
       </View>
       <View style={ui.card}>
-        <View style={ui.row}>
+        <View style={[ui.row, { justifyContent: "flex-start" }]}>
+          <Switch value={!!settings.self_signup_business_trial} disabled={busy} onValueChange={(value) => void save("self_signup_business_trial", value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
           <View style={{ flex: 1 }}>
             <Text style={ui.strong}>Inscription spontanée d’une entreprise</Text>
             <Text style={ui.small}>{settings.self_signup_business_trial
               ? "Une personne qui s’inscrit seule peut créer un espace entreprise, en période d’essai selon la durée ci-dessus."
               : "Une personne qui s’inscrit seule obtient un compte personnel ; l’espace entreprise reste à valider par l’équipe Appro+."}</Text>
           </View>
-          <Switch value={!!settings.self_signup_business_trial} disabled={busy} onValueChange={(value) => void save("self_signup_business_trial", value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
         </View>
       </View>
       <View style={ui.card}>

@@ -4,7 +4,7 @@ import { Text, TextInput } from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VAT_RATES, fetchAdminProducts, fetchCategories, saveProduct, type AdminProduct, type Category, type ProductInput } from "../data/productAdmin";
 import {
-  catalogOptionLabels, defaultCatalogOptions, fetchCatalogPresets, fetchImportHistory, importProducts, planImport, productsCsv, saveCatalogPresets, shareCatalogPdf,
+  allFields, catalogFieldLabels, catalogProducts, defaultCatalogOptions, fetchCatalogPresets, fetchImportHistory, importProducts, planImport, productsCsv, saveCatalogPresets, shareCatalogPdf,
   type CatalogOptions, type CatalogPreset, type ImportPlan, type ImportRecord,
 } from "../data/productCatalog";
 import { pickCsvText, parseCsv } from "../data/csvFile";
@@ -196,9 +196,9 @@ function ProductEditor({ product, visible, categories, extended, onClose, onSave
             <View style={[ui.wrapRow, { marginTop: 6 }]}>{VAT_RATES.map((rate) => <Chip key={rate} label={`${rate} %`} selected={vatRate === rate} onPress={() => setVatRate(rate)} />)}</View>
             <Field label="Stock disponible" value={form.stock_quantity} onChangeText={set("stock_quantity")} keyboardType="decimal-pad" />
             <Field label="Lien de la photo (facultatif)" value={form.image_url} onChangeText={set("image_url")} autoCapitalize="none" />
-            <View style={[ui.row, { marginTop: 12 }]}>
-              <Text style={ui.body}>Proposé à la commande</Text>
+            <View style={[ui.row, { justifyContent: "flex-start", marginTop: 12 }]}>
               <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.primary, false: colors.line }} />
+              <Text style={ui.body}>Proposé à la commande</Text>
             </View>
           </View>
 
@@ -321,7 +321,8 @@ function HistoryModal({ visible, onClose }: { visible: boolean; onClose: () => v
   </Modal>;
 }
 
-// The catalogue PDF: what to show (boxes), saved presets for the Pro, one marked as the default.
+// The catalogue PDF: layout, cover page, fields shown (each field of the product sheet too), categories and sorting;
+// presets saved for the Pro, one marked as the default.
 function CatalogModal({ visible, products, categories, onClose }: { visible: boolean; products: AdminProduct[]; categories: Category[]; onClose: () => void }) {
   const [options, setOptions] = useState<CatalogOptions>(defaultCatalogOptions);
   const [presets, setPresets] = useState<CatalogPreset[] | null>(null);
@@ -332,9 +333,19 @@ function CatalogModal({ visible, products, categories, onClose }: { visible: boo
     void fetchCatalogPresets().then((list) => {
       setPresets(list);
       const preferred = list?.find((item) => item.default);
-      if (preferred) setOptions(preferred.options);
+      setOptions(preferred ? { ...defaultCatalogOptions, ...preferred.options } : defaultCatalogOptions);
     });
   }, [visible]);
+  const set = <K extends keyof CatalogOptions>(key: K, value: CatalogOptions[K]) => setOptions((current) => ({ ...current, [key]: value }));
+  const usedCategories = categories.filter((category) => products.some((product) => product.category_id === category.id));
+  const fields = allFields(usedCategories);
+  const count = catalogProducts(products, categories, options).length;
+  const toggleIn = (list: string[] | null, all: string[], key: string) => {
+    const current = list ?? all;
+    const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+    return next.length === all.length ? null : next;
+  };
+
   async function storePresets(next: CatalogPreset[]) {
     try { await saveCatalogPresets(next); setPresets(next); } catch (cause) { notify("Catalogue", errorMessage(cause, "Le modèle n’a pas pu être enregistré.")); }
   }
@@ -342,27 +353,91 @@ function CatalogModal({ visible, products, categories, onClose }: { visible: boo
     setBusy(true);
     try { await shareCatalogPdf(products, categories, options); } catch (cause) { notify("Catalogue", errorMessage(cause, "Impossible de générer le PDF.")); } finally { setBusy(false); }
   }
+  const toggleRow = (key: keyof CatalogOptions, label: string, hint?: string) => <View key={key} style={[ui.row, { justifyContent: "flex-start", marginTop: 8 }]}>
+    <Switch value={!!options[key]} onValueChange={(value) => set(key, value as never)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
+    <View style={{ flex: 1 }}>
+      <Text style={ui.body}>{label}</Text>
+      {hint ? <Text style={ui.small}>{hint}</Text> : null}
+    </View>
+  </View>;
+
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={ui.modalSafe}>
-      <ScreenHeader eyebrow="PRODUITS" title="Catalogue PDF" subtitle="Choisissez ce qui apparaît ; enregistrez vos choix comme modèle." right={<CloseButton onPress={onClose} />} />
-      <ScrollView contentContainerStyle={ui.content}>
-        {presets?.length ? <View style={{ marginTop: 10 }}>
-          <Text style={ui.fieldLabel}>Modèles</Text>
+      <ScreenHeader eyebrow="PRODUITS" title="Catalogue PDF" subtitle={`${count} produit(s) avec ces réglages`} right={<CloseButton onPress={onClose} />} />
+      <ScrollView contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+        {presets?.length ? <View style={ui.card}>
+          <Text style={ui.strong}>Modèles enregistrés</Text>
           {presets.map((preset) => <View key={preset.name} style={[ui.row, { marginTop: 6 }]}>
-            <Chip label={`${preset.default ? "★ " : ""}${preset.name}`} selected={JSON.stringify(preset.options) === JSON.stringify(options)} onPress={() => setOptions(preset.options)} />
+            <Chip label={`${preset.default ? "★ " : ""}${preset.name}`} selected={JSON.stringify({ ...defaultCatalogOptions, ...preset.options }) === JSON.stringify(options)} onPress={() => setOptions({ ...defaultCatalogOptions, ...preset.options })} />
             <View style={{ flex: 1 }} />
             {!preset.default ? <Button label="PAR DÉFAUT" variant="secondary" onPress={() => void storePresets(presets.map((item) => ({ ...item, default: item.name === preset.name })))} /> : null}
             <Button label="SUPPRIMER" variant="secondary" onPress={() => void storePresets(presets.filter((item) => item.name !== preset.name))} />
           </View>)}
         </View> : null}
-        <Text style={[ui.fieldLabel, { marginTop: 12 }]}>À afficher</Text>
-        {(Object.keys(catalogOptionLabels) as (keyof CatalogOptions)[]).map((key) => <View key={key} style={[ui.row, { marginTop: 6 }]}>
-          <Text style={[ui.body, { flex: 1 }]}>{catalogOptionLabels[key]}</Text>
-          <Switch value={options[key]} onValueChange={(value) => setOptions((current) => ({ ...current, [key]: value }))} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
-        </View>)}
-        <Button label="GÉNÉRER LE CATALOGUE" onPress={generate} busy={busy} style={{ marginTop: 14 }} />
+
+        <View style={ui.card}>
+          <Text style={ui.strong}>Mise en page</Text>
+          <View style={[ui.wrapRow, { marginTop: 8 }]}>
+            <Chip label="Fiches illustrées (grille)" selected={options.layout === "grid"} onPress={() => set("layout", "grid")} />
+            <Chip label="Liste détaillée" selected={options.layout === "list"} onPress={() => set("layout", "list")} />
+            <Chip label="Tarif compact (tableau)" selected={options.layout === "table"} onPress={() => set("layout", "table")} />
+          </View>
+          {options.layout === "grid" ? <View style={[ui.wrapRow, { marginTop: 8 }]}>
+            <Chip label="2 par ligne" selected={options.columns === 2} onPress={() => set("columns", 2)} />
+            <Chip label="3 par ligne" selected={options.columns === 3} onPress={() => set("columns", 3)} />
+          </View> : null}
+          {toggleRow("groupByCategory", "Classer par catégorie", "Un bandeau de couleur par catégorie.")}
+          <Text style={[ui.fieldLabel, { marginTop: 10 }]}>Ordre</Text>
+          <View style={[ui.wrapRow, { marginTop: 6 }]}>
+            <Chip label="Catégories" selected={options.sort === "category"} onPress={() => set("sort", "category")} />
+            <Chip label="Nom" selected={options.sort === "name"} onPress={() => set("sort", "name")} />
+            <Chip label="Prix croissant" selected={options.sort === "price"} onPress={() => set("sort", "price")} />
+            <Chip label="Prix décroissant" selected={options.sort === "priceDesc"} onPress={() => set("sort", "priceDesc")} />
+          </View>
+          <Text style={[ui.small, { marginTop: 8 }]}>Les couleurs et le nom viennent de Paramétrage → Entreprise.</Text>
+        </View>
+
+        <View style={ui.card}>
+          <Text style={ui.strong}>Page de garde et en-tête</Text>
+          {toggleRow("cover", "Page de garde")}
+          <Field label="Titre" value={options.title} onChangeText={(value) => set("title", value)} placeholder="Catalogue printemps 2026" maxLength={60} />
+          {options.cover ? <>
+            <Field label="Sous-titre (facultatif)" value={options.subtitle} onChangeText={(value) => set("subtitle", value)} placeholder="Fruits et légumes de saison" maxLength={80} />
+            <Field label="Texte de présentation (facultatif)" value={options.intro} onChangeText={(value) => set("intro", value)} multiline maxLength={600} />
+          </> : null}
+          <Field label="Prix valables jusqu’au (facultatif)" value={options.validUntil} onChangeText={(value) => set("validUntil", value)} placeholder="30/11/2026" maxLength={30} />
+          {toggleRow("contact", "Coordonnées de l’entreprise", "Adresse, téléphone, e-mail, matricule fiscal.")}
+          {toggleRow("pageNumbers", "Numéros de page")}
+        </View>
+
+        <View style={ui.card}>
+          <Text style={ui.strong}>Champs à inclure</Text>
+          {(Object.keys(catalogFieldLabels) as (keyof CatalogOptions)[]).map((key) => toggleRow(key, catalogFieldLabels[key] ?? key))}
+          {options.sheet && fields.length ? <>
+            <Text style={[ui.fieldLabel, { marginTop: 10 }]}>Champs de la fiche produit</Text>
+            <View style={[ui.wrapRow, { marginTop: 6 }]}>
+              {fields.map((field) => <Chip key={field.key} label={field.label} selected={!options.sheetFields || options.sheetFields.includes(field.key)}
+                onPress={() => set("sheetFields", toggleIn(options.sheetFields, fields.map((item) => item.key), field.key))} />)}
+            </View>
+          </> : null}
+        </View>
+
+        <View style={ui.card}>
+          <Text style={ui.strong}>Produits</Text>
+          {usedCategories.length > 1 ? <>
+            <Text style={[ui.fieldLabel, { marginTop: 8 }]}>Catégories</Text>
+            <View style={[ui.wrapRow, { marginTop: 6 }]}>
+              {usedCategories.map((category) => <Chip key={category.id} label={category.name} selected={!options.categories || options.categories.includes(category.id)}
+                onPress={() => set("categories", toggleIn(options.categories, usedCategories.map((item) => item.id), category.id))} />)}
+            </View>
+          </> : null}
+          {toggleRow("inStockOnly", "Seulement les produits en stock")}
+          {toggleRow("inactive", "Inclure les produits non proposés")}
+        </View>
+
+        <Button label={`GÉNÉRER LE CATALOGUE (${count})`} onPress={generate} busy={busy} disabled={!count} style={{ marginTop: 14 }} />
         {presets !== null ? <View style={[ui.card, { marginTop: 14 }]}>
-          <Text style={ui.strong}>Enregistrer ces choix comme modèle</Text>
+          <Text style={ui.strong}>Enregistrer ces réglages comme modèle</Text>
           <Field label="Nom du modèle" value={name} onChangeText={setName} placeholder="Clients restaurants" maxLength={40} />
           <Button label="ENREGISTRER LE MODÈLE" variant="secondary" disabled={!name.trim() || presets.length >= 10} style={{ marginTop: 8 }}
             onPress={() => { void storePresets([...presets.filter((item) => item.name !== name.trim()), { name: name.trim(), options, default: presets.length === 0 }]); setName(""); }} />

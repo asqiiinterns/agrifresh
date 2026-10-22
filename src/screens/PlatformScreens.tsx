@@ -11,6 +11,8 @@ import { errorMessage, notify } from "../ui/notify";
 import { ProDetailModal } from "./PlatformAdmin";
 import { Pressable } from "react-native";
 import { colors, ui } from "../ui/theme";
+import { fetchInvitations, type InvitationRecord } from "../data/directory";
+import { useNav } from "../ui/navigation";
 
 const statusStyle: Record<ProStatus, { label: string; color: string; background: string }> = {
   pending: { label: "À valider", color: "#7a5a12", background: "#fbefc9" },
@@ -29,9 +31,13 @@ export function ProsScreen() {
   const [status, setStatus] = useState<ProStatus | "all">("all");
   const [kind, setKind] = useState("all");
   const [opened, setOpened] = useState<string | null | undefined>(undefined);
+  // The latest invitations (Appro+ is told of each one): who invited whom, when, accepted or not.
+  const [invitations, setInvitations] = useState<InvitationRecord[]>([]);
+  const { navigate } = useNav();
 
   async function reload(refresh = false) {
     if (refresh) setRefreshing(true);
+    void fetchInvitations("platform").then(setInvitations).catch(() => setInvitations([]));
     try {
       setPros(await fetchPros());
       setError("");
@@ -55,6 +61,7 @@ export function ProsScreen() {
   }
 
   const counts = useMemo(() => ({ pending: pros.filter((pro) => pro.status === "pending").length }), [pros]);
+  const recentInvitations = invitations.filter((item) => Date.now() - new Date(item.created_at).getTime() < 7 * 86400000);
   const needle = search.trim().toLocaleLowerCase("fr");
   const visible = pros.filter((pro) => (status === "all" || pro.status === status)
     && (kind === "all" || (kind === "supplier" ? pro.is_supplier : pro.is_buyer))
@@ -71,6 +78,13 @@ export function ProsScreen() {
         { key: "all", label: "Toutes" }, { key: "supplier", label: "Fournisseurs" }, { key: "buyer", label: "Acheteurs" },
       ] },
     ]} />
+    {recentInvitations.length ? <Pressable onPress={() => navigate("platformSettings", { page: "invitations" })} style={styles.invitations}>
+      <Text style={[ui.strong, { color: colors.primary }]}>{recentInvitations.length} invitation(s) ces 7 derniers jours · {recentInvitations.filter((item) => !item.acceptances.length).length} pas encore acceptée(s)</Text>
+      {recentInvitations.slice(0, 3).map((item) => <Text key={item.code} style={ui.small} numberOfLines={1}>
+        {formatDateTime(item.created_at)} · {item.invited_by ?? "—"} ({item.org_name}) → {item.client_name ?? item.name ?? item.contact ?? "sans nom"}{item.acceptances.length ? ` · acceptée par ${item.acceptances[0].name ?? "—"}` : ""}
+      </Text>)}
+      <Text style={[ui.small, { color: colors.primary, fontWeight: "800" }]}>Voir toutes les invitations ›</Text>
+    </Pressable> : null}
     {loading ? <Loading /> : <FlatList
       data={visible}
       keyExtractor={(pro) => pro.id}
@@ -185,6 +199,7 @@ export function PlatformTeamScreen() {
 }
 
 const styles = StyleSheet.create({
+  invitations: { marginHorizontal: 14, marginTop: 8, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primarySoft, gap: 2 },
   kind: { color: colors.primary, fontSize: 11, fontWeight: "700", backgroundColor: colors.primarySoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, overflow: "hidden" },
   member: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white },
 });

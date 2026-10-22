@@ -245,12 +245,12 @@ function WorkflowPage({ header }: { header: React.ReactNode }) {
     next.splice(Math.max(0, Math.min(next.length, index + delta)), 0, item);
     return next;
   });
-  const row = (label: string, hint: string, value: boolean, onChange: (value: boolean) => void) => <View style={[ui.row, { marginTop: 10 }]}>
+  const row = (label: string, hint: string, value: boolean, onChange: (value: boolean) => void) => <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
+    <Switch value={value} disabled={busy} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
     <View style={{ flex: 1 }}>
       <Text style={ui.body}>{label}</Text>
       <Text style={ui.small}>{hint}</Text>
     </View>
-    <Switch value={value} disabled={busy} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
   </View>;
 
   return <View style={ui.screen}>
@@ -400,7 +400,7 @@ function ClientOptionsPage({ theme, header, clients, defaults, setDefault, setCl
       {sheet === "all" ? <>
         <Text style={[ui.small, { marginTop: 8 }]}>Réglage commun à tous les clients. Une fiche peut avoir sa propre valeur (onglet « Par client » ou dans la fiche).</Text>
         {clientOptionBlocks.filter((block) => !theme || block.title === theme).map((block) => <ListGroup key={block.title} title={block.title}>
-          {block.items.map((item) => <ListRow key={item.key} title={item.label} detail={item.hint} right={<Switch value={optionToBool(item.key, defaults[item.key])} onValueChange={(value) => setDefault(item.key, value)} trackColor={{ true: colors.primary, false: colors.line }} />} />)}
+          {block.items.map((item) => <ListRow key={item.key} title={item.label} detail={item.hint} leading={<Switch value={optionToBool(item.key, defaults[item.key])} onValueChange={(value) => setDefault(item.key, value)} trackColor={{ true: colors.primary, false: colors.line }} />} />)}
         </ListGroup>)}
       </> : record ? <>
         <ListRow icon="storefront-outline" title={record.business_name} detail={`${record.custom_settings.length} option(s) propre(s)`} right={<BackButton label="Liste" onPress={() => setClientId(null)} />} />
@@ -515,13 +515,13 @@ function NumberingPage({ header }: { header: React.ReactNode }) {
           <View style={{ flex: 1 }}><Field label="Chiffres" value={String(item.digits)} onChangeText={(text) => patch(item.doc_type, { digits: Math.min(10, Math.max(1, Number(text) || 1)) })} keyboardType="number-pad" /></View>
           <View style={{ flex: 1 }}><Field label="Prochain n°" value={String(item.next_number)} onChangeText={(text) => patch(item.doc_type, { next_number: Math.max(1, Number(text) || 1) })} keyboardType="number-pad" /></View>
         </View>
-        <View style={[ui.row, { marginTop: 8 }]}>
-          <Text style={[ui.body, { flex: 1 }]}>Inclure l’année (ex. 2026-)</Text>
+        <View style={[ui.row, { justifyContent: "flex-start", marginTop: 8 }]}>
           <Switch value={item.with_year} onValueChange={(value) => patch(item.doc_type, { with_year: value })} trackColor={{ true: colors.primary, false: colors.line }} />
+          <Text style={[ui.body, { flex: 1 }]}>Inclure l’année (ex. 2026-)</Text>
         </View>
-        <View style={[ui.row, { marginTop: 4 }]}>
-          <Text style={[ui.body, { flex: 1 }]}>Repartir à 1 chaque année</Text>
+        <View style={[ui.row, { justifyContent: "flex-start", marginTop: 4 }]}>
           <Switch value={item.yearly_reset} onValueChange={(value) => patch(item.doc_type, { yearly_reset: value })} trackColor={{ true: colors.primary, false: colors.line }} />
+          <Text style={[ui.body, { flex: 1 }]}>Repartir à 1 chaque année</Text>
         </View>
         <Button label="ENREGISTRER" variant="secondary" onPress={() => save(item)} busy={busy === item.doc_type} style={{ marginTop: 8, alignSelf: "flex-start" }} />
       </View>)}

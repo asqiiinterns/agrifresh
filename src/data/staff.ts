@@ -65,7 +65,8 @@ export const closedAt = (order: Pick<Order, "delivered_at" | "order_status_histo
   ?? order.created_at;
 
 export type StaffOrder = Order & {
-  clients: { business_name: string; client_number: number; show_prices: boolean; show_origin: boolean; reconfirm_declined?: boolean } | null;
+  // buyer_org_id: the buyer's own space on Appro+ (its card can be seen before accepting its first order).
+  clients: { business_name: string; client_number: number; show_prices: boolean; show_origin: boolean; reconfirm_declined?: boolean; buyer_org_id?: string | null } | null;
   client_invoices: { invoice_number: string | null; status: string } | null;
   delivered_by_profile: { full_name: string } | null;
   planned_vehicle_id?: string | null;
@@ -80,7 +81,7 @@ async function loadAllOrders(): Promise<StaffOrder[]> {
   // The planned vehicle exists once 20261121 is installed; before, the list loads without it.
   const query = (extra: string) => client
     .from("orders")
-    .select(`${ORDER_FIELDS}${extra}, clients(business_name, client_number, show_prices, show_origin, reconfirm_declined), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
+    .select(`${ORDER_FIELDS}${extra}, clients(business_name, client_number, show_prices, show_origin, reconfirm_declined, buyer_org_id), client_invoices(invoice_number, status), delivered_by_profile:profiles!orders_delivered_by_fkey(full_name)`)
     .or(`status.not.in.(${statusGroups.done.join(",")}),updated_at.gte.${since},created_at.gte.${since}`)
     .order("created_at", { ascending: false })
     .limit(1500);

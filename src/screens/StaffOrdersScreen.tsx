@@ -9,6 +9,7 @@ import { fetchVehicles, vehicleName, type Vehicle } from "../data/fleet";
 import { closedAt, executionQueue, fetchAllOrders, groupOf, planVehicle, revertOrder, revertableStatuses, setOrderFlags, staffActions, statusGroups, updateOrderStatus, type OrderStatus, type StaffAction, type StaffOrder } from "../data/staff";
 import { FilterBar, type Filter } from "../ui/FilterBar";
 import { useWorkflow } from "../data/workflow";
+import { ProCardModal } from "./NetworkScreen";
 import { matchesDate, presets, type DateFilterValue } from "../ui/dateFilter";
 import { PlanningScreen } from "./PlanningScreen";
 import { useCan, type Feature } from "../data/permissions";
@@ -236,6 +237,8 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
   const can = useCan();
   const mod = useModules();
   const workflow = useWorkflow();
+  // The card of the buyer's space (what it chose to show), before deciding on its order.
+  const [showCard, setShowCard] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -409,10 +412,12 @@ function OrderCard({ order, position, claims, onPlan, onShip, onChanged, onLocal
     <View style={styles.actions}>
       {actions.filter((action) => expanded || action.variant === "primary").map((action) => <Button key={action.status} label={action.label} variant={action.variant} color={statusStyles[action.status]?.color} busy={busy && action.variant === "primary"} disabled={busy} onPress={() => confirmAction(action)} style={action.variant === "primary" ? { flexGrow: 1 } : undefined} />)}
       {position && can("orders.plan") ? <Button label="PLANIFIER" variant="secondary" onPress={() => onPlan("move")} /> : null}
+      {expanded && order.clients?.buyer_org_id ? <Button label="FICHE DU CLIENT" variant="secondary" onPress={() => setShowCard(true)} /> : null}
       {expanded && canRevert ? <Button label="↩ ÉTAPE PRÉCÉDENTE" variant="secondary" disabled={busy} onPress={revert} /> : null}
       {expanded && can("orders.delivery_note") && ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(order.status) ? <Button label="BON DE LIVRAISON" variant="secondary" busy={printing} onPress={() => printDeliveryNote()} /> : null}
     </View>
     {order.status === "out_for_delivery" ? <Text style={[ui.small, { marginTop: 6 }]}>En route : en attente de la remise au client par le livreur.</Text> : null}
+    <ProCardModal target={showCard && order.clients?.buyer_org_id ? { orgId: order.clients.buyer_org_id } : null} onClose={() => setShowCard(false)} />
     {order.status === "awaiting_client" ? <Text style={[ui.small, { marginTop: 6, color: "#9a4f0f" }]}>En attente de la reconfirmation du client.</Text> : null}
     <RecurringModal visible={repeating} order={order} onClose={() => setRepeating(false)} onSaved={() => setRepeating(false)} />
   </View>;

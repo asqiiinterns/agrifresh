@@ -144,12 +144,32 @@ export async function fetchImportHistory(): Promise<ImportRecord[]> {
 }
 
 // ---- Catalogue PDF ----
-export type CatalogOptions = { photo: boolean; description: boolean; price: boolean; priceTtc: boolean; vat: boolean; stock: boolean; origin: boolean; identifiers: boolean; sheet: boolean; inactive: boolean };
-export const defaultCatalogOptions: CatalogOptions = { photo: true, description: true, price: true, priceTtc: false, vat: false, stock: false, origin: true, identifiers: false, sheet: true, inactive: false };
-export const catalogOptionLabels: Record<keyof CatalogOptions, string> = {
-  photo: "Photos", description: "Descriptions", price: "Prix HT", priceTtc: "Prix TTC", vat: "Taux de TVA", stock: "Stock disponible",
-  origin: "Origine (producteur, région, label)", identifiers: "Références et codes-barres", sheet: "Fiche produit (variété, calibre…)", inactive: "Produits non proposés",
+// Layout, cover page, fields shown (including each field of the product sheet), categories, sorting: everything is a
+// setting, and the settings can be saved as presets for the Pro (20261202).
+export type CatalogLayout = "grid" | "list" | "table";
+export type CatalogSort = "category" | "name" | "price" | "priceDesc";
+export type CatalogOptions = {
+  layout: CatalogLayout; columns: 2 | 3; cover: boolean; title: string; subtitle: string; validUntil: string; intro: string;
+  groupByCategory: boolean; sort: CatalogSort; categories: string[] | null; inStockOnly: boolean; inactive: boolean;
+  photo: boolean; description: boolean; unit: boolean; price: boolean; priceTtc: boolean; vat: boolean; stock: boolean;
+  origin: boolean; originNote: boolean; reference: boolean; barcode: boolean; platformCode: boolean;
+  sheet: boolean; sheetFields: string[] | null; contact: boolean; pageNumbers: boolean;
 };
+export const defaultCatalogOptions: CatalogOptions = {
+  layout: "grid", columns: 2, cover: true, title: "Catalogue", subtitle: "", validUntil: "", intro: "",
+  groupByCategory: true, sort: "category", categories: null, inStockOnly: false, inactive: false,
+  photo: true, description: true, unit: true, price: true, priceTtc: false, vat: false, stock: false,
+  origin: true, originNote: false, reference: false, barcode: false, platformCode: false,
+  sheet: true, sheetFields: null, contact: true, pageNumbers: true,
+};
+// The fields a person may switch on or off, in the order of the settings page.
+export const catalogFieldLabels: Partial<Record<keyof CatalogOptions, string>> = {
+  photo: "Photo", description: "Description", unit: "Unité de vente", price: "Prix HT", priceTtc: "Prix TTC", vat: "Taux de TVA",
+  stock: "Stock disponible", origin: "Origine (producteur, région, label)", originNote: "Note qualité", reference: "Référence",
+  barcode: "Code-barres", platformCode: "Code Appro+", sheet: "Fiche produit",
+};
+// Kept for the former presets saved before the new settings.
+export const catalogOptionLabels = catalogFieldLabels;
 export type CatalogPreset = { name: string; options: CatalogOptions; default?: boolean };
 
 export async function fetchCatalogPresets(): Promise<CatalogPreset[] | null> {
@@ -163,45 +183,132 @@ export async function saveCatalogPresets(presets: CatalogPreset[]): Promise<void
   if (error) throw error;
 }
 
-export async function shareCatalogPdf(products: AdminProduct[], categories: Category[], options: CatalogOptions, title = "Catalogue"): Promise<void> {
-  const list = products.filter((product) => options.inactive || product.active);
-  const groups = new Map<string, AdminProduct[]>();
-  for (const product of list) {
-    const name = categories.find((item) => item.id === product.category_id)?.name ?? "Autres produits";
-    groups.set(name, [...(groups.get(name) ?? []), product]);
-  }
-  const fieldsOf = (product: AdminProduct) => categories.find((item) => item.id === product.category_id)?.fields ?? [];
-  const card = (product: AdminProduct) => {
-    const price = Number(product.price);
-    const ttc = price * (1 + Number(product.vat_rate) / 100);
-    const sheet = options.sheet ? fieldsOf(product).map((field) => product.attributes?.[field.key] ? `${escapeHtml(field.label)} : ${escapeHtml(product.attributes[field.key])}${field.unit ? ` ${escapeHtml(field.unit)}` : ""}` : "").filter(Boolean) : [];
-    const origin = options.origin ? [product.origin_producer, product.origin_region, product.origin_label].filter(Boolean).join(" · ") : "";
-    return `<div class="card">
-      ${options.photo && product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt=""/>` : ""}
-      <div class="info">
-        <div class="name">${escapeHtml(product.name)}${product.active ? "" : ' <span class="muted">(non proposé)</span>'}</div>
-        <div class="muted">${escapeHtml(product.unit_label)}${options.identifiers ? [product.sku ? ` · Réf. ${escapeHtml(product.sku)}` : "", product.gtin ? ` · EAN ${escapeHtml(product.gtin)}` : ""].join("") : ""}</div>
-        ${options.description && product.description ? `<div class="desc">${escapeHtml(product.description)}</div>` : ""}
-        ${sheet.length ? `<div class="sheet">${sheet.join(" · ")}</div>` : ""}
-        ${origin ? `<div class="origin">${escapeHtml(origin)}</div>` : ""}
-        ${options.stock ? `<div class="muted">Stock : ${escapeHtml(String(Number(product.stock_quantity)))}</div>` : ""}
-      </div>
-      ${options.price || options.priceTtc ? `<div class="price">${options.price ? `${pdfAmount(price)} HT` : ""}${options.price && options.priceTtc ? "<br/>" : ""}${options.priceTtc ? `${pdfAmount(ttc)} TTC` : ""}${options.vat ? `<br/><span class="muted">TVA ${Number(product.vat_rate)} %</span>` : ""}</div>` : ""}
-    </div>`;
-  };
+// The products the catalogue will show with these settings (also used to count them on the settings page).
+export function catalogProducts(products: AdminProduct[], categories: Category[], options: CatalogOptions): AdminProduct[] {
+  const order = new Map(categories.map((category, index) => [category.id, index]));
+  const list = products.filter((product) => (options.inactive || product.active)
+    && (!options.inStockOnly || Number(product.stock_quantity) > 0)
+    && (!options.categories || options.categories.includes(product.category_id ?? "")));
+  const byName = (a: AdminProduct, b: AdminProduct) => a.name.localeCompare(b.name, "fr");
+  return list.sort((a, b) => options.sort === "price" ? Number(a.price) - Number(b.price) || byName(a, b)
+    : options.sort === "priceDesc" ? Number(b.price) - Number(a.price) || byName(a, b)
+    : options.sort === "category" ? (order.get(a.category_id ?? "") ?? 999) - (order.get(b.category_id ?? "") ?? 999) || byName(a, b)
+    : byName(a, b));
+}
+
+export async function shareCatalogPdf(products: AdminProduct[], categories: Category[], options: CatalogOptions): Promise<void> {
+  const o = { ...defaultCatalogOptions, ...options };
+  const list = catalogProducts(products, categories, o);
   const color = brandColor();
+  const categoryOf = (product: AdminProduct) => categories.find((item) => item.id === product.category_id);
+  const groups: [string, AdminProduct[]][] = [];
+  if (o.groupByCategory) {
+    for (const product of list) {
+      const name = categoryOf(product)?.name ?? "Autres produits";
+      const group = groups.find(([title]) => title === name);
+      if (group) group[1].push(product); else groups.push([name, [product]]);
+    }
+  } else groups.push(["", list]);
+
+  const ttc = (product: AdminProduct) => Number(product.price) * (1 + Number(product.vat_rate) / 100);
+  const sheetOf = (product: AdminProduct) => !o.sheet ? [] : (categoryOf(product)?.fields ?? [])
+    .filter((field) => (!o.sheetFields || o.sheetFields.includes(field.key)) && product.attributes?.[field.key])
+    .map((field) => ({ label: field.label, value: `${product.attributes![field.key]}${field.unit ? ` ${field.unit}` : ""}` }));
+  const codes = (product: AdminProduct) => [o.reference && product.sku ? `Réf. ${product.sku}` : "", o.barcode && product.gtin ? `EAN ${product.gtin}` : "",
+    o.platformCode && product.platform_code ? product.platform_code : ""].filter(Boolean);
+  const origin = (product: AdminProduct) => o.origin ? [product.origin_producer, product.origin_region, product.origin_label].filter(Boolean).join(" · ") : "";
+  const priceBlock = (product: AdminProduct) => !o.price && !o.priceTtc ? "" : `<div class="price">
+      ${o.price ? `<span class="amount">${pdfAmount(Number(product.price))}</span><span class="tax"> HT</span>` : ""}
+      ${o.priceTtc ? `<div class="${o.price ? "second" : "amount"}">${pdfAmount(ttc(product))}<span class="tax"> TTC</span></div>` : ""}
+      ${o.unit ? `<div class="per">le ${escapeHtml(product.unit_label)}</div>` : ""}
+      ${o.vat ? `<div class="per">TVA ${Number(product.vat_rate)} %</div>` : ""}
+    </div>`;
+  const details = (product: AdminProduct) => {
+    const sheet = sheetOf(product);
+    return `${o.description && product.description ? `<p class="desc">${escapeHtml(product.description)}</p>` : ""}
+      ${sheet.length ? `<div class="chips">${sheet.map((item) => `<span class="chip"><b>${escapeHtml(item.label)}</b> ${escapeHtml(item.value)}</span>`).join("")}</div>` : ""}
+      ${origin(product) ? `<div class="origin">● ${escapeHtml(origin(product))}</div>` : ""}
+      ${o.originNote && product.origin_note ? `<div class="note">${escapeHtml(product.origin_note)}</div>` : ""}
+      ${o.stock ? `<div class="meta">Stock : ${escapeHtml(String(Number(product.stock_quantity)))} ${escapeHtml(product.unit_label)}</div>` : ""}
+      ${codes(product).length ? `<div class="meta">${codes(product).map(escapeHtml).join(" · ")}</div>` : ""}
+      ${!product.active ? `<div class="meta">Non proposé actuellement</div>` : ""}`;
+  };
+  const photo = (product: AdminProduct, size: "big" | "small") => !o.photo ? "" : product.image_url
+    ? `<div class="photo ${size}" style="background-image:url('${escapeHtml(product.image_url)}')"></div>`
+    : `<div class="photo ${size} empty">${escapeHtml(product.name.slice(0, 1).toUpperCase())}</div>`;
+
+  const card = (product: AdminProduct) => `<div class="card">${photo(product, "big")}
+      <div class="body"><div class="head"><div class="name">${escapeHtml(product.name)}</div>${priceBlock(product)}</div>${details(product)}</div></div>`;
+  const row = (product: AdminProduct) => `<div class="row">${photo(product, "small")}
+      <div class="body"><div class="name">${escapeHtml(product.name)}</div>${details(product)}</div>${priceBlock(product)}</div>`;
+  const tableHead = `<tr><th>Produit</th>${o.unit ? "<th>Unité</th>" : ""}${o.sheet ? "<th>Fiche</th>" : ""}${o.origin ? "<th>Origine</th>" : ""}${o.reference || o.barcode || o.platformCode ? "<th>Codes</th>" : ""}${o.stock ? "<th class=\"num\">Stock</th>" : ""}${o.price ? "<th class=\"num\">Prix HT</th>" : ""}${o.priceTtc ? "<th class=\"num\">Prix TTC</th>" : ""}${o.vat ? "<th class=\"num\">TVA</th>" : ""}</tr>`;
+  const tableRow = (product: AdminProduct) => `<tr><td><b>${escapeHtml(product.name)}</b>${o.description && product.description ? `<div class="meta">${escapeHtml(product.description)}</div>` : ""}</td>
+      ${o.unit ? `<td>${escapeHtml(product.unit_label)}</td>` : ""}${o.sheet ? `<td>${sheetOf(product).map((item) => `${escapeHtml(item.label)} : ${escapeHtml(item.value)}`).join("<br/>")}</td>` : ""}
+      ${o.origin ? `<td>${escapeHtml(origin(product))}</td>` : ""}${o.reference || o.barcode || o.platformCode ? `<td>${codes(product).map(escapeHtml).join("<br/>")}</td>` : ""}
+      ${o.stock ? `<td class="num">${escapeHtml(String(Number(product.stock_quantity)))}</td>` : ""}${o.price ? `<td class="num">${pdfAmount(Number(product.price))}</td>` : ""}
+      ${o.priceTtc ? `<td class="num">${pdfAmount(ttc(product))}</td>` : ""}${o.vat ? `<td class="num">${Number(product.vat_rate)} %</td>` : ""}</tr>`;
+  const section = ([title, items]: [string, AdminProduct[]]) => `<section>
+      ${title ? `<h2><span>${escapeHtml(title)}</span><small>${items.length} produit(s)</small></h2>` : ""}
+      ${o.layout === "grid" ? `<div class="grid cols${o.columns}">${items.map(card).join("")}</div>`
+        : o.layout === "list" ? items.map(row).join("")
+        : `<table>${tableHead}${items.map(tableRow).join("")}</table>`}
+    </section>`;
+
+  const contact = [company.address, company.phone, company.email].filter(Boolean).map((item) => escapeHtml(item)).join(" · ");
+  const today = new Date().toLocaleDateString("fr-TN", { day: "numeric", month: "long", year: "numeric" });
+  const cover = !o.cover ? "" : `<div class="cover">
+      <div class="band"></div>
+      <div class="brand">${escapeHtml(company.name || "Appro+")}</div>
+      ${company.tagline ? `<div class="tagline">${escapeHtml(company.tagline)}</div>` : ""}
+      <h1>${escapeHtml(o.title || "Catalogue")}</h1>
+      ${o.subtitle ? `<div class="subtitle">${escapeHtml(o.subtitle)}</div>` : ""}
+      ${o.intro ? `<p class="intro">${escapeHtml(o.intro)}</p>` : ""}
+      <div class="facts"><div><b>${list.length}</b> produit(s)</div><div><b>${groups.filter(([title]) => title).length || 1}</b> catégorie(s)</div><div>Édité le <b>${escapeHtml(today)}</b></div>
+        ${o.validUntil ? `<div>Prix valables jusqu’au <b>${escapeHtml(o.validUntil)}</b></div>` : ""}</div>
+      ${o.contact && contact ? `<div class="contact">${contact}${company.taxId ? `<br/>MF ${escapeHtml(company.taxId)}` : ""}</div>` : ""}
+    </div>`;
+
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"/><style>
-    body{font-family:Arial,sans-serif;color:#1d2939;padding:24px;max-width:820px;margin:auto;font-size:11px}
-    h1{color:${color};margin:0;font-size:24px} h2{color:${color};font-size:15px;margin:22px 0 8px;border-bottom:2px solid ${color};padding-bottom:4px}
-    .muted{color:#667085;font-size:10px} .top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid ${color};padding-bottom:12px}
-    .card{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #e2e6ec;page-break-inside:avoid}
-    .card img{width:64px;height:64px;object-fit:cover;border-radius:6px} .info{flex:1} .name{font-weight:bold;font-size:13px}
-    .desc{margin-top:3px} .sheet{margin-top:3px;color:#344054} .origin{margin-top:3px;color:${color}} .price{text-align:right;font-weight:bold;font-size:13px;white-space:nowrap}
+    @page{margin:14mm 12mm 16mm}
+    *{box-sizing:border-box} body{font-family:Helvetica,Arial,sans-serif;color:#1d2939;margin:0;font-size:10.5px;line-height:1.4}
+    .cover{min-height:250mm;display:flex;flex-direction:column;justify-content:center;padding:0 10mm;page-break-after:always;position:relative}
+    .cover .band{position:absolute;top:0;left:0;right:0;height:14mm;background:${color}}
+    .cover .brand{font-size:30px;font-weight:800;color:${color};letter-spacing:.5px}
+    .cover .tagline{color:#667085;font-size:13px;margin-top:4px}
+    .cover h1{font-size:46px;margin:34px 0 6px;color:#101828;line-height:1.05}
+    .cover .subtitle{font-size:17px;color:${color};font-weight:600}
+    .cover .intro{font-size:12.5px;color:#344054;max-width:150mm;margin-top:18px}
+    .cover .facts{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:28px;padding-top:14px;border-top:2px solid ${color};font-size:12px;color:#475467}
+    .cover .contact{margin-top:auto;padding-top:20px;font-size:11px;color:#667085}
+    header.top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid ${color};padding-bottom:6px;margin-bottom:6px}
+    header.top .brand{font-weight:800;color:${color};font-size:15px} header.top .title{color:#667085;font-size:10px}
+    h2{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 10px;padding:7px 10px;background:${color};color:#fff;border-radius:6px;font-size:13px;page-break-after:avoid}
+    h2 small{font-weight:400;opacity:.85;font-size:10px}
+    .grid{display:flex;flex-wrap:wrap;gap:10px}
+    .grid .card{width:calc(50% - 5px);border:1px solid #e4e7ec;border-radius:10px;overflow:hidden;page-break-inside:avoid;background:#fff}
+    .grid.cols3 .card{width:calc(33.333% - 7px)}
+    .photo{background-size:cover;background-position:center;background-color:#f2f4f7}
+    .photo.big{height:38mm} .grid.cols3 .photo.big{height:30mm}
+    .photo.small{width:20mm;height:20mm;border-radius:8px;flex:none}
+    .photo.empty{display:flex;align-items:center;justify-content:center;color:${color};font-size:22px;font-weight:800;opacity:.55}
+    .card .body{padding:8px 10px 10px} .head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+    .name{font-weight:700;font-size:12.5px;color:#101828}
+    .price{text-align:right;white-space:nowrap} .price .amount{font-size:14px;font-weight:800;color:${color}} .price .second{font-size:11px;font-weight:700;color:#344054}
+    .tax{font-size:9px;color:#667085;font-weight:600} .per{font-size:9px;color:#667085}
+    .desc{margin:4px 0 0;color:#475467}
+    .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px} .chip{background:#f2f4f7;border-radius:10px;padding:2px 7px;font-size:9px;color:#344054} .chip b{color:${color};font-weight:700}
+    .origin{margin-top:5px;color:${color};font-size:9.5px;font-weight:600} .note{margin-top:2px;font-style:italic;color:#475467;font-size:9.5px}
+    .meta{margin-top:3px;color:#667085;font-size:9px}
+    .row{display:flex;gap:10px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid #eaecf0;page-break-inside:avoid} .row .body{flex:1}
+    table{width:100%;border-collapse:collapse;font-size:9.5px} th{background:#f2f4f7;color:${color};text-align:left;padding:6px;font-size:9px;text-transform:uppercase;letter-spacing:.3px}
+    td{padding:6px;border-bottom:1px solid #eaecf0;vertical-align:top} tr{page-break-inside:avoid} .num{text-align:right;white-space:nowrap}
+    footer.bottom{margin-top:16px;padding-top:6px;border-top:1px solid #eaecf0;color:#98a2b3;font-size:9px;display:flex;justify-content:space-between}
+    ${o.pageNumbers ? "@page{@bottom-right{content:counter(page) ' / ' counter(pages);font-size:9px;color:#98a2b3}}" : ""}
   </style></head><body>
-    <div class="top"><div><h1>${escapeHtml(company.name || "Catalogue")}</h1><div class="muted">${escapeHtml(company.tagline)}</div></div>
-      <div class="muted" style="text-align:right">${escapeHtml(title)}<br/>${new Date().toLocaleDateString("fr-TN")}<br/>${list.length} produit(s)</div></div>
-    ${[...groups.entries()].map(([name, items]) => `<h2>${escapeHtml(name)}</h2>${items.map(card).join("")}`).join("")}
-    ${company.phone || company.email ? `<p class="muted" style="margin-top:20px">${escapeHtml([company.phone, company.email, company.address].filter(Boolean).join(" · "))}</p>` : ""}
+    ${cover}
+    <header class="top"><div class="brand">${escapeHtml(company.name || "Catalogue")}</div><div class="title">${escapeHtml(o.title || "Catalogue")}${o.validUntil ? ` · prix valables jusqu’au ${escapeHtml(o.validUntil)}` : ""}</div></header>
+    ${list.length ? groups.map(section).join("") : `<p>Aucun produit ne correspond à ces réglages.</p>`}
+    <footer class="bottom"><span>${o.contact ? contact : ""}</span><span>${escapeHtml(today)}${o.price || o.priceTtc ? " · prix en TND" : ""}</span></footer>
   </body></html>`;
-  await outputPdf(html, `${title}-${company.name || "catalogue"}`, title);
+  await outputPdf(html, `${o.title || "Catalogue"}-${company.name || "catalogue"}`, o.title || "Catalogue");
 }

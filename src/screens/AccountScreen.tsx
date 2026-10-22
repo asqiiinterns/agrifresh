@@ -207,12 +207,12 @@ function ReminderChoiceCard({ account, onChanged }: { account: Account; onChange
     setBusy(false);
   }
   return <View style={[ui.card, !allowed && { opacity: 0.6 }]}>
-    <View style={ui.row}>
+    <View style={[ui.row, { justifyContent: "flex-start" }]}>
+      <Switch value={!client.reminder_opt_out || !allowed} disabled={!allowed || busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
       <View style={{ flex: 1 }}>
         <Text style={ui.strong}>Rappels de factures à régler</Text>
         <Text style={ui.small}>{allowed ? "Recevoir un rappel quand une facture arrive à échéance." : "Activés par votre fournisseur pour votre compte : ce réglage ne peut pas être modifié."}</Text>
       </View>
-      <Switch value={!client.reminder_opt_out || !allowed} disabled={!allowed || busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
     </View>
     {error ? <Text style={[ui.error, { marginTop: 6 }]}>{error}</Text> : null}
   </View>;

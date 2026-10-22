@@ -22,8 +22,8 @@ export const colors = {
 export const ui = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
   // Wide screens (web, tablets): pages keep a readable width so buttons stay next to their options.
-  content: { paddingHorizontal: 14, paddingBottom: 24, width: "100%", maxWidth: 960, alignSelf: "center" },
-  pageInner: { width: "100%", maxWidth: 960, alignSelf: "center" },
+  content: { paddingHorizontal: 14, paddingBottom: 24, width: "100%", maxWidth: 760, alignSelf: "center" },
+  pageInner: { width: "100%", maxWidth: 760, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.paper },
   eyebrow: { color: colors.textSoft, fontSize: 9, letterSpacing: 1.8, fontWeight: "800" },
   title: { color: colors.text, fontSize: 21, fontWeight: "700", marginTop: 2 },

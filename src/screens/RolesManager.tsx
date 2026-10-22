@@ -115,13 +115,13 @@ export function RolesManager({ orgId, header }: { orgId?: string | null; header?
             const on = role.granted.includes(perm.key);
             const changed = perm.key in role.overrides;
             return <View key={perm.key} style={styles.perm}>
+              <Switch value={on} disabled={!matrix.can_edit} onValueChange={(value) => void toggle(perm.key, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
               <View style={{ flex: 1 }}>
                 <Text style={ui.body}>{rightLabel(perm.key)}</Text>
                 {changed && role.template ? <Pressable onPress={() => void toggle(perm.key, null)} disabled={!matrix.can_edit}>
                   <Text style={styles.changed}>{on ? "Ajouté" : "Retiré"} par rapport au modèle{matrix.can_edit ? " · revenir au modèle" : ""}</Text>
                 </Pressable> : null}
               </View>
-              <Switch value={on} disabled={!matrix.can_edit} onValueChange={(value) => void toggle(perm.key, value)} trackColor={{ true: colors.primary, false: colors.line }} thumbColor={colors.white} />
             </View>;
           })}
         </View>)}

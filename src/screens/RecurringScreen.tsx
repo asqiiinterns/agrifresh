@@ -112,9 +112,9 @@ export function RecurringModal({ visible, order, existing, onClose, onSaved }: {
           <Chip label="3 jours avant" selected={leadDays === 3} onPress={() => setLeadDays(3)} />
         </View>
         <Field label="Remarque jointe à chaque commande (facultatif)" value={note} onChangeText={setNote} />
-        <View style={[ui.row, { marginTop: 10 }]}>
-          <Text style={[ui.body, { flex: 1 }]}>Active</Text>
+        <View style={[ui.row, { justifyContent: "flex-start", marginTop: 10 }]}>
           <Switch value={active} onValueChange={setActive} trackColor={{ true: colors.primary, false: colors.line }} />
+          <Text style={[ui.body, { flex: 1 }]}>Active</Text>
         </View>
         <Text style={[ui.small, { marginTop: 6 }]}>Chaque commande arrive comme une commande normale : elle est acceptée par votre fournisseur, et vous pouvez la modifier ou l’annuler.</Text>
         {error ? <Text style={[ui.error, { marginTop: 10 }]}>{error}</Text> : null}

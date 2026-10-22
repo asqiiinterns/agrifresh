@@ -1,6 +1,12 @@
 // Texts with values: {0}, {1}… stand for numbers, names or dates, kept as they are.
 // [français, english, العربية]
 export const patterns: [string, string, string][] = [
+  [" · acceptée par {0}", " · accepted by {0}", " · قبلها {0}"],
+  [" · prix valables jusqu’au {0}", " · prices valid until {0}", " · الأسعار صالحة حتى {0}"],
+  ["GÉNÉRER LE CATALOGUE ({0})", "GENERATE THE CATALOGUE ({0})", "إنشاء الكتالوج ({0})"],
+  ["{0} produit(s) avec ces réglages", "{0} product(s) with these settings", "{0} منتج(ات) بهذه الإعدادات"],
+  ["{0}Je vends (fournisseur)", "{0}I sell (supplier)", "{0}أبيع (مورد)"],
+  ["{0}J’achète (acheteur)", "{0}I buy (buyer)", "{0}أشتري (مشتر)"],
   [" Colonnes ignorées : {0}.", " Ignored columns: {0}.", " أعمدة متجاهلة: {0}."],
   [" · EAN {0}", " · EAN {0}", " · EAN {0}"],
   [", {0} ligne(s) ignorée(s) :\n{1}", ", {0} line(s) ignored:\n{1}", "، {0} سطر(أسطر) متجاهلة:\n{1}"],

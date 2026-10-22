@@ -104,12 +104,12 @@ function LocationConsentCard() {
     }
   }
   return <View style={ui.card}>
-    <View style={ui.row}>
+    <View style={[ui.row, { justifyContent: "flex-start" }]}>
+      <Switch value={consent} disabled={busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
       <View style={{ flex: 1 }}>
         <Text style={ui.strong}>Partager ma position</Text>
         <Text style={ui.small}>Votre dernière position est mise à jour quand l’application est ouverte. Personne ne la voit sans vous le demander : vous acceptez ou refusez chaque demande. Arrêter efface votre position.</Text>
       </View>
-      <Switch value={consent} disabled={busy} onValueChange={(value) => void toggle(value)} trackColor={{ true: colors.primary, false: colors.line }} />
     </View>
     {views.length ? <View style={{ marginTop: 10 }}>
       <Text style={ui.fieldLabel}>Consultations de ma position</Text>
